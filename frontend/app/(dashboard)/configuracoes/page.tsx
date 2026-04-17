@@ -52,13 +52,20 @@ export default function ConfiguracoesPage() {
     if (form.meta_app_id) payload.meta_app_id = form.meta_app_id
     if (form.meta_app_secret) payload.meta_app_secret = form.meta_app_secret
 
+    if (Object.keys(payload).length === 0) {
+      setPlatformError("Preencha pelo menos um campo antes de salvar.")
+      setSavingPlatform(false)
+      return
+    }
+
     try {
       await api.post("/settings/platform", payload)
       const updated = await api.get("/settings/platform")
       setPlatform(updated)
-      setForm({ anthropic_api_key: "", meta_app_id: "", meta_app_secret: "" })
+      if (updated.meta_app_id) setForm((f) => ({ ...f, meta_app_id: updated.meta_app_id }))
+      setForm((f) => ({ ...f, anthropic_api_key: "", meta_app_secret: "" }))
       setSavedPlatform(true)
-      setTimeout(() => setSavedPlatform(false), 2000)
+      setTimeout(() => setSavedPlatform(false), 5000)
     } catch (e: any) {
       setPlatformError(e.message || "Erro ao salvar")
     } finally {
