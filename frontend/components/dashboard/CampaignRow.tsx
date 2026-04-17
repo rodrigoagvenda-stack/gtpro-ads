@@ -1,5 +1,6 @@
 "use client"
 
+import Link from "next/link"
 import { formatCurrency } from "@/lib/utils"
 import { cn } from "@/lib/utils"
 import type { Campaign } from "@/types"
@@ -22,10 +23,10 @@ export default function CampaignRow({ campaign, onToggle }: CampaignRowProps) {
 
   return (
     <div className="flex items-center gap-4 px-5 py-4 hover:bg-zinc-800/50 transition-colors">
-      <div className="flex-1 min-w-0">
-        <p className="text-sm font-medium text-zinc-100 truncate">{campaign.name}</p>
+      <Link href={`/campanhas/${campaign.id}`} className="flex-1 min-w-0 group">
+        <p className="text-sm font-medium text-zinc-100 truncate group-hover:text-violet-300 transition-colors">{campaign.name}</p>
         <p className="text-xs text-zinc-500 mt-0.5">{campaign.objective?.replace("OUTCOME_", "")}</p>
-      </div>
+      </Link>
 
       <span className={cn("px-2 py-0.5 rounded-full text-xs font-medium", statusInfo.color)}>
         {statusInfo.label}

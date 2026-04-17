@@ -100,4 +100,42 @@ export async function getLongLivedToken(shortToken: string) {
   return data
 }
 
+export async function getAdSets(tenantId: string, campaignId: string) {
+  const token = await getToken(tenantId)
+  const fields = "id,name,status,daily_budget,lifetime_budget,optimization_goal,billing_event,bid_amount"
+  const data = await graphGet(`/${campaignId}/adsets`, { access_token: token, fields, limit: "50" })
+  return data.data ?? []
+}
+
+export async function getCampaignInsights(tenantId: string, campaignId: string, datePreset = "last_7d") {
+  const token = await getToken(tenantId)
+  const fields = "impressions,clicks,spend,reach,ctr,cpm,cpc,actions,action_values,frequency"
+  const data = await graphGet(`/${campaignId}/insights`, {
+    access_token: token, fields, date_preset: datePreset,
+  })
+  return data.data?.[0] ?? {}
+}
+
+export async function getAdAccounts(accessToken: string) {
+  const data = await graphGet("/me/adaccounts", {
+    access_token: accessToken,
+    fields: "id,name,account_id,account_status,currency",
+  })
+  return data.data ?? []
+}
+
+export async function saveMetaConnection(tenantId: string, accessToken: string, adAccountId: string) {
+  const supabase = createServiceClient()
+  await supabase.from("meta_connections").upsert(
+    {
+      tenant_id: tenantId,
+      access_token_encrypted: encrypt(accessToken),
+      ad_account_id: adAccountId,
+      active: true,
+      updated_at: new Date().toISOString(),
+    },
+    { onConflict: "tenant_id" }
+  )
+}
+
 export { encrypt, getToken }

@@ -6,6 +6,9 @@ function getKey(): Buffer {
 }
 
 export function encrypt(text: string): string {
+  if (!process.env.ENCRYPTION_KEY) {
+    return `plain:${Buffer.from(text).toString("base64")}`
+  }
   const iv = randomBytes(16)
   const cipher = createCipheriv("aes-256-gcm", getKey(), iv)
   const encrypted = Buffer.concat([cipher.update(text, "utf8"), cipher.final()])
@@ -14,6 +17,9 @@ export function encrypt(text: string): string {
 }
 
 export function decrypt(data: string): string {
+  if (data.startsWith("plain:")) {
+    return Buffer.from(data.slice(6), "base64").toString("utf8")
+  }
   const [ivHex, tagHex, encHex] = data.split(":")
   const decipher = createDecipheriv("aes-256-gcm", getKey(), Buffer.from(ivHex, "hex"))
   decipher.setAuthTag(Buffer.from(tagHex, "hex"))
