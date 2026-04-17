@@ -39,20 +39,28 @@ export default function ConfiguracoesPage() {
     api.get("/settings/api-keys").then(setApiKeys)
   }, [])
 
+  const [platformError, setPlatformError] = useState("")
+
   async function savePlatformSettings() {
     setSavingPlatform(true)
+    setPlatformError("")
     const payload: Record<string, string> = {}
     if (form.anthropic_api_key) payload.anthropic_api_key = form.anthropic_api_key
     if (form.meta_app_id) payload.meta_app_id = form.meta_app_id
     if (form.meta_app_secret) payload.meta_app_secret = form.meta_app_secret
 
-    await api.post("/settings/platform", payload)
-    const updated = await api.get("/settings/platform")
-    setPlatform(updated)
-    setForm({ anthropic_api_key: "", meta_app_id: "", meta_app_secret: "" })
-    setSavingPlatform(false)
-    setSavedPlatform(true)
-    setTimeout(() => setSavedPlatform(false), 2000)
+    try {
+      await api.post("/settings/platform", payload)
+      const updated = await api.get("/settings/platform")
+      setPlatform(updated)
+      setForm({ anthropic_api_key: "", meta_app_id: "", meta_app_secret: "" })
+      setSavedPlatform(true)
+      setTimeout(() => setSavedPlatform(false), 2000)
+    } catch (e: any) {
+      setPlatformError(e.message || "Erro ao salvar")
+    } finally {
+      setSavingPlatform(false)
+    }
   }
 
   async function createApiKey() {
@@ -146,6 +154,10 @@ export default function ConfiguracoesPage() {
             </div>
           </div>
         </div>
+
+        {platformError && (
+          <p className="text-xs text-red-400">{platformError}</p>
+        )}
 
         <button
           onClick={savePlatformSettings}
