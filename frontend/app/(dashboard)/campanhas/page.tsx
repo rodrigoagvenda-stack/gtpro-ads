@@ -27,8 +27,8 @@ export default function CampanhasPage() {
         api.campaigns.list(datePreset),
         api.insights.get(datePreset),
       ])
-      setCampaigns(cData)
-      setInsights(iData)
+      setCampaigns(Array.isArray(cData) ? cData : [])
+      setInsights(iData && typeof iData === "object" && !Array.isArray(iData) ? iData : {})
       setLoading(false)
     }
     load()
