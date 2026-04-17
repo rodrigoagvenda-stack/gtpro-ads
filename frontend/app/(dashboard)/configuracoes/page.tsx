@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useState, Suspense } from "react"
 import { useSearchParams } from "next/navigation"
 import { api } from "@/lib/api"
 import {
@@ -24,7 +24,7 @@ const OBJETIVOS = [
   { value: "APP_INSTALLS", label: "Instalações de app" },
 ]
 
-export default function ConfiguracoesPage() {
+function ConfiguracoesContent() {
   const searchParams = useSearchParams()
 
   // Platform credentials
@@ -458,5 +458,13 @@ export default function ConfiguracoesPage() {
         )}
       </section>
     </div>
+  )
+}
+
+export default function ConfiguracoesPage() {
+  return (
+    <Suspense>
+      <ConfiguracoesContent />
+    </Suspense>
   )
 }
