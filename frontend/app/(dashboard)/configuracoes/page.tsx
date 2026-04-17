@@ -106,7 +106,7 @@ function ConfiguracoesContent() {
 
   async function connectMeta() {
     setConnectingMeta(true)
-    try { const { url } = await api.meta.connect(); window.location.href = url }
+    try { const { url } = await api.meta.connect(); window.open(url, "_blank") }
     catch (e: any) { setMetaMsg({ type: "err", text: e.message }); setConnectingMeta(false) }
   }
 

@@ -37,7 +37,7 @@ export default function OnboardingPage() {
     setConnectingMeta(true)
     try {
       const { url } = await api.meta.connect()
-      window.location.href = url
+      window.open(url, "_blank")
     } catch (e: any) {
       alert(e.message)
       setConnectingMeta(false)
