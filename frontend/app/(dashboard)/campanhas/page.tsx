@@ -20,14 +20,21 @@ export default function CampanhasPage() {
   const [insights, setInsights] = useState<Record<string, any>>({})
   const [preset, setPreset] = useState("last_7d")
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     setLoading(true)
-    Promise.all([api.campaigns.list(preset), api.insights.get(preset)]).then(([c, i]) => {
-      setCampaigns(Array.isArray(c) ? c : [])
-      setInsights(i && typeof i === "object" && !Array.isArray(i) ? i : {})
-      setLoading(false)
-    })
+    setError(null)
+    Promise.all([api.campaigns.list(preset), api.insights.get(preset)])
+      .then(([c, i]) => {
+        setCampaigns(Array.isArray(c) ? c : [])
+        setInsights(i && typeof i === "object" && !Array.isArray(i) ? i : {})
+        setLoading(false)
+      })
+      .catch((err) => {
+        setError(err.message || "Erro ao carregar dados")
+        setLoading(false)
+      })
   }, [preset])
 
   async function toggleCampaign(id: string, status: string) {
@@ -136,6 +143,11 @@ export default function CampanhasPage() {
 
         {loading ? (
           <div className="px-5 py-14 text-center text-[13px] text-zinc-600">Carregando...</div>
+        ) : error ? (
+          <div className="px-5 py-14 text-center">
+            <p className="text-[13px] text-red-400 mb-1">Erro ao carregar campanhas</p>
+            <p className="text-[11px] text-zinc-600">{error}</p>
+          </div>
         ) : campaigns.length === 0 ? (
           <div className="px-5 py-14 text-center text-[13px] text-zinc-600">Nenhuma campanha encontrada.</div>
         ) : (

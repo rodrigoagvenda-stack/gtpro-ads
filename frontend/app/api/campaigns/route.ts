@@ -8,7 +8,7 @@ export async function GET(req: NextRequest) {
   try {
     const data = await getCampaigns(tenant.tenant_id)
     return Response.json(data)
-  } catch {
-    return Response.json([])
+  } catch (e: any) {
+    return Response.json({ error: e.message }, { status: 500 })
   }
 }
