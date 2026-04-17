@@ -21,10 +21,10 @@ async function getSetting(key: string): Promise<string> {
 
 export async function setSetting(key: string, value: string) {
   const supabase = createServiceClient()
-  const { error } = await supabase.from("platform_settings").upsert(
-    { key, value_encrypted: value, updated_at: new Date().toISOString() },
-    { onConflict: "key" }
-  )
+  const { error } = await supabase
+    .from("platform_settings")
+    .update({ value_encrypted: value, updated_at: new Date().toISOString() })
+    .eq("key", key)
   if (error) throw new Error(error.message)
   cache.delete(key)
 }
