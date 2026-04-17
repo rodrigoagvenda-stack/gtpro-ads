@@ -5,7 +5,7 @@ import { useSearchParams } from "next/navigation"
 import { api } from "@/lib/api"
 import {
   Check, Copy, Eye, EyeOff, Plus, Trash2, RefreshCw,
-  Facebook, Link2, Unlink, AlertCircle, Loader2,
+  LayoutGrid, Link2, Unlink, AlertCircle, Loader2,
 } from "lucide-react"
 
 interface ApiKey {
@@ -284,7 +284,7 @@ export default function ConfiguracoesPage() {
           <div className="flex items-center justify-between bg-zinc-800 rounded-lg px-4 py-3">
             <div className="flex items-center gap-3">
               <div className="w-8 h-8 rounded-full bg-blue-600/20 flex items-center justify-center">
-                <Facebook size={16} className="text-blue-400" />
+                <LayoutGrid size={16} className="text-blue-400" />
               </div>
               <div>
                 <p className="text-sm font-medium text-zinc-200">Meta Ads conectado</p>
