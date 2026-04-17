@@ -5,7 +5,7 @@ import { api } from "@/lib/api"
 import { AlertTriangle, CheckCircle, X } from "lucide-react"
 import type { Alert } from "@/types"
 
-const ALERT_ICONS: Record<string, string> = {
+const ALERT_LABELS: Record<string, string> = {
   roas_baixo: "ROAS abaixo do mínimo",
   cpl_alto: "CPL acima do limite",
   budget_esgotado: "Budget esgotado",
@@ -30,40 +30,49 @@ export default function AlertasPage() {
   }
 
   return (
-    <div className="space-y-6">
-      <h1 className="text-xl font-semibold text-white">Alertas</h1>
+    <div className="space-y-7">
+      <div>
+        <h1 className="text-[17px] font-semibold text-white">Alertas</h1>
+        <p className="text-[12px] text-zinc-600 mt-0.5">Campanhas que precisam de atenção</p>
+      </div>
 
       {loading ? (
-        <p className="text-zinc-500 text-sm">Carregando...</p>
+        <p className="text-[13px] text-zinc-600">Carregando...</p>
       ) : alerts.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-16 text-zinc-500">
-          <CheckCircle size={40} className="text-emerald-500 mb-3" />
-          <p className="text-sm font-medium text-zinc-300">Nenhum alerta ativo</p>
-          <p className="text-xs mt-1">Todas as campanhas estão dentro dos parâmetros configurados.</p>
+        <div className="flex flex-col items-center justify-center py-20 gap-3">
+          <div className="w-10 h-10 rounded-full bg-emerald-500/10 flex items-center justify-center">
+            <CheckCircle size={18} className="text-emerald-500" />
+          </div>
+          <div className="text-center">
+            <p className="text-[13px] font-medium text-zinc-300">Tudo certo</p>
+            <p className="text-[12px] text-zinc-600 mt-0.5">Nenhum alerta ativo no momento.</p>
+          </div>
         </div>
       ) : (
-        <div className="space-y-3">
+        <div className="space-y-2">
           {alerts.map((alert) => (
             <div
               key={alert.id}
-              className="flex items-start gap-4 bg-zinc-900 border border-zinc-800 rounded-xl px-5 py-4"
+              className="flex items-start gap-4 bg-white/[0.02] ring-1 ring-white/[0.06] rounded-xl px-5 py-4"
             >
-              <AlertTriangle size={16} className="text-yellow-400 mt-0.5 shrink-0" />
+              <div className="w-7 h-7 rounded-full bg-amber-500/10 flex items-center justify-center shrink-0 mt-0.5">
+                <AlertTriangle size={13} className="text-amber-400" />
+              </div>
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-zinc-200">
-                  {ALERT_ICONS[alert.type] ?? alert.type}
+                <p className="text-[13px] font-medium text-zinc-200">
+                  {ALERT_LABELS[alert.type] ?? alert.type}
                 </p>
-                <p className="text-xs text-zinc-400 mt-0.5">{alert.message}</p>
-                <p className="text-xs text-zinc-600 mt-1">
+                <p className="text-[12px] text-zinc-500 mt-0.5 leading-relaxed">{alert.message}</p>
+                <p className="text-[11px] text-zinc-700 mt-1.5">
                   {new Date(alert.created_at).toLocaleString("pt-BR")}
                 </p>
               </div>
               <button
                 onClick={() => resolve(alert.id)}
-                className="shrink-0 p-1 hover:bg-zinc-800 rounded-md transition-colors"
+                className="shrink-0 w-7 h-7 flex items-center justify-center hover:bg-white/[0.06] rounded-lg transition-colors"
                 title="Marcar como resolvido"
               >
-                <X size={14} className="text-zinc-500" />
+                <X size={13} className="text-zinc-600 hover:text-zinc-300" />
               </button>
             </div>
           ))}

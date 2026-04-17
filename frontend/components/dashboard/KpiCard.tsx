@@ -1,5 +1,5 @@
 import { cn } from "@/lib/utils"
-import { TrendingUp, TrendingDown, Minus } from "lucide-react"
+import { TrendingUp, TrendingDown } from "lucide-react"
 
 interface KpiCardProps {
   label: string
@@ -10,37 +10,28 @@ interface KpiCardProps {
 }
 
 export default function KpiCard({ label, value, trend, description, highlight }: KpiCardProps) {
-  const trendPositive = trend !== undefined && trend > 0
-  const trendNegative = trend !== undefined && trend < 0
-
   return (
     <div
       className={cn(
-        "rounded-xl p-5 border",
+        "rounded-lg px-5 py-4",
         highlight
-          ? "bg-violet-600/10 border-violet-500/30"
-          : "bg-zinc-900 border-zinc-800"
+          ? "bg-violet-600/10 ring-1 ring-violet-500/20"
+          : "bg-white/[0.03] ring-1 ring-white/[0.06]"
       )}
     >
-      <p className="text-xs font-medium text-zinc-400 uppercase tracking-wide">{label}</p>
-      <p className="mt-2 text-2xl font-bold text-white">{value}</p>
+      <p className="text-[11px] font-medium text-zinc-500 uppercase tracking-[0.08em]">{label}</p>
+      <p className="mt-2.5 text-[22px] font-semibold text-white leading-none tracking-tight">{value}</p>
       {trend !== undefined && (
-        <div className="mt-2 flex items-center gap-1 text-xs">
-          {trendPositive && <TrendingUp size={12} className="text-emerald-400" />}
-          {trendNegative && <TrendingDown size={12} className="text-red-400" />}
-          {!trendPositive && !trendNegative && <Minus size={12} className="text-zinc-500" />}
-          <span
-            className={cn(
-              trendPositive && "text-emerald-400",
-              trendNegative && "text-red-400",
-              !trendPositive && !trendNegative && "text-zinc-500"
-            )}
-          >
-            {trend > 0 ? "+" : ""}{trend.toFixed(1)}% vs período anterior
+        <div className="mt-2 flex items-center gap-1">
+          {trend > 0
+            ? <TrendingUp size={10} className="text-emerald-500" />
+            : <TrendingDown size={10} className="text-red-400" />}
+          <span className={cn("text-[11px] font-medium", trend > 0 ? "text-emerald-500" : "text-red-400")}>
+            {trend > 0 ? "+" : ""}{trend.toFixed(1)}%
           </span>
         </div>
       )}
-      {description && <p className="mt-1 text-xs text-zinc-500">{description}</p>}
+      {description && <p className="mt-1 text-[11px] text-zinc-600">{description}</p>}
     </div>
   )
 }

@@ -6,10 +6,9 @@ import { formatCurrency } from "@/lib/utils"
 import KpiCard from "@/components/dashboard/KpiCard"
 import CampaignRow from "@/components/dashboard/CampaignRow"
 import type { Campaign } from "@/types"
-import { TrendingDown, TrendingUp } from "lucide-react"
 import { cn } from "@/lib/utils"
 
-const DATE_PRESETS = [
+const PRESETS = [
   { value: "today", label: "Hoje" },
   { value: "last_7d", label: "7 dias" },
   { value: "last_30d", label: "30 dias" },
@@ -19,34 +18,26 @@ const DATE_PRESETS = [
 export default function CampanhasPage() {
   const [campaigns, setCampaigns] = useState<Campaign[]>([])
   const [insights, setInsights] = useState<Record<string, any>>({})
-  const [datePreset, setDatePreset] = useState("last_7d")
+  const [preset, setPreset] = useState("last_7d")
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    async function load() {
-      setLoading(true)
-      const [cData, iData] = await Promise.all([
-        api.campaigns.list(datePreset),
-        api.insights.get(datePreset),
-      ])
-      setCampaigns(Array.isArray(cData) ? cData : [])
-      setInsights(iData && typeof iData === "object" && !Array.isArray(iData) ? iData : {})
+    setLoading(true)
+    Promise.all([api.campaigns.list(preset), api.insights.get(preset)]).then(([c, i]) => {
+      setCampaigns(Array.isArray(c) ? c : [])
+      setInsights(i && typeof i === "object" && !Array.isArray(i) ? i : {})
       setLoading(false)
-    }
-    load()
-  }, [datePreset])
+    })
+  }, [preset])
 
-  async function toggleCampaign(id: string, currentStatus: string) {
-    const newStatus = currentStatus === "ACTIVE" ? "PAUSED" : "ACTIVE"
-    await api.campaigns.toggle(id, newStatus)
-    setCampaigns((prev) =>
-      prev.map((c) => (c.id === id ? { ...c, status: newStatus as Campaign["status"] } : c))
-    )
+  async function toggleCampaign(id: string, status: string) {
+    const next = status === "ACTIVE" ? "PAUSED" : "ACTIVE"
+    await api.campaigns.toggle(id, next)
+    setCampaigns((prev) => prev.map((c) => c.id === id ? { ...c, status: next as Campaign["status"] } : c))
   }
 
-  const totalSpend = campaigns.reduce((acc, c) => acc + (c.metrics?.spend || 0), 0)
+  const totalSpend = campaigns.reduce((a, c) => a + (c.metrics?.spend || 0), 0)
 
-  // Build funnel steps from account-level insights
   const impressions = Number(insights.impressions ?? 0)
   const reach = Number(insights.reach ?? 0)
   const clicks = Number(insights.clicks ?? 0)
@@ -61,21 +52,25 @@ export default function CampanhasPage() {
     ...(purchases ? [{ label: "Compras", value: Number(purchases) }] : []),
   ].filter((s) => s.value > 0)
 
-  const maxVal = funnelSteps[0]?.value ?? 1
-  const showFunnel = funnelSteps.length >= 3
+  const maxVal = funnelSteps[0]?.value || 1
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-7">
+      {/* Header */}
       <div className="flex items-center justify-between">
-        <h1 className="text-xl font-semibold text-white">Campanhas</h1>
-        <div className="flex gap-1 bg-zinc-900 rounded-lg p-1 border border-zinc-800">
-          {DATE_PRESETS.map((p) => (
+        <div>
+          <h1 className="text-[17px] font-semibold text-white">Campanhas</h1>
+          <p className="text-[12px] text-zinc-600 mt-0.5">Performance da conta Meta Ads</p>
+        </div>
+        <div className="flex items-center bg-white/[0.04] rounded-lg p-0.5 ring-1 ring-white/[0.06]">
+          {PRESETS.map((p) => (
             <button
               key={p.value}
-              onClick={() => setDatePreset(p.value)}
-              className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
-                datePreset === p.value ? "bg-violet-600 text-white" : "text-zinc-400 hover:text-zinc-100"
-              }`}
+              onClick={() => setPreset(p.value)}
+              className={cn(
+                "px-3 py-1.5 rounded-md text-[12px] font-medium transition-colors",
+                preset === p.value ? "bg-white/[0.08] text-white" : "text-zinc-500 hover:text-zinc-300"
+              )}
             >
               {p.label}
             </button>
@@ -83,7 +78,8 @@ export default function CampanhasPage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      {/* KPIs */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <KpiCard label="Gasto total" value={formatCurrency(insights.spend || totalSpend)} highlight />
         <KpiCard label="ROAS" value={insights.roas ? `${Number(insights.roas).toFixed(2)}x` : "—"} />
         <KpiCard label="CPC" value={insights.cpc ? formatCurrency(Number(insights.cpc)) : "—"} />
@@ -91,31 +87,32 @@ export default function CampanhasPage() {
       </div>
 
       {/* Funnel */}
-      {showFunnel && (
-        <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-5">
-          <h2 className="text-sm font-medium text-zinc-300 mb-4">Funil da conta</h2>
-          <div className="flex items-end gap-3">
+      {funnelSteps.length >= 3 && (
+        <div className="bg-white/[0.02] ring-1 ring-white/[0.06] rounded-xl p-5">
+          <p className="text-[11px] font-medium text-zinc-500 uppercase tracking-widest mb-5">Funil da conta</p>
+          <div className="flex items-end gap-2 h-20">
             {funnelSteps.map((step, i) => {
-              const heightPct = (step.value / maxVal) * 100
-              const convRate = i > 0 && funnelSteps[i - 1].value > 0
+              const h = Math.max(8, (step.value / maxVal) * 80)
+              const conv = i > 0 && funnelSteps[i - 1].value > 0
                 ? ((step.value / funnelSteps[i - 1].value) * 100).toFixed(1)
                 : null
               return (
                 <div key={step.label} className="flex-1 flex flex-col items-center gap-1">
-                  <p className="text-xs font-medium text-zinc-200">{step.value >= 1000 ? `${(step.value / 1000).toFixed(1)}k` : step.value}</p>
-                  {convRate && (
-                    <p className={cn("text-xs flex items-center gap-0.5", Number(convRate) >= 2 ? "text-emerald-400" : "text-yellow-400")}>
-                      {Number(convRate) >= 2 ? <TrendingUp size={10} /> : <TrendingDown size={10} />}
-                      {convRate}%
+                  <p className="text-[10px] text-zinc-400 font-medium">
+                    {step.value >= 1000 ? `${(step.value / 1000).toFixed(1)}k` : step.value}
+                  </p>
+                  {conv && (
+                    <p className={cn("text-[10px]", Number(conv) >= 2 ? "text-emerald-500" : "text-zinc-500")}>
+                      {conv}%
                     </p>
                   )}
-                  <div className="w-full bg-zinc-800 rounded-t-md" style={{ height: 80 }}>
+                  <div className="w-full flex flex-col justify-end" style={{ height: 56 }}>
                     <div
-                      className="w-full bg-violet-600/70 rounded-t-md transition-all"
-                      style={{ height: `${heightPct}%`, marginTop: `${100 - heightPct}%` }}
+                      className={cn("w-full rounded-sm", i === 0 ? "bg-violet-600/60" : "bg-violet-600/30")}
+                      style={{ height: h }}
                     />
                   </div>
-                  <p className="text-xs text-zinc-500 text-center">{step.label}</p>
+                  <p className="text-[10px] text-zinc-600 text-center leading-tight">{step.label}</p>
                 </div>
               )
             })}
@@ -123,25 +120,28 @@ export default function CampanhasPage() {
         </div>
       )}
 
-      {/* Campaigns list */}
-      <div className="bg-zinc-900 rounded-xl border border-zinc-800 overflow-hidden">
-        <div className="px-5 py-4 border-b border-zinc-800">
-          <h2 className="text-sm font-medium text-zinc-300">
+      {/* Table */}
+      <div className="bg-white/[0.02] ring-1 ring-white/[0.06] rounded-xl overflow-hidden">
+        <div className="px-5 py-3.5 border-b border-white/[0.05] flex items-center justify-between">
+          <p className="text-[12px] font-medium text-zinc-400">
             {campaigns.length} campanha{campaigns.length !== 1 ? "s" : ""}
-          </h2>
+          </p>
+          <div className="hidden md:flex gap-5 pr-14 text-[11px] text-zinc-600 uppercase tracking-wider">
+            <span>Gasto</span>
+            <span>ROAS</span>
+            <span>CPL</span>
+            <span>CTR</span>
+          </div>
         </div>
+
         {loading ? (
-          <div className="px-5 py-12 text-center text-zinc-500 text-sm">Carregando...</div>
+          <div className="px-5 py-14 text-center text-[13px] text-zinc-600">Carregando...</div>
         ) : campaigns.length === 0 ? (
-          <div className="px-5 py-12 text-center text-zinc-500 text-sm">Nenhuma campanha encontrada.</div>
+          <div className="px-5 py-14 text-center text-[13px] text-zinc-600">Nenhuma campanha encontrada.</div>
         ) : (
-          <div className="divide-y divide-zinc-800">
-            {campaigns.map((campaign) => (
-              <CampaignRow
-                key={campaign.id}
-                campaign={campaign}
-                onToggle={() => toggleCampaign(campaign.id, campaign.status)}
-              />
+          <div className="divide-y divide-white/[0.04]">
+            {campaigns.map((c) => (
+              <CampaignRow key={c.id} campaign={c} onToggle={() => toggleCampaign(c.id, c.status)} />
             ))}
           </div>
         )}

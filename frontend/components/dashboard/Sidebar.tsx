@@ -1,19 +1,45 @@
 "use client"
 
 import Link from "next/link"
-import { usePathname } from "next/navigation"
-import { BarChart3, Megaphone, Bot, FileText, Bell, Settings, LogOut, Zap } from "lucide-react"
+import { usePathname, useRouter } from "next/navigation"
+import { Megaphone, Bot, FileText, Bell, Settings, LogOut, Zap, BarChart2 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { createClient } from "@/lib/supabase"
-import { useRouter } from "next/navigation"
 
-const navItems = [
+const NAV_MAIN = [
   { href: "/campanhas", label: "Campanhas", icon: Megaphone },
   { href: "/agente", label: "Agente IA", icon: Bot },
   { href: "/relatorios", label: "Relatórios", icon: FileText },
   { href: "/alertas", label: "Alertas", icon: Bell },
-  { href: "/onboarding", label: "Primeiros passos", icon: Zap },
 ]
+
+const NAV_BOTTOM = [
+  { href: "/onboarding", label: "Primeiros passos", icon: Zap },
+  { href: "/configuracoes", label: "Configurações", icon: Settings },
+]
+
+function NavLink({ href, label, icon: Icon, active }: { href: string; label: string; icon: any; active: boolean }) {
+  return (
+    <Link
+      href={href}
+      className={cn(
+        "group flex items-center gap-2.5 px-3 py-[7px] rounded-md text-[13px] font-medium transition-colors",
+        active
+          ? "bg-white/[0.08] text-white"
+          : "text-zinc-500 hover:text-zinc-200 hover:bg-white/[0.04]"
+      )}
+    >
+      <Icon
+        size={14}
+        className={cn(
+          "shrink-0 transition-colors",
+          active ? "text-violet-400" : "text-zinc-600 group-hover:text-zinc-400"
+        )}
+      />
+      {label}
+    </Link>
+  )
+}
 
 export default function Sidebar() {
   const pathname = usePathname()
@@ -26,45 +52,34 @@ export default function Sidebar() {
   }
 
   return (
-    <aside className="w-60 shrink-0 flex flex-col bg-zinc-900 border-r border-zinc-800">
-      <div className="px-6 py-5 border-b border-zinc-800">
+    <aside className="w-52 shrink-0 flex flex-col bg-[#0b0b0d] border-r border-white/[0.05]">
+      {/* Logo */}
+      <div className="h-[52px] flex items-center px-4 border-b border-white/[0.05]">
         <div className="flex items-center gap-2">
-          <BarChart3 className="text-violet-400" size={20} />
-          <span className="font-bold text-white text-lg">GTPRO</span>
+          <div className="w-[26px] h-[26px] rounded-[6px] bg-violet-600 flex items-center justify-center">
+            <BarChart2 size={13} className="text-white" />
+          </div>
+          <span className="font-semibold text-[15px] text-white tracking-[-0.2px]">GTPRO</span>
         </div>
       </div>
 
-      <nav className="flex-1 px-3 py-4 space-y-1">
-        {navItems.map(({ href, label, icon: Icon }) => (
-          <Link
-            key={href}
-            href={href}
-            className={cn(
-              "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors",
-              pathname.startsWith(href)
-                ? "bg-violet-600/20 text-violet-300"
-                : "text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800"
-            )}
-          >
-            <Icon size={16} />
-            {label}
-          </Link>
+      {/* Main nav */}
+      <nav className="flex-1 px-2 pt-3 pb-2 space-y-0.5">
+        {NAV_MAIN.map(({ href, label, icon }) => (
+          <NavLink key={href} href={href} label={label} icon={icon} active={pathname.startsWith(href)} />
         ))}
       </nav>
 
-      <div className="px-3 py-4 border-t border-zinc-800 space-y-1">
-        <Link
-          href="/configuracoes"
-          className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800 transition-colors"
-        >
-          <Settings size={16} />
-          Configurações
-        </Link>
+      {/* Bottom nav */}
+      <div className="px-2 pb-3 pt-2 border-t border-white/[0.05] space-y-0.5">
+        {NAV_BOTTOM.map(({ href, label, icon }) => (
+          <NavLink key={href} href={href} label={label} icon={icon} active={pathname.startsWith(href)} />
+        ))}
         <button
           onClick={handleLogout}
-          className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800 transition-colors"
+          className="w-full group flex items-center gap-2.5 px-3 py-[7px] rounded-md text-[13px] font-medium text-zinc-500 hover:text-zinc-200 hover:bg-white/[0.04] transition-colors"
         >
-          <LogOut size={16} />
+          <LogOut size={14} className="shrink-0 text-zinc-600 group-hover:text-zinc-400 transition-colors" />
           Sair
         </button>
       </div>

@@ -3,13 +3,14 @@
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import { api } from "@/lib/api"
-import { Check, Link2, Settings, Zap, Loader2, ArrowRight } from "lucide-react"
+import { Check, ArrowRight, Loader2 } from "lucide-react"
+import { cn } from "@/lib/utils"
 
 const OBJETIVOS = [
   { value: "LEADS", label: "Geração de Leads", desc: "Formulários, WhatsApp, ligações" },
-  { value: "SALES", label: "Vendas / E-commerce", desc: "Compras, add to cart, checkout" },
-  { value: "TRAFFIC", label: "Tráfego", desc: "Cliques no site, visualizações de página" },
-  { value: "AWARENESS", label: "Reconhecimento", desc: "Alcance, impressões, brand awareness" },
+  { value: "SALES", label: "Vendas", desc: "E-commerce, compras online" },
+  { value: "TRAFFIC", label: "Tráfego", desc: "Cliques no site, pageviews" },
+  { value: "AWARENESS", label: "Reconhecimento", desc: "Alcance e brand awareness" },
 ]
 
 export default function OnboardingPage() {
@@ -17,23 +18,18 @@ export default function OnboardingPage() {
   const [step, setStep] = useState(1)
   const [metaConnected, setMetaConnected] = useState(false)
   const [connectingMeta, setConnectingMeta] = useState(false)
-  const [hasPlatformCreds, setHasPlatformCreds] = useState(false)
-  const [config, setConfig] = useState({
-    objetivo_principal: "LEADS",
-    roas_minimo: 2,
-    cpl_maximo: 50,
-    modo_supervisionado: true,
-  })
+  const [hasCreds, setHasCreds] = useState(false)
+  const [config, setConfig] = useState({ objetivo_principal: "LEADS", roas_minimo: 2, cpl_maximo: 50, modo_supervisionado: true })
   const [saving, setSaving] = useState(false)
 
   useEffect(() => {
     Promise.all([
       api.get("/settings/platform"),
       api.meta.status().catch(() => ({ connected: false })),
-    ]).then(([platform, meta]) => {
-      setHasPlatformCreds(platform.anthropic_api_key_set)
-      setMetaConnected(meta.connected)
-      if (meta.connected) setStep(2)
+    ]).then(([p, m]) => {
+      setHasCreds(p.anthropic_api_key_set)
+      setMetaConnected(m.connected)
+      if (m.connected) setStep(2)
     })
   }, [])
 
@@ -51,11 +47,7 @@ export default function OnboardingPage() {
   async function finish() {
     setSaving(true)
     try {
-      await api.tenant.save({
-        ...config,
-        roas_minimo: Number(config.roas_minimo),
-        cpl_maximo: Number(config.cpl_maximo),
-      })
+      await api.tenant.save({ ...config, roas_minimo: Number(config.roas_minimo), cpl_maximo: Number(config.cpl_maximo) })
       router.push("/campanhas")
     } catch (e: any) {
       alert(e.message)
@@ -65,154 +57,159 @@ export default function OnboardingPage() {
   }
 
   return (
-    <div className="min-h-full flex items-start justify-center pt-16">
-      <div className="w-full max-w-lg space-y-6">
-        <div className="text-center space-y-2">
-          <div className="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-violet-600/20 mb-2">
-            <Zap size={24} className="text-violet-400" />
-          </div>
-          <h1 className="text-2xl font-bold text-white">Configuração inicial</h1>
-          <p className="text-zinc-400 text-sm">Configure o GTPRO em 2 passos rápidos</p>
+    <div className="min-h-full flex items-start justify-center pt-12">
+      <div className="w-full max-w-md">
+
+        {/* Header */}
+        <div className="mb-8">
+          <p className="text-[11px] font-medium text-violet-400 uppercase tracking-widest mb-2">Configuração inicial</p>
+          <h1 className="text-xl font-semibold text-white">Configure o GTPRO</h1>
+          <p className="text-sm text-zinc-500 mt-1">Dois passos para começar a gerenciar suas campanhas com IA.</p>
         </div>
 
-        {/* Progress */}
-        <div className="flex items-center gap-2">
-          {[1, 2].map((s) => (
-            <div key={s} className="flex items-center gap-2 flex-1">
-              <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold transition-colors ${
-                step > s ? "bg-emerald-600 text-white" : step === s ? "bg-violet-600 text-white" : "bg-zinc-800 text-zinc-500"
-              }`}>
-                {step > s ? <Check size={12} /> : s}
+        {/* Steps indicator */}
+        <div className="flex items-center gap-2 mb-6">
+          {[
+            { n: 1, label: "Conectar Meta Ads" },
+            { n: 2, label: "Objetivos" },
+          ].map((s, i) => (
+            <div key={s.n} className="flex items-center gap-2">
+              <div className="flex items-center gap-1.5">
+                <div className={cn(
+                  "w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold transition-colors",
+                  step > s.n ? "bg-emerald-600" : step === s.n ? "bg-violet-600" : "bg-zinc-800 text-zinc-500"
+                )}>
+                  {step > s.n ? <Check size={9} /> : <span className="text-white">{s.n}</span>}
+                </div>
+                <span className={cn("text-[12px]", step >= s.n ? "text-zinc-300" : "text-zinc-600")}>{s.label}</span>
               </div>
-              <span className={`text-xs ${step >= s ? "text-zinc-300" : "text-zinc-600"}`}>
-                {s === 1 ? "Conectar Meta Ads" : "Objetivos e limites"}
-              </span>
-              {s < 2 && <div className={`flex-1 h-px ${step > s ? "bg-emerald-600" : "bg-zinc-800"}`} />}
+              {i < 1 && <div className={cn("flex-1 h-px w-8", step > s.n ? "bg-emerald-600/50" : "bg-zinc-800")} />}
             </div>
           ))}
         </div>
 
-        {/* Step 1 */}
+        {/* Step 1 — Meta */}
         {step === 1 && (
-          <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6 space-y-5">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-lg bg-blue-600/20 flex items-center justify-center">
-                <Link2 size={18} className="text-blue-400" />
-              </div>
-              <div>
-                <h2 className="text-base font-semibold text-white">Conectar conta Meta Ads</h2>
-                <p className="text-xs text-zinc-400">O agente precisa de acesso para gerenciar suas campanhas</p>
-              </div>
+          <div className="bg-white/[0.03] ring-1 ring-white/[0.07] rounded-xl p-6 space-y-5">
+            <div>
+              <h2 className="text-[14px] font-semibold text-white">Conectar Meta Ads</h2>
+              <p className="text-[12px] text-zinc-500 mt-1">O agente precisa de acesso para ler e otimizar suas campanhas.</p>
             </div>
 
-            {!hasPlatformCreds && (
-              <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-lg px-4 py-3 text-xs text-yellow-400">
-                Configure o Meta App ID e App Secret em{" "}
+            {!hasCreds && (
+              <div className="rounded-lg bg-amber-500/10 border border-amber-500/20 px-4 py-3 text-[12px] text-amber-400">
+                Configure o Meta App ID em{" "}
                 <button onClick={() => router.push("/configuracoes")} className="underline font-medium">Configurações</button>{" "}
                 antes de continuar.
               </div>
             )}
 
             {metaConnected ? (
-              <div className="flex items-center gap-2 text-emerald-400 text-sm">
-                <Check size={16} /> Conta conectada com sucesso
+              <div className="flex items-center gap-2 text-[13px] text-emerald-400">
+                <Check size={14} /> Conta conectada
               </div>
             ) : (
               <button
                 onClick={connectMeta}
-                disabled={connectingMeta || !hasPlatformCreds}
-                className="w-full flex items-center justify-center gap-2 py-3 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white font-medium rounded-lg transition-colors"
+                disabled={connectingMeta || !hasCreds}
+                className="w-full flex items-center justify-center gap-2 py-2.5 bg-white text-zinc-900 text-[13px] font-semibold rounded-lg hover:bg-zinc-100 disabled:opacity-40 transition-colors"
               >
-                {connectingMeta ? <><Loader2 size={16} className="animate-spin" /> Redirecionando...</> : <><Link2 size={16} /> Conectar Meta Ads</>}
+                {connectingMeta ? <><Loader2 size={14} className="animate-spin" /> Redirecionando...</> : "Conectar Meta Ads"}
               </button>
             )}
 
-            <div className="flex justify-between pt-2">
-              <button onClick={() => setStep(2)} className="text-xs text-zinc-500 hover:text-zinc-300 underline">
+            <div className="flex items-center justify-between pt-1">
+              <button onClick={() => setStep(2)} className="text-[12px] text-zinc-600 hover:text-zinc-400 transition-colors">
                 Pular por agora
               </button>
               {metaConnected && (
-                <button onClick={() => setStep(2)} className="flex items-center gap-1.5 text-sm text-violet-400 font-medium hover:text-violet-300">
-                  Continuar <ArrowRight size={14} />
+                <button onClick={() => setStep(2)} className="flex items-center gap-1 text-[13px] text-violet-400 font-medium hover:text-violet-300 transition-colors">
+                  Continuar <ArrowRight size={13} />
                 </button>
               )}
             </div>
           </div>
         )}
 
-        {/* Step 2 */}
+        {/* Step 2 — Config */}
         {step === 2 && (
-          <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6 space-y-5">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-lg bg-violet-600/20 flex items-center justify-center">
-                <Settings size={18} className="text-violet-400" />
-              </div>
-              <div>
-                <h2 className="text-base font-semibold text-white">Objetivos e limites</h2>
-                <p className="text-xs text-zinc-400">O agente usa esses parâmetros para avaliar performance</p>
-              </div>
+          <div className="bg-white/[0.03] ring-1 ring-white/[0.07] rounded-xl p-6 space-y-5">
+            <div>
+              <h2 className="text-[14px] font-semibold text-white">Objetivos e limites</h2>
+              <p className="text-[12px] text-zinc-500 mt-1">O agente usa esses parâmetros para avaliar e otimizar campanhas.</p>
             </div>
 
+            {/* Objetivo */}
             <div>
-              <label className="block text-xs text-zinc-400 mb-2">Qual seu objetivo principal?</label>
-              <div className="grid grid-cols-2 gap-2">
+              <label className="block text-[11px] font-medium text-zinc-500 uppercase tracking-widest mb-2">Objetivo principal</label>
+              <div className="space-y-1">
                 {OBJETIVOS.map((o) => (
                   <button
                     key={o.value}
                     onClick={() => setConfig((c) => ({ ...c, objetivo_principal: o.value }))}
-                    className={`text-left px-4 py-3 rounded-lg border transition-colors ${
+                    className={cn(
+                      "w-full flex items-center justify-between px-4 py-2.5 rounded-lg text-left transition-colors",
                       config.objetivo_principal === o.value
-                        ? "border-violet-500 bg-violet-600/10 text-white"
-                        : "border-zinc-700 bg-zinc-800 text-zinc-300 hover:border-zinc-600"
-                    }`}
+                        ? "bg-violet-600/15 ring-1 ring-violet-500/30"
+                        : "hover:bg-white/[0.04] ring-1 ring-transparent"
+                    )}
                   >
-                    <p className="text-sm font-medium">{o.label}</p>
-                    <p className="text-xs text-zinc-500 mt-0.5">{o.desc}</p>
+                    <div>
+                      <p className={cn("text-[13px] font-medium", config.objetivo_principal === o.value ? "text-white" : "text-zinc-300")}>{o.label}</p>
+                      <p className="text-[11px] text-zinc-500">{o.desc}</p>
+                    </div>
+                    {config.objetivo_principal === o.value && (
+                      <div className="w-4 h-4 rounded-full bg-violet-600 flex items-center justify-center shrink-0">
+                        <Check size={9} className="text-white" />
+                      </div>
+                    )}
                   </button>
                 ))}
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
+            {/* Metrics */}
+            <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="block text-xs text-zinc-400 mb-1.5">ROAS mínimo</label>
+                <label className="block text-[11px] font-medium text-zinc-500 uppercase tracking-widest mb-1.5">ROAS mínimo</label>
                 <input
                   type="number" step="0.1" min="0"
                   value={config.roas_minimo}
                   onChange={(e) => setConfig((c) => ({ ...c, roas_minimo: Number(e.target.value) }))}
-                  className="w-full px-4 py-2.5 bg-zinc-800 border border-zinc-700 rounded-lg text-sm text-white focus:outline-none focus:border-violet-500 transition-colors"
+                  className="w-full px-3 py-2 bg-white/[0.04] ring-1 ring-white/[0.08] rounded-lg text-[13px] text-white focus:outline-none focus:ring-violet-500/50 transition-all"
                 />
               </div>
               <div>
-                <label className="block text-xs text-zinc-400 mb-1.5">CPL máximo (R$)</label>
+                <label className="block text-[11px] font-medium text-zinc-500 uppercase tracking-widest mb-1.5">CPL máx (R$)</label>
                 <input
                   type="number" step="1" min="0"
                   value={config.cpl_maximo}
                   onChange={(e) => setConfig((c) => ({ ...c, cpl_maximo: Number(e.target.value) }))}
-                  className="w-full px-4 py-2.5 bg-zinc-800 border border-zinc-700 rounded-lg text-sm text-white focus:outline-none focus:border-violet-500 transition-colors"
+                  className="w-full px-3 py-2 bg-white/[0.04] ring-1 ring-white/[0.08] rounded-lg text-[13px] text-white focus:outline-none focus:ring-violet-500/50 transition-all"
                 />
               </div>
             </div>
 
-            <div className="flex items-center justify-between bg-zinc-800 rounded-lg px-4 py-3">
+            {/* Supervised mode */}
+            <div className="flex items-center justify-between py-3 border-t border-white/[0.05]">
               <div>
-                <p className="text-sm font-medium text-zinc-200">Modo supervisionado</p>
-                <p className="text-xs text-zinc-500 mt-0.5">Agente propõe — você aprova</p>
+                <p className="text-[13px] font-medium text-zinc-200">Modo supervisionado</p>
+                <p className="text-[11px] text-zinc-500 mt-0.5">Agente propõe — você aprova antes de executar</p>
               </div>
               <button
                 onClick={() => setConfig((c) => ({ ...c, modo_supervisionado: !c.modo_supervisionado }))}
-                className={`shrink-0 w-11 h-6 rounded-full transition-colors relative ${config.modo_supervisionado ? "bg-violet-600" : "bg-zinc-700"}`}
+                className={cn("shrink-0 w-10 h-[22px] rounded-full transition-colors relative", config.modo_supervisionado ? "bg-violet-600" : "bg-zinc-700")}
               >
-                <span className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${config.modo_supervisionado ? "translate-x-5" : "translate-x-0.5"}`} />
+                <span className={cn("absolute top-[3px] w-4 h-4 bg-white rounded-full shadow transition-transform", config.modo_supervisionado ? "translate-x-[22px]" : "translate-x-[3px]")} />
               </button>
             </div>
 
             <button
               onClick={finish}
               disabled={saving}
-              className="w-full flex items-center justify-center gap-2 py-3 bg-violet-600 hover:bg-violet-500 disabled:opacity-50 text-white font-medium rounded-lg transition-colors"
+              className="w-full flex items-center justify-center gap-2 py-2.5 bg-violet-600 hover:bg-violet-500 disabled:opacity-50 text-white text-[13px] font-semibold rounded-lg transition-colors"
             >
-              {saving ? <><Loader2 size={16} className="animate-spin" /> Salvando...</> : <>Concluir configuração <ArrowRight size={16} /></>}
+              {saving ? <><Loader2 size={14} className="animate-spin" /> Salvando...</> : <>Concluir <ArrowRight size={14} /></>}
             </button>
           </div>
         )}

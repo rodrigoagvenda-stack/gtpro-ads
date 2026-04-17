@@ -10,62 +10,65 @@ interface CampaignRowProps {
   onToggle: () => void
 }
 
-const STATUS_LABELS: Record<string, { label: string; color: string }> = {
-  ACTIVE: { label: "Ativo", color: "bg-emerald-500/20 text-emerald-400" },
-  PAUSED: { label: "Pausado", color: "bg-zinc-700 text-zinc-400" },
-  WITH_ISSUES: { label: "Com problemas", color: "bg-red-500/20 text-red-400" },
-  IN_PROCESS: { label: "Em revisão", color: "bg-yellow-500/20 text-yellow-400" },
+const STATUS: Record<string, { dot: string; label: string }> = {
+  ACTIVE: { dot: "bg-emerald-500", label: "Ativo" },
+  PAUSED: { dot: "bg-zinc-600", label: "Pausado" },
+  WITH_ISSUES: { dot: "bg-red-500", label: "Com problemas" },
+  IN_PROCESS: { dot: "bg-amber-500", label: "Em revisão" },
 }
 
 export default function CampaignRow({ campaign, onToggle }: CampaignRowProps) {
-  const statusInfo = STATUS_LABELS[campaign.status] ?? { label: campaign.status, color: "bg-zinc-700 text-zinc-400" }
+  const st = STATUS[campaign.status] ?? { dot: "bg-zinc-600", label: campaign.status }
   const isActive = campaign.status === "ACTIVE"
 
   return (
-    <div className="flex items-center gap-4 px-5 py-4 hover:bg-zinc-800/50 transition-colors">
+    <div className="flex items-center gap-4 px-5 py-3.5 hover:bg-white/[0.02] transition-colors">
       <Link href={`/campanhas/${campaign.id}`} className="flex-1 min-w-0 group">
-        <p className="text-sm font-medium text-zinc-100 truncate group-hover:text-violet-300 transition-colors">{campaign.name}</p>
-        <p className="text-xs text-zinc-500 mt-0.5">{campaign.objective?.replace("OUTCOME_", "")}</p>
+        <p className="text-[13px] font-medium text-zinc-200 truncate group-hover:text-white transition-colors">
+          {campaign.name}
+        </p>
+        <p className="text-[11px] text-zinc-600 mt-0.5">{campaign.objective?.replace("OUTCOME_", "")}</p>
       </Link>
 
-      <span className={cn("px-2 py-0.5 rounded-full text-xs font-medium", statusInfo.color)}>
-        {statusInfo.label}
-      </span>
+      <div className="flex items-center gap-1.5 shrink-0">
+        <span className={cn("w-1.5 h-1.5 rounded-full", st.dot)} />
+        <span className="text-[12px] text-zinc-500">{st.label}</span>
+      </div>
 
-      <div className="hidden md:flex gap-6 text-right text-xs">
-        <div>
-          <p className="text-zinc-500">Gasto</p>
-          <p className="text-zinc-200 font-medium">{formatCurrency(campaign.metrics?.spend || 0)}</p>
+      <div className="hidden md:flex gap-5 shrink-0">
+        <div className="text-right">
+          <p className="text-[11px] text-zinc-600">Gasto</p>
+          <p className="text-[13px] text-zinc-300 font-medium">{formatCurrency(campaign.metrics?.spend || 0)}</p>
         </div>
-        {campaign.metrics?.roas && (
-          <div>
-            <p className="text-zinc-500">ROAS</p>
-            <p className="text-zinc-200 font-medium">{campaign.metrics.roas.toFixed(2)}x</p>
+        {campaign.metrics?.roas != null && (
+          <div className="text-right">
+            <p className="text-[11px] text-zinc-600">ROAS</p>
+            <p className="text-[13px] text-zinc-300 font-medium">{campaign.metrics.roas.toFixed(2)}x</p>
           </div>
         )}
-        {campaign.metrics?.cpl && (
-          <div>
-            <p className="text-zinc-500">CPL</p>
-            <p className="text-zinc-200 font-medium">{formatCurrency(campaign.metrics.cpl)}</p>
+        {campaign.metrics?.cpl != null && (
+          <div className="text-right">
+            <p className="text-[11px] text-zinc-600">CPL</p>
+            <p className="text-[13px] text-zinc-300 font-medium">{formatCurrency(campaign.metrics.cpl)}</p>
           </div>
         )}
-        <div>
-          <p className="text-zinc-500">CTR</p>
-          <p className="text-zinc-200 font-medium">{(campaign.metrics?.ctr || 0).toFixed(2)}%</p>
+        <div className="text-right">
+          <p className="text-[11px] text-zinc-600">CTR</p>
+          <p className="text-[13px] text-zinc-300 font-medium">{(campaign.metrics?.ctr || 0).toFixed(2)}%</p>
         </div>
       </div>
 
       <button
         onClick={onToggle}
         className={cn(
-          "shrink-0 w-10 h-6 rounded-full transition-colors relative",
-          isActive ? "bg-violet-600" : "bg-zinc-700"
+          "shrink-0 w-9 h-5 rounded-full transition-colors relative",
+          isActive ? "bg-violet-600" : "bg-zinc-800"
         )}
-        title={isActive ? "Pausar campanha" : "Ativar campanha"}
+        title={isActive ? "Pausar" : "Ativar"}
       >
         <span
           className={cn(
-            "absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform",
+            "absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform",
             isActive ? "translate-x-4" : "translate-x-0.5"
           )}
         />

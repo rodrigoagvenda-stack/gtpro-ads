@@ -3,6 +3,7 @@
 import { useState } from "react"
 import { createClient } from "@/lib/supabase"
 import { useRouter } from "next/navigation"
+import { BarChart2 } from "lucide-react"
 
 export default function LoginPage() {
   const [email, setEmail] = useState("")
@@ -16,7 +17,6 @@ export default function LoginPage() {
     e.preventDefault()
     setLoading(true)
     setError("")
-
     const { error } = await supabase.auth.signInWithPassword({ email, password })
     if (error) {
       setError(error.message)
@@ -26,7 +26,7 @@ export default function LoginPage() {
     router.push("/campanhas")
   }
 
-  async function handleGoogleLogin() {
+  async function handleGoogle() {
     await supabase.auth.signInWithOAuth({
       provider: "google",
       options: { redirectTo: `${window.location.origin}/campanhas` },
@@ -34,58 +34,56 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-zinc-950">
-      <div className="w-full max-w-sm space-y-8 px-4">
-        <div className="text-center">
-          <h1 className="text-3xl font-bold text-white">GTPRO</h1>
-          <p className="mt-2 text-zinc-400 text-sm">Gestão de tráfego com inteligência artificial</p>
+    <div className="min-h-screen flex items-center justify-center bg-[#08080a]">
+      <div className="w-full max-w-[360px] px-4">
+
+        {/* Logo */}
+        <div className="flex flex-col items-center mb-8">
+          <div className="w-9 h-9 rounded-[10px] bg-violet-600 flex items-center justify-center mb-4">
+            <BarChart2 size={18} className="text-white" />
+          </div>
+          <h1 className="text-[18px] font-semibold text-white tracking-tight">GTPRO</h1>
+          <p className="text-[13px] text-zinc-500 mt-1">Gestão de tráfego com inteligência artificial</p>
         </div>
 
-        <form onSubmit={handleLogin} className="space-y-4">
-          <div>
-            <input
-              type="email"
-              placeholder="E-mail"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-              className="w-full px-4 py-3 bg-zinc-900 border border-zinc-800 rounded-lg text-white placeholder-zinc-500 focus:outline-none focus:border-violet-500 transition-colors"
-            />
-          </div>
-          <div>
-            <input
-              type="password"
-              placeholder="Senha"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-              className="w-full px-4 py-3 bg-zinc-900 border border-zinc-800 rounded-lg text-white placeholder-zinc-500 focus:outline-none focus:border-violet-500 transition-colors"
-            />
-          </div>
+        <form onSubmit={handleLogin} className="space-y-3">
+          <input
+            type="email"
+            placeholder="E-mail"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            required
+            className="w-full px-3.5 py-2.5 bg-white/[0.04] ring-1 ring-white/[0.08] rounded-lg text-[13px] text-white placeholder-zinc-600 focus:outline-none focus:ring-violet-500/50 transition-all"
+          />
+          <input
+            type="password"
+            placeholder="Senha"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            required
+            className="w-full px-3.5 py-2.5 bg-white/[0.04] ring-1 ring-white/[0.08] rounded-lg text-[13px] text-white placeholder-zinc-600 focus:outline-none focus:ring-violet-500/50 transition-all"
+          />
 
-          {error && <p className="text-red-400 text-sm">{error}</p>}
+          {error && <p className="text-[12px] text-red-400">{error}</p>}
 
           <button
             type="submit"
             disabled={loading}
-            className="w-full py-3 bg-violet-600 hover:bg-violet-500 disabled:opacity-50 text-white font-medium rounded-lg transition-colors"
+            className="w-full py-2.5 bg-violet-600 hover:bg-violet-500 disabled:opacity-50 text-white text-[13px] font-semibold rounded-lg transition-colors"
           >
             {loading ? "Entrando..." : "Entrar"}
           </button>
         </form>
 
-        <div className="relative">
-          <div className="absolute inset-0 flex items-center">
-            <div className="w-full border-t border-zinc-800" />
-          </div>
-          <div className="relative flex justify-center text-xs text-zinc-500">
-            <span className="px-2 bg-zinc-950">ou</span>
-          </div>
+        <div className="flex items-center gap-3 my-4">
+          <div className="flex-1 h-px bg-white/[0.06]" />
+          <span className="text-[11px] text-zinc-600">ou</span>
+          <div className="flex-1 h-px bg-white/[0.06]" />
         </div>
 
         <button
-          onClick={handleGoogleLogin}
-          className="w-full py-3 bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-white font-medium rounded-lg transition-colors"
+          onClick={handleGoogle}
+          className="w-full py-2.5 bg-white/[0.04] ring-1 ring-white/[0.08] hover:bg-white/[0.07] text-white text-[13px] font-medium rounded-lg transition-colors"
         >
           Continuar com Google
         </button>
