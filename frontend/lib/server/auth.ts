@@ -16,9 +16,11 @@ export async function getTenant(req: NextRequest): Promise<TenantContext | null>
 
   // Tenta como JWT do Supabase
   try {
-    const secret = new TextEncoder().encode(process.env.SUPABASE_JWT_SECRET!)
+    const jwtSecret = process.env.SUPABASE_JWT_SECRET!
+    const secret = new TextEncoder().encode(jwtSecret)
     const { payload } = await jwtVerify(token, secret)
     const tenant_id = (payload as any).app_metadata?.tenant_id
+      ?? (payload as any).sub
     if (tenant_id) return { tenant_id, auth_type: "jwt" }
   } catch {}
 
