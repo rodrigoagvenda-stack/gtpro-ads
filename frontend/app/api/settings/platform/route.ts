@@ -12,6 +12,10 @@ export async function GET(req: NextRequest) {
   })
 }
 
+export async function POST(req: NextRequest) {
+  return PUT(req)
+}
+
 export async function PUT(req: NextRequest) {
   const tenant = await getTenant(req)
   if (!tenant) return unauthorized()
