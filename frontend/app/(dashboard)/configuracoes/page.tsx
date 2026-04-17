@@ -35,8 +35,11 @@ export default function ConfiguracoesPage() {
   const [creatingKey, setCreatingKey] = useState(false)
 
   useEffect(() => {
-    api.get("/settings/platform").then(setPlatform)
-    api.get("/settings/api-keys").then(setApiKeys)
+    api.get("/settings/platform").then((data) => {
+      setPlatform(data)
+      if (data.meta_app_id) setForm((f) => ({ ...f, meta_app_id: data.meta_app_id }))
+    })
+    api.get("/settings/api-keys").then((data) => setApiKeys(Array.isArray(data) ? data : []))
   }, [])
 
   const [platformError, setPlatformError] = useState("")
@@ -91,6 +94,17 @@ export default function ConfiguracoesPage() {
       {/* Plataforma */}
       <section className="bg-zinc-900 border border-zinc-800 rounded-xl p-6 space-y-5">
         <h2 className="text-sm font-semibold text-zinc-300 uppercase tracking-wide">Credenciais da Plataforma</h2>
+
+        {savedPlatform && (
+          <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-lg px-4 py-3 text-sm text-emerald-400 flex items-center gap-2">
+            <Check size={14} /> Credenciais salvas com sucesso
+          </div>
+        )}
+        {platformError && (
+          <div className="bg-red-500/10 border border-red-500/30 rounded-lg px-4 py-3 text-sm text-red-400">
+            {platformError}
+          </div>
+        )}
 
         <div className="space-y-4">
           <div>
@@ -154,10 +168,6 @@ export default function ConfiguracoesPage() {
             </div>
           </div>
         </div>
-
-        {platformError && (
-          <p className="text-xs text-red-400">{platformError}</p>
-        )}
 
         <button
           onClick={savePlatformSettings}
