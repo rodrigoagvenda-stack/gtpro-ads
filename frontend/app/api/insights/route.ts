@@ -9,7 +9,7 @@ export async function GET(req: NextRequest) {
   try {
     const data = await getInsights(tenant.tenant_id, datePreset)
     return Response.json(data)
-  } catch (e: any) {
-    return Response.json({ error: e.message }, { status: 200 })
+  } catch {
+    return Response.json({})
   }
 }
