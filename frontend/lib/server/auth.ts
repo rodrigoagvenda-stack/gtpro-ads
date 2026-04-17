@@ -1,6 +1,5 @@
 import { createServiceClient } from "./supabase"
 import { hashKey } from "./crypto"
-import { jwtVerify } from "jose"
 import { NextRequest } from "next/server"
 
 export interface TenantContext {
@@ -14,14 +13,11 @@ export async function getTenant(req: NextRequest): Promise<TenantContext | null>
   if (!auth?.startsWith("Bearer ")) return null
   const token = auth.slice(7)
 
-  // Tenta como JWT do Supabase
+  // Verifica JWT via Supabase
   try {
-    const jwtSecret = process.env.SUPABASE_JWT_SECRET!
-    const secret = new TextEncoder().encode(jwtSecret)
-    const { payload } = await jwtVerify(token, secret)
-    const tenant_id = (payload as any).app_metadata?.tenant_id
-      ?? (payload as any).sub
-    if (tenant_id) return { tenant_id, auth_type: "jwt" }
+    const supabase = createServiceClient()
+    const { data: { user } } = await supabase.auth.getUser(token)
+    if (user) return { tenant_id: user.id, auth_type: "jwt" }
   } catch {}
 
   // Tenta como API Key (para MAX e agentes externos)
