@@ -56,6 +56,10 @@ function ConfiguracoesContent() {
   const [metaStatus, setMetaStatus] = useState<{ connected: boolean; ad_account_id?: string; connected_at?: string } | null>(null)
   const [connectingMeta, setConnectingMeta] = useState(false)
   const [metaMsg, setMetaMsg] = useState<{ type: "ok" | "err" | "info"; text: string } | null>(null)
+  const [manualToken, setManualToken] = useState("")
+  const [manualAccountId, setManualAccountId] = useState("")
+  const [savingToken, setSavingToken] = useState(false)
+  const [showManual, setShowManual] = useState(false)
 
   const [tenantConfig, setTenantConfig] = useState({ objetivo_principal: "LEADS", roas_minimo: 2, cpl_maximo: 50, budget_mensal: "", modo_supervisionado: true, limite_budget_sem_aprovacao: 100 })
   const [savingTenant, setSavingTenant] = useState(false)
@@ -115,6 +119,24 @@ function ConfiguracoesContent() {
     await api.meta.disconnect()
     setMetaStatus({ connected: false })
     setMetaMsg({ type: "info", text: "Conta desconectada." })
+  }
+
+  async function saveManualToken() {
+    if (!manualToken.trim() || !manualAccountId.trim()) return
+    setSavingToken(true)
+    try {
+      await api.meta.saveToken(manualToken.trim(), manualAccountId.trim())
+      const status = await api.meta.status()
+      setMetaStatus(status)
+      setMetaMsg({ type: "ok", text: "Token salvo com sucesso." })
+      setManualToken("")
+      setManualAccountId("")
+      setShowManual(false)
+    } catch (e: any) {
+      setMetaMsg({ type: "err", text: e.message })
+    } finally {
+      setSavingToken(false)
+    }
   }
 
   async function saveTenant() {
@@ -197,10 +219,45 @@ function ConfiguracoesContent() {
           </div>
         ) : (
           <div className="space-y-3">
-            {!platform.meta_app_id && <p className="text-[12px] text-amber-400">Configure o Meta App ID acima antes de conectar.</p>}
+            {!platform.meta_app_id && <p className="text-[12px] text-amber-400">Configure o Meta App ID acima antes de conectar via OAuth.</p>}
             <button onClick={connectMeta} disabled={connectingMeta || !platform.meta_app_id} className="flex items-center gap-2 px-4 py-2.5 bg-white text-zinc-900 text-[13px] font-semibold rounded-lg hover:bg-zinc-100 disabled:opacity-40 transition-colors">
-              {connectingMeta ? <><Loader2 size={13} className="animate-spin" /> Redirecionando...</> : <><Link2 size={13} /> Conectar Meta Ads</>}
+              {connectingMeta ? <><Loader2 size={13} className="animate-spin" /> Redirecionando...</> : <><Link2 size={13} /> Conectar via OAuth</>}
             </button>
+
+            <div className="border-t border-white/[0.05] pt-3">
+              <button onClick={() => setShowManual(v => !v)} className="text-[12px] text-zinc-500 hover:text-zinc-300 transition-colors">
+                {showManual ? "▲ Ocultar" : "▼ Tenho um System User Token permanente"}
+              </button>
+              {showManual && (
+                <div className="mt-3 space-y-2">
+                  <Field label="Access Token">
+                    <input
+                      type="password"
+                      placeholder="EAAxxxxx..."
+                      value={manualToken}
+                      onChange={(e) => setManualToken(e.target.value)}
+                      className={inputCls}
+                    />
+                  </Field>
+                  <Field label="Ad Account ID">
+                    <input
+                      type="text"
+                      placeholder="act_123456789 ou 123456789"
+                      value={manualAccountId}
+                      onChange={(e) => setManualAccountId(e.target.value)}
+                      className={inputCls}
+                    />
+                  </Field>
+                  <button
+                    onClick={saveManualToken}
+                    disabled={savingToken || !manualToken.trim() || !manualAccountId.trim()}
+                    className="flex items-center gap-1.5 px-4 py-2 bg-violet-600 hover:bg-violet-500 disabled:opacity-40 text-white text-[13px] font-medium rounded-lg transition-colors"
+                  >
+                    {savingToken ? <><Loader2 size={13} className="animate-spin" /> Salvando...</> : "Salvar token"}
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
         )}
       </Section>

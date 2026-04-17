@@ -54,6 +54,8 @@ export const api = {
     status: () => fetchWithAuth("/meta/status"),
     connect: () => fetchWithAuth("/meta/connect"),
     disconnect: () => fetchWithAuth("/meta/status", { method: "DELETE" }),
+    saveToken: (access_token: string, ad_account_id: string) =>
+      fetchWithAuth("/meta/token", { method: "POST", body: JSON.stringify({ access_token, ad_account_id }) }),
   },
 
   tenant: {
