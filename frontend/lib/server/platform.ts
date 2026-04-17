@@ -1,17 +1,5 @@
 import { createServiceClient } from "./supabase"
 
-function safeEncrypt(value: string): string {
-  if (!process.env.ENCRYPTION_KEY) return value
-  const { encrypt } = require("./crypto")
-  return encrypt(value)
-}
-
-function safeDecrypt(value: string): string {
-  if (!process.env.ENCRYPTION_KEY || !value.includes(":")) return value
-  const { decrypt } = require("./crypto")
-  try { return decrypt(value) } catch { return value }
-}
-
 const cache = new Map<string, { value: string; ts: number }>()
 const TTL = 300_000
 
@@ -26,18 +14,18 @@ async function getSetting(key: string): Promise<string> {
     .eq("key", key)
     .single()
 
-  const raw = data?.value_encrypted ?? ""
-  const value = raw ? safeDecrypt(raw) : ""
+  const value = data?.value_encrypted ?? ""
   cache.set(key, { value, ts: Date.now() })
   return value
 }
 
 export async function setSetting(key: string, value: string) {
   const supabase = createServiceClient()
-  await supabase.from("platform_settings").upsert(
-    { key, value_encrypted: value ? safeEncrypt(value) : "", updated_at: new Date().toISOString() },
+  const { error } = await supabase.from("platform_settings").upsert(
+    { key, value_encrypted: value, updated_at: new Date().toISOString() },
     { onConflict: "key" }
   )
+  if (error) throw new Error(error.message)
   cache.delete(key)
 }
 
