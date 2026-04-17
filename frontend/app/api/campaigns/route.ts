@@ -5,6 +5,10 @@ import { getCampaigns } from "@/lib/server/meta-ads"
 export async function GET(req: NextRequest) {
   const tenant = await getTenant(req)
   if (!tenant) return unauthorized()
-  const data = await getCampaigns(tenant.tenant_id)
-  return Response.json(data)
+  try {
+    const data = await getCampaigns(tenant.tenant_id)
+    return Response.json(data)
+  } catch (e: any) {
+    return Response.json({ error: e.message, data: [] }, { status: 200 })
+  }
 }
