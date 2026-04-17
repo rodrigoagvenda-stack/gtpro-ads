@@ -100,6 +100,20 @@ export async function getLongLivedToken(shortToken: string) {
   return data
 }
 
+export async function getAds(tenantId: string, campaignId: string) {
+  const token = await getToken(tenantId)
+  const fields = "id,name,status,creative{id,name,thumbnail_url,body,title,image_url,object_story_spec}"
+  const data = await graphGet(`/${campaignId}/ads`, { access_token: token, fields, limit: "50" })
+  // Append access_token to thumbnail URLs so the browser can load them
+  const ads = (data.data ?? []).map((ad: any) => ({
+    ...ad,
+    creative: ad.creative
+      ? { ...ad.creative, thumbnail_url: ad.creative.thumbnail_url ? `${ad.creative.thumbnail_url}&access_token=${token}` : null }
+      : null,
+  }))
+  return ads
+}
+
 export async function getAdSets(tenantId: string, campaignId: string) {
   const token = await getToken(tenantId)
   const fields = "id,name,status,daily_budget,lifetime_budget,optimization_goal,billing_event,bid_amount"
