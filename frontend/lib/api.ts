@@ -1,11 +1,9 @@
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://api.vendai.pro"
-
 async function fetchWithAuth(path: string, options: RequestInit = {}) {
   const { createClient } = await import("./supabase")
   const supabase = createClient()
   const { data: { session } } = await supabase.auth.getSession()
 
-  const res = await fetch(`${API_URL}${path}`, {
+  const res = await fetch(`/api${path}`, {
     ...options,
     headers: {
       "Content-Type": "application/json",
