@@ -1,9 +1,19 @@
 import Anthropic from "@anthropic-ai/sdk"
 import { getAnthropicKey } from "./platform"
 import { createServiceClient } from "./supabase"
-import { getCampaigns, getInsights, toggleCampaign, updateBudget } from "./meta-ads"
+import {
+  getCampaigns, getInsights, getCampaignInsights, getAdSetInsights, getAdInsights, getInsightsByBreakdown,
+  createCampaign, updateCampaign, duplicateCampaign, deleteCampaign, toggleCampaign, updateBudget,
+  getAdSets, getAdSetById, createAdSet, updateAdSet, duplicateAdSet, deleteAdSet,
+  getAds, getAdsByAdSet, updateAd, duplicateAd, deleteAd,
+  getPixels, getPixelStats, getCustomConversions,
+  getCustomAudiences, createLookalikeAudience,
+  getAccountInfo,
+} from "./meta-ads"
 
 const SYSTEM_PROMPT = `Você é o GTPRO, agente especializado em gestão de tráfego pago no Meta Ads.
+
+Você tem acesso COMPLETO à API do Meta Ads: criar, editar, duplicar e deletar campanhas, conjuntos de anúncios e anúncios; acessar pixel, conversões, públicos e insights detalhados.
 
 Regras de formatação — OBRIGATÓRIAS:
 - Nunca use tabelas markdown (sem pipes |)
@@ -14,97 +24,185 @@ Regras de formatação — OBRIGATÓRIAS:
 
 Regras de comportamento:
 - Para saudações ou perguntas simples, responda brevemente sem buscar dados
-- Só use ferramentas quando o usuário pedir análise, métricas ou otimizações
-- Pause campanhas só se ROAS < 1.0 por mais de 24h OU CPL > 3x o limite
-- Alterações de budget acima do limite requerem aprovação humana
-- Justifique cada ação com dados concretos`
+- Só use ferramentas quando o usuário pedir análise, métricas ou ações concretas
+- Em modo supervisionado: SEMPRE descreva o que vai fazer e peça confirmação antes de qualquer criação, edição, duplicação ou deleção
+- Nunca delete sem confirmação explícita do usuário
+- Justifique cada ação com dados
+- Ao criar campanhas, sempre crie com status PAUSED por padrão`
+
+const o = { type: "object" as const }
+const s = { type: "string" as const }
+const n = { type: "number" as const }
+const b = { type: "boolean" as const }
 
 const TOOLS: Anthropic.Tool[] = [
-  {
-    name: "get_campaigns",
-    description: "Lista todas as campanhas com métricas.",
-    input_schema: {
-      type: "object" as const,
-      properties: {
-        date_preset: { type: "string", default: "last_7d" },
-      },
-    },
-  },
-  {
-    name: "get_insights",
-    description: "Retorna métricas agregadas da conta para um período.",
-    input_schema: {
-      type: "object" as const,
-      properties: {
-        date_preset: { type: "string" },
-      },
-      required: ["date_preset"],
-    },
-  },
-  {
-    name: "toggle_campaign",
-    description: "Ativa ou pausa uma campanha.",
-    input_schema: {
-      type: "object" as const,
-      properties: {
-        campaign_id: { type: "string" },
-        status: { type: "string", enum: ["ACTIVE", "PAUSED"] },
-      },
-      required: ["campaign_id", "status"],
-    },
-  },
-  {
-    name: "update_budget",
-    description: "Atualiza o orçamento de uma campanha.",
-    input_schema: {
-      type: "object" as const,
-      properties: {
-        campaign_id: { type: "string" },
-        daily_budget: { type: "number" },
-        lifetime_budget: { type: "number" },
-      },
-      required: ["campaign_id"],
-    },
-  },
-  {
-    name: "create_alert",
-    description: "Registra um alerta no sistema.",
-    input_schema: {
-      type: "object" as const,
-      properties: {
-        type: { type: "string", enum: ["roas_baixo", "cpl_alto", "budget_esgotado", "campanha_rejeitada", "queda_performance"] },
-        message: { type: "string" },
-        campaign_id: { type: "string" },
-      },
-      required: ["type", "message"],
-    },
-  },
+  // ── Account
+  { name: "get_account_info",       description: "Informações da conta: moeda, fuso, saldo, limite de gasto.", input_schema: { ...o, properties: {} } },
+
+  // ── Campaigns — Read
+  { name: "get_campaigns",          description: "Lista todas as campanhas com métricas e orçamentos.", input_schema: { ...o, properties: { date_preset: s } } },
+  { name: "get_campaign_insights",  description: "Métricas detalhadas de uma campanha específica.", input_schema: { ...o, properties: { campaign_id: s, date_preset: s }, required: ["campaign_id"] } },
+  { name: "get_insights_breakdown", description: "Insights com breakdown por age, gender, placement, device, region etc.", input_schema: { ...o, properties: { breakdown: s, date_preset: s }, required: ["breakdown"] } },
+  { name: "get_account_insights",   description: "Métricas agregadas da conta inteira.", input_schema: { ...o, properties: { date_preset: s } } },
+
+  // ── Campaigns — Write
+  { name: "create_campaign", description: "Cria uma nova campanha. Sempre cria como PAUSED por padrão.", input_schema: { ...o, properties: { name: s, objective: s, daily_budget: n, lifetime_budget: n, start_time: s, stop_time: s, special_ad_categories: { type: "array", items: s } }, required: ["name", "objective"] } },
+  { name: "update_campaign", description: "Atualiza campos de uma campanha: nome, status, orçamento, datas.", input_schema: { ...o, properties: { campaign_id: s, name: s, status: s, daily_budget: n, lifetime_budget: n, start_time: s, stop_time: s }, required: ["campaign_id"] } },
+  { name: "duplicate_campaign", description: "Duplica uma campanha (deep copy, cria como PAUSED).", input_schema: { ...o, properties: { campaign_id: s, new_name: s }, required: ["campaign_id"] } },
+  { name: "delete_campaign",    description: "Deleta permanentemente uma campanha.", input_schema: { ...o, properties: { campaign_id: s }, required: ["campaign_id"] } },
+  { name: "toggle_campaign",    description: "Ativa ou pausa uma campanha.", input_schema: { ...o, properties: { campaign_id: s, status: { type: "string", enum: ["ACTIVE", "PAUSED"] } }, required: ["campaign_id", "status"] } },
+
+  // ── Ad Sets — Read
+  { name: "get_adsets",         description: "Lista os conjuntos de anúncios de uma campanha.", input_schema: { ...o, properties: { campaign_id: s }, required: ["campaign_id"] } },
+  { name: "get_adset",          description: "Detalhes de um conjunto de anúncios específico, incluindo targeting.", input_schema: { ...o, properties: { adset_id: s }, required: ["adset_id"] } },
+  { name: "get_adset_insights", description: "Métricas detalhadas de um conjunto de anúncios.", input_schema: { ...o, properties: { adset_id: s, date_preset: s }, required: ["adset_id"] } },
+
+  // ── Ad Sets — Write
+  { name: "create_adset", description: "Cria um novo conjunto de anúncios.", input_schema: { ...o, properties: { campaign_id: s, name: s, optimization_goal: s, billing_event: s, daily_budget: n, lifetime_budget: n, targeting: { type: "object" as const }, start_time: s, end_time: s, bid_amount: n }, required: ["campaign_id", "name", "optimization_goal", "billing_event"] } },
+  { name: "update_adset", description: "Atualiza campos de um conjunto de anúncios.", input_schema: { ...o, properties: { adset_id: s, name: s, status: s, daily_budget: n, lifetime_budget: n, targeting: { type: "object" as const }, bid_amount: n }, required: ["adset_id"] } },
+  { name: "duplicate_adset", description: "Duplica um conjunto de anúncios.", input_schema: { ...o, properties: { adset_id: s, campaign_id: s }, required: ["adset_id"] } },
+  { name: "delete_adset",    description: "Deleta um conjunto de anúncios.", input_schema: { ...o, properties: { adset_id: s }, required: ["adset_id"] } },
+
+  // ── Ads — Read
+  { name: "get_ads",         description: "Lista os anúncios de uma campanha com criativos.", input_schema: { ...o, properties: { campaign_id: s }, required: ["campaign_id"] } },
+  { name: "get_ads_by_adset",description: "Lista os anúncios de um conjunto de anúncios.", input_schema: { ...o, properties: { adset_id: s }, required: ["adset_id"] } },
+  { name: "get_ad_insights", description: "Métricas detalhadas de um anúncio específico.", input_schema: { ...o, properties: { ad_id: s, date_preset: s }, required: ["ad_id"] } },
+
+  // ── Ads — Write
+  { name: "update_ad",    description: "Atualiza status ou nome de um anúncio.", input_schema: { ...o, properties: { ad_id: s, status: s, name: s }, required: ["ad_id"] } },
+  { name: "duplicate_ad", description: "Duplica um anúncio, opcionalmente para outro ad set.", input_schema: { ...o, properties: { ad_id: s, adset_id: s }, required: ["ad_id"] } },
+  { name: "delete_ad",    description: "Deleta um anúncio.", input_schema: { ...o, properties: { ad_id: s }, required: ["ad_id"] } },
+
+  // ── Pixel
+  { name: "get_pixels",             description: "Lista os Pixels do Facebook da conta.", input_schema: { ...o, properties: {} } },
+  { name: "get_pixel_stats",        description: "Estatísticas de eventos de um Pixel (visualizações, leads, compras).", input_schema: { ...o, properties: { pixel_id: s, date_preset: s }, required: ["pixel_id"] } },
+  { name: "get_custom_conversions", description: "Lista as conversões customizadas configuradas na conta.", input_schema: { ...o, properties: {} } },
+
+  // ── Audiences
+  { name: "get_audiences",              description: "Lista públicos customizados da conta.", input_schema: { ...o, properties: {} } },
+  { name: "create_lookalike_audience",  description: "Cria um público lookalike a partir de um público existente.", input_schema: { ...o, properties: { source_audience_id: s, name: s, country: s, ratio: n }, required: ["source_audience_id", "name", "country"] } },
+
+  // ── Internal
+  { name: "create_alert", description: "Registra um alerta interno no sistema.", input_schema: { ...o, properties: { type: { type: "string", enum: ["roas_baixo", "cpl_alto", "budget_esgotado", "campanha_rejeitada", "queda_performance"] }, message: s, campaign_id: s }, required: ["type", "message"] } },
 ]
+
+const WRITE_TOOLS = new Set(["create_campaign","update_campaign","duplicate_campaign","delete_campaign","toggle_campaign","create_adset","update_adset","duplicate_adset","delete_adset","update_ad","duplicate_ad","delete_ad","create_lookalike_audience"])
 
 async function executeTool(name: string, input: Record<string, any>, tenantId: string, tenantConfig: Record<string, any>) {
   const supabase = createServiceClient()
+  const sup = tenantConfig.modo_supervisionado
 
-  if (name === "get_campaigns") return getCampaigns(tenantId)
-  if (name === "get_insights") return getInsights(tenantId, input.date_preset)
-  if (name === "toggle_campaign") {
-    if (tenantConfig.modo_supervisionado) {
-      await supabase.from("alerts").insert({ tenant_id: tenantId, type: "roas_baixo", message: `Aguardando aprovação: ${name} em ${input.campaign_id}`, status: "active" })
-      return { status: "pending_approval" }
+  // Helper: block write tools in supervised mode
+  async function requireApproval(action: string) {
+    if (sup) {
+      await supabase.from("alerts").insert({ tenant_id: tenantId, type: "roas_baixo", message: `Aguardando aprovação: ${action}`, status: "active" })
+      return { status: "pending_approval", action }
     }
+    return null
+  }
+
+  // ── Account
+  if (name === "get_account_info")       return getAccountInfo(tenantId)
+
+  // ── Campaigns
+  if (name === "get_campaigns")          return getCampaigns(tenantId)
+  if (name === "get_account_insights")   return getInsights(tenantId, input.date_preset)
+  if (name === "get_campaign_insights")  return getCampaignInsights(tenantId, input.campaign_id, input.date_preset)
+  if (name === "get_insights_breakdown") return getInsightsByBreakdown(tenantId, input.breakdown, input.date_preset)
+  if (name === "create_campaign") {
+    const pending = await requireApproval(`criar campanha "${input.name}"`)
+    if (pending) return pending
+    return createCampaign(tenantId, input)
+  }
+  if (name === "update_campaign") {
+    const { campaign_id, ...params } = input
+    const pending = await requireApproval(`atualizar campanha ${campaign_id}`)
+    if (pending) return pending
+    return updateCampaign(tenantId, campaign_id, params)
+  }
+  if (name === "duplicate_campaign") {
+    const pending = await requireApproval(`duplicar campanha ${input.campaign_id}`)
+    if (pending) return pending
+    return duplicateCampaign(tenantId, input.campaign_id, input.new_name)
+  }
+  if (name === "delete_campaign") {
+    const pending = await requireApproval(`DELETAR campanha ${input.campaign_id}`)
+    if (pending) return pending
+    return deleteCampaign(tenantId, input.campaign_id)
+  }
+  if (name === "toggle_campaign") {
+    const pending = await requireApproval(`${input.status === "ACTIVE" ? "ativar" : "pausar"} campanha ${input.campaign_id}`)
+    if (pending) return pending
     return toggleCampaign(tenantId, input.campaign_id, input.status)
   }
-  if (name === "update_budget") {
-    if (tenantConfig.modo_supervisionado) {
-      await supabase.from("alerts").insert({ tenant_id: tenantId, type: "roas_baixo", message: `Aguardando aprovação: alteração de budget em ${input.campaign_id}`, status: "active" })
-      return { status: "pending_approval" }
-    }
-    return updateBudget(tenantId, input.campaign_id, input.daily_budget, input.lifetime_budget)
+
+  // ── Ad Sets
+  if (name === "get_adsets")         return getAdSets(tenantId, input.campaign_id)
+  if (name === "get_adset")          return getAdSetById(tenantId, input.adset_id)
+  if (name === "get_adset_insights") return getAdSetInsights(tenantId, input.adset_id, input.date_preset)
+  if (name === "create_adset") {
+    const pending = await requireApproval(`criar ad set "${input.name}"`)
+    if (pending) return pending
+    return createAdSet(tenantId, input)
   }
+  if (name === "update_adset") {
+    const { adset_id, ...params } = input
+    const pending = await requireApproval(`atualizar ad set ${adset_id}`)
+    if (pending) return pending
+    return updateAdSet(tenantId, adset_id, params)
+  }
+  if (name === "duplicate_adset") {
+    const pending = await requireApproval(`duplicar ad set ${input.adset_id}`)
+    if (pending) return pending
+    return duplicateAdSet(tenantId, input.adset_id, input.campaign_id)
+  }
+  if (name === "delete_adset") {
+    const pending = await requireApproval(`DELETAR ad set ${input.adset_id}`)
+    if (pending) return pending
+    return deleteAdSet(tenantId, input.adset_id)
+  }
+
+  // ── Ads
+  if (name === "get_ads")          return getAds(tenantId, input.campaign_id)
+  if (name === "get_ads_by_adset") return getAdsByAdSet(tenantId, input.adset_id)
+  if (name === "get_ad_insights")  return getAdInsights(tenantId, input.ad_id, input.date_preset)
+  if (name === "update_ad") {
+    const { ad_id, ...params } = input
+    const pending = await requireApproval(`atualizar anúncio ${ad_id}`)
+    if (pending) return pending
+    return updateAd(tenantId, ad_id, params)
+  }
+  if (name === "duplicate_ad") {
+    const pending = await requireApproval(`duplicar anúncio ${input.ad_id}`)
+    if (pending) return pending
+    return duplicateAd(tenantId, input.ad_id, input.adset_id)
+  }
+  if (name === "delete_ad") {
+    const pending = await requireApproval(`DELETAR anúncio ${input.ad_id}`)
+    if (pending) return pending
+    return deleteAd(tenantId, input.ad_id)
+  }
+
+  // ── Pixel
+  if (name === "get_pixels")             return getPixels(tenantId)
+  if (name === "get_pixel_stats")        return getPixelStats(tenantId, input.pixel_id, input.date_preset)
+  if (name === "get_custom_conversions") return getCustomConversions(tenantId)
+
+  // ── Audiences
+  if (name === "get_audiences")             return getCustomAudiences(tenantId)
+  if (name === "create_lookalike_audience") {
+    const pending = await requireApproval(`criar lookalike "${input.name}"`)
+    if (pending) return pending
+    return createLookalikeAudience(tenantId, input)
+  }
+
+  // ── Internal
   if (name === "create_alert") {
     const { data } = await supabase.from("alerts").insert({ tenant_id: tenantId, ...input, status: "active" }).select().single()
     return data
   }
-  throw new Error(`Tool desconhecida: ${name}`)
+
+  throw new Error(`Ferramenta desconhecida: ${name}`)
 }
 
 function logAction(tenantId: string, action: string, params: any, result: any, status: string) {
@@ -112,7 +210,7 @@ function logAction(tenantId: string, action: string, params: any, result: any, s
   supabase.from("agent_logs").insert({ tenant_id: tenantId, action, params, result, status, justification: "" })
 }
 
-const ALLOWED_MODELS = ["claude-haiku-4-5-20251001", "claude-sonnet-4-6", "claude-opus-4-7"]
+export const ALLOWED_MODELS = ["claude-haiku-4-5-20251001", "claude-sonnet-4-6", "claude-opus-4-7"]
 
 export async function runAgent(
   tenantId: string,
@@ -125,28 +223,20 @@ export async function runAgent(
   const client = new Anthropic({ apiKey })
   const model = ALLOWED_MODELS.includes(modelId ?? "") ? modelId! : "claude-sonnet-4-6"
 
-  const configCtx = `Configurações: objetivo=${tenantConfig.objetivo_principal}, ROAS mín=${tenantConfig.roas_minimo}, CPL máx=${tenantConfig.cpl_maximo}, modo supervisionado=${tenantConfig.modo_supervisionado}`
+  const configCtx = `Configurações do cliente: objetivo=${tenantConfig.objetivo_principal}, ROAS mín=${tenantConfig.roas_minimo}, CPL máx=R$${tenantConfig.cpl_maximo}, budget mensal=R$${tenantConfig.budget_mensal ?? "não definido"}, modo supervisionado=${tenantConfig.modo_supervisionado ? "ATIVO — descreva ações e aguarde confirmação" : "DESATIVADO — pode executar diretamente"}`
 
-  // Build messages: history first, then current message
   const prior: Anthropic.MessageParam[] = (history ?? [])
     .filter(m => m.role === "user" || m.role === "assistant")
     .map(m => ({ role: m.role as "user" | "assistant", content: m.content }))
 
-  // Inject config only into the first user message if no history yet
   const userContent = prior.length === 0 ? `${configCtx}\n\n${message}` : message
   const messages: Anthropic.MessageParam[] = [...prior, { role: "user", content: userContent }]
+
   const actionsTaken: any[] = []
   const toolsUsed: { name: string; input: Record<string, any> }[] = []
 
   while (true) {
-    const response = await client.messages.create({
-      model,
-      max_tokens: 4096,
-      system: SYSTEM_PROMPT,
-      tools: TOOLS,
-      messages,
-    })
-
+    const response = await client.messages.create({ model, max_tokens: 4096, system: SYSTEM_PROMPT, tools: TOOLS, messages })
     messages.push({ role: "assistant", content: response.content })
 
     if (response.stop_reason === "end_turn") {
@@ -162,7 +252,7 @@ export async function runAgent(
         try {
           const result = await executeTool(block.name, block.input as any, tenantId, tenantConfig)
           logAction(tenantId, block.name, block.input, result, "success")
-          if (["toggle_campaign", "update_budget"].includes(block.name)) actionsTaken.push({ tool: block.name, input: block.input, result })
+          if (WRITE_TOOLS.has(block.name)) actionsTaken.push({ tool: block.name, input: block.input, result })
           results.push({ type: "tool_result", tool_use_id: block.id, content: JSON.stringify(result) })
         } catch (e: any) {
           logAction(tenantId, block.name, block.input, { error: e.message }, "failed")
