@@ -85,6 +85,11 @@ export const api = {
     list: (datePreset = "last_30d") => fetchWithAuth(`/leads?date_preset=${datePreset}`),
   },
 
+  alertsConfig: {
+    get: () => fetchWithAuth("/settings/alerts-config"),
+    save: (body: unknown) => fetchWithAuth("/settings/alerts-config", { method: "POST", body: JSON.stringify(body) }),
+  },
+
   webhook: {
     get: () => fetchWithAuth("/settings/webhook"),
     regenerate: () => fetchWithAuth("/settings/webhook", { method: "POST" }),
