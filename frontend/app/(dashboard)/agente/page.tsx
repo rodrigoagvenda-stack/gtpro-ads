@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from "react"
 import { api } from "@/lib/api"
-import { ArrowUp, Bot, Search, BarChart2, Zap, Bell, Power, DollarSign, CheckCircle2, Clock, Sparkles, ChevronDown, Trash2, FileText, Users, Image } from "lucide-react"
+import { ArrowUp, Bot, Search, BarChart2, Zap, Bell, Power, DollarSign, CheckCircle2, Clock, Sparkles, ChevronDown, Trash2, FileText, Users, Image, X } from "lucide-react"
 import { cn } from "@/lib/utils"
 
 interface ToolCall { name: string; input: Record<string, any> }
@@ -91,12 +91,22 @@ export default function AgentePage() {
   const [model, setModel] = useState("claude-sonnet-4-6")
   const [modelOpen, setModelOpen] = useState(false)
   const [skills, setSkills] = useState<{ id: string; name: string; icon: string; color: string; prompt: string }[]>([])
+  const [skillsOpen, setSkillsOpen] = useState(false)
   const bottomRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const intervalRef = useRef<ReturnType<typeof setInterval> | undefined>(undefined)
+  const skillsRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     api.skills.list().then((d: any[]) => setSkills(Array.isArray(d) ? d : [])).catch(() => {})
+  }, [])
+
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (skillsRef.current && !skillsRef.current.contains(e.target as Node)) setSkillsOpen(false)
+    }
+    document.addEventListener("mousedown", handleClick)
+    return () => document.removeEventListener("mousedown", handleClick)
   }, [])
 
   // Load persistent history on mount
@@ -173,22 +183,48 @@ export default function AgentePage() {
 
       {/* Empty state */}
       {messages.length === 0 && !loading && (
-        <div className="flex-1 flex flex-col items-center justify-center py-20 gap-6">
-          <div className="w-14 h-14 rounded-2xl bg-violet-600/15 ring-1 ring-violet-500/20 flex items-center justify-center">
-            <Sparkles size={22} className="text-violet-400" />
+        <div className="flex flex-col items-center justify-center py-16 gap-8">
+          <div className="flex flex-col items-center gap-3">
+            <div className="w-14 h-14 rounded-2xl bg-violet-600/15 ring-1 ring-violet-500/20 flex items-center justify-center">
+              <Sparkles size={22} className="text-violet-400" />
+            </div>
+            <div className="text-center">
+              <p className="text-[18px] font-semibold text-white">Como posso ajudar?</p>
+              <p className="text-[13px] text-zinc-500 mt-1">Analiso campanhas, identifico problemas e executo otimizações no Meta Ads.</p>
+            </div>
           </div>
-          <div className="text-center">
-            <p className="text-[18px] font-semibold text-white">Como posso ajudar?</p>
-            <p className="text-[13px] text-zinc-500 mt-1.5">Analiso campanhas, identifico problemas e executo otimizações no Meta Ads.</p>
-          </div>
-          <div className="grid grid-cols-2 gap-2 w-full max-w-lg mt-2">
-            {SUGGESTIONS.map(s => (
-              <button key={s} onClick={() => send(s)}
-                className="text-left px-4 py-3.5 bg-white/[0.03] ring-1 ring-white/[0.07] rounded-xl text-[12px] text-zinc-400 hover:bg-white/[0.06] hover:text-zinc-200 transition-all leading-snug">
-                {s}
-              </button>
-            ))}
-          </div>
+
+          {/* Skill cards */}
+          {skills.length > 0 ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 w-full max-w-lg">
+              {skills.map(skill => {
+                const Icon = SKILL_ICONS[skill.icon] ?? Zap
+                const cls = SKILL_COLORS[skill.color] ?? SKILL_COLORS.violet
+                const [iconCls] = cls.split(" ")
+                return (
+                  <button key={skill.id} onClick={() => send(skill.prompt)} disabled={loading}
+                    className="text-left px-4 py-3.5 bg-white/[0.03] ring-1 ring-white/[0.07] rounded-xl hover:bg-white/[0.06] transition-all group disabled:opacity-40">
+                    <div className="flex items-center gap-2.5 mb-1.5">
+                      <Icon size={13} className={cn(iconCls, "shrink-0")} />
+                      <span className="text-[13px] font-medium text-zinc-200 group-hover:text-white transition-colors">{skill.name}</span>
+                    </div>
+                    <p className="text-[11px] text-zinc-600 leading-snug line-clamp-2">
+                      {skill.prompt.replace(/Use \w+[\w,\s]* para /g, "").slice(0, 80)}…
+                    </p>
+                  </button>
+                )
+              })}
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 gap-2 w-full max-w-lg">
+              {SUGGESTIONS.map(s => (
+                <button key={s} onClick={() => send(s)}
+                  className="text-left px-4 py-3.5 bg-white/[0.03] ring-1 ring-white/[0.07] rounded-xl text-[12px] text-zinc-400 hover:bg-white/[0.06] hover:text-zinc-200 transition-all leading-snug">
+                  {s}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
@@ -279,27 +315,37 @@ export default function AgentePage() {
       <div className="shrink-0 pb-5 pt-3 bg-gradient-to-t from-[#08080a] via-[#08080a]/95 to-transparent">
         <div className="max-w-2xl mx-auto">
 
-          {/* Skill chips */}
-          {skills.length > 0 && (
-            <div className="flex gap-2 overflow-x-auto pb-2 mb-2 scrollbar-thin">
-              {skills.map(skill => {
-                const Icon = SKILL_ICONS[skill.icon] ?? Zap
-                const cls = SKILL_COLORS[skill.color] ?? SKILL_COLORS.violet
-                return (
-                  <button
-                    key={skill.id}
-                    onClick={() => send(skill.prompt)}
-                    disabled={loading}
-                    className={cn("flex items-center gap-1.5 px-3 py-1.5 rounded-full ring-1 text-[11px] font-medium whitespace-nowrap transition-colors disabled:opacity-40 shrink-0", cls)}
-                  >
-                    <Icon size={10} />
-                    {skill.name}
-                  </button>
-                )
-              })}
-            </div>
-          )}
-          <div className="bg-[#111113] ring-1 ring-white/[0.08] rounded-2xl transition-all focus-within:ring-white/[0.14]">
+          <div ref={skillsRef} className="relative bg-[#111113] ring-1 ring-white/[0.08] rounded-2xl transition-all focus-within:ring-white/[0.14]">
+
+            {/* Skills popover */}
+            {skillsOpen && skills.length > 0 && (
+              <div className="absolute bottom-full mb-2 left-0 w-full bg-[#16161a] ring-1 ring-white/[0.10] rounded-xl overflow-hidden z-30 shadow-xl">
+                <div className="flex items-center justify-between px-4 py-2.5 border-b border-white/[0.06]">
+                  <span className="text-[11px] font-semibold text-zinc-500 uppercase tracking-wider">Skills</span>
+                  <button onClick={() => setSkillsOpen(false)} className="text-zinc-600 hover:text-zinc-400 transition-colors"><X size={13} /></button>
+                </div>
+                <div className="py-1 max-h-72 overflow-y-auto scrollbar-thin">
+                  {skills.map(skill => {
+                    const Icon = SKILL_ICONS[skill.icon] ?? Zap
+                    const cls = SKILL_COLORS[skill.color] ?? SKILL_COLORS.violet
+                    const [iconCls] = cls.split(" ")
+                    return (
+                      <button key={skill.id} onClick={() => { send(skill.prompt); setSkillsOpen(false) }} disabled={loading}
+                        className="w-full flex items-start gap-3 px-4 py-3 hover:bg-white/[0.05] transition-colors text-left group disabled:opacity-40">
+                        <div className={cn("mt-0.5 shrink-0 w-6 h-6 rounded-md flex items-center justify-center", cls.split(" ").slice(1).join(" "))}>
+                          <Icon size={12} className={iconCls} />
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-[13px] font-medium text-zinc-200 group-hover:text-white transition-colors">{skill.name}</p>
+                          <p className="text-[11px] text-zinc-600 truncate mt-0.5">{skill.prompt.slice(0, 70)}…</p>
+                        </div>
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
+
             {/* Textarea */}
             <textarea
               ref={textareaRef}
@@ -318,7 +364,16 @@ export default function AgentePage() {
 
             {/* Bottom bar */}
             <div className="flex items-center justify-between px-3 pb-2.5 pt-1">
-              <span className="text-[11px] text-zinc-600">+</span>
+              <button
+                onClick={() => setSkillsOpen(v => !v)}
+                disabled={skills.length === 0}
+                className={cn("flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] transition-colors disabled:opacity-20",
+                  skillsOpen ? "text-violet-400 bg-violet-500/10" : "text-zinc-600 hover:text-zinc-300 hover:bg-white/[0.05]"
+                )}
+              >
+                <Sparkles size={12} />
+                {!skillsOpen && <span>Skills</span>}
+              </button>
 
               <div className="flex items-center gap-2">
                 {/* Model selector */}
