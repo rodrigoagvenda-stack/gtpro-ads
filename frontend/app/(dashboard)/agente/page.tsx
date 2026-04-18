@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from "react"
 import { api } from "@/lib/api"
-import { Send, Bot, Search, BarChart2, TrendingUp, Zap, Bell, Power, DollarSign, CheckCircle2, XCircle, Clock, ChevronDown, Sparkles } from "lucide-react"
+import { Send, Bot, Search, BarChart2, TrendingUp, Zap, Bell, Power, DollarSign, CheckCircle2, Clock, ChevronDown, Sparkles } from "lucide-react"
 import { cn } from "@/lib/utils"
 
 interface ToolCall { name: string; input: Record<string, any> }
@@ -90,7 +90,7 @@ export default function AgentePage() {
   const [expandedTools, setExpandedTools] = useState<number[]>([])
   const bottomRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
-  const thinkInterval = useRef<NodeJS.Timeout | null>(null)
+  const thinkInterval = useRef<ReturnType<typeof setInterval> | undefined>(undefined)
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" })
