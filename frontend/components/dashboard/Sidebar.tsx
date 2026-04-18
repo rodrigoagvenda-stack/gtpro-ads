@@ -7,7 +7,7 @@ import { cn } from "@/lib/utils"
 import { createClient } from "@/lib/supabase"
 
 const NAV_MAIN = [
-  { href: "/", label: "Home", icon: Home },
+  { href: "/home", label: "Home", icon: Home },
   { href: "/campanhas", label: "Campanhas", icon: Megaphone },
   { href: "/agente", label: "Agente IA", icon: Bot },
   { href: "/relatorios", label: "Relatórios", icon: FileText },
@@ -68,7 +68,7 @@ export default function Sidebar() {
       {/* Main nav */}
       <nav className="flex-1 px-2 pt-3 pb-2 space-y-0.5">
         {NAV_MAIN.map(({ href, label, icon }) => (
-          <NavLink key={href} href={href} label={label} icon={icon} active={href === "/" ? pathname === "/" : pathname.startsWith(href)} />
+          <NavLink key={href} href={href} label={label} icon={icon} active={pathname === href || (href !== "/home" && pathname.startsWith(href))} />
         ))}
       </nav>
 
