@@ -1,12 +1,18 @@
 "use client"
 
 import { useEffect, useState } from "react"
+import { useRouter } from "next/navigation"
 import { api } from "@/lib/api"
 import { formatCurrency } from "@/lib/utils"
 import KpiCard from "@/components/dashboard/KpiCard"
 import CampaignRow from "@/components/dashboard/CampaignRow"
 import type { Campaign } from "@/types"
 import { cn } from "@/lib/utils"
+import { AlertTriangle, RefreshCw, Key } from "lucide-react"
+
+function isTokenExpired(msg: string) {
+  return msg.includes("190") || msg.includes("463") || msg.includes("Session has expired") || msg.includes("access token")
+}
 
 const PRESETS = [
   { value: "today", label: "Hoje" },
@@ -16,6 +22,7 @@ const PRESETS = [
 ]
 
 export default function CampanhasPage() {
+  const router = useRouter()
   const [campaigns, setCampaigns] = useState<Campaign[]>([])
   const [insights, setInsights] = useState<Record<string, any>>({})
   const [preset, setPreset] = useState("last_7d")
@@ -144,9 +151,33 @@ export default function CampanhasPage() {
         {loading ? (
           <div className="px-5 py-14 text-center text-[13px] text-zinc-600">Carregando...</div>
         ) : error ? (
-          <div className="px-5 py-14 text-center">
-            <p className="text-[13px] text-red-400 mb-1">Erro ao carregar campanhas</p>
-            <p className="text-[11px] text-zinc-600">{error}</p>
+          <div className="px-5 py-12 flex flex-col items-center gap-4 text-center">
+            <div className="w-10 h-10 rounded-full bg-amber-500/10 flex items-center justify-center">
+              <AlertTriangle size={18} className="text-amber-400" />
+            </div>
+            {isTokenExpired(error) ? (
+              <>
+                <div>
+                  <p className="text-[14px] font-medium text-white mb-1">Token Meta Ads expirado</p>
+                  <p className="text-[12px] text-zinc-500 max-w-xs">
+                    O token de acesso expirou. Tokens OAuth do Meta duram ~60 dias. Para não ter esse problema novamente, use um <strong className="text-zinc-300">System User Token permanente</strong>.
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button onClick={() => router.push("/configuracoes")} className="flex items-center gap-1.5 px-4 py-2 bg-violet-600 hover:bg-violet-500 text-white text-[12px] font-medium rounded-lg transition-colors">
+                    <RefreshCw size={12} /> Reconectar via OAuth
+                  </button>
+                  <button onClick={() => router.push("/configuracoes")} className="flex items-center gap-1.5 px-4 py-2 bg-white/[0.06] hover:bg-white/[0.09] text-zinc-300 text-[12px] font-medium rounded-lg ring-1 ring-white/[0.08] transition-colors">
+                    <Key size={12} /> Usar token permanente
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
+                <p className="text-[13px] text-red-400">Erro ao carregar campanhas</p>
+                <p className="text-[11px] text-zinc-600 max-w-sm">{error}</p>
+              </>
+            )}
           </div>
         ) : campaigns.length === 0 ? (
           <div className="px-5 py-14 text-center text-[13px] text-zinc-600">Nenhuma campanha encontrada.</div>
