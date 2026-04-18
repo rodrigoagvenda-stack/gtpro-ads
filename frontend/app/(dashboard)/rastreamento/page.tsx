@@ -201,7 +201,7 @@ function UtmTab() {
 // ─── Leads attribution tab ──────────────────────────────────────────────────────
 
 type Lead = {
-  id: string; contact_name: string | null; email: string | null; whatsapp: string | null
+  id: string; name: string | null; email: string | null; phone: string | null
   utm_source: string | null; utm_campaign: string | null; utm_content: string | null; utm_term: string | null
   created_at: string; source: string
 }
@@ -278,9 +278,9 @@ function LeadsTab() {
           <span className="text-[11px] font-medium text-zinc-500 uppercase tracking-wider">Payload esperado (JSON)</span>
           <div className="bg-[#0d0d10] border border-white/[0.07] rounded-lg p-3.5 font-mono text-[11px] text-zinc-400 space-y-0.5">
             <div>{`{`}</div>
-            <div className="pl-4"><span className="text-violet-300">"contact_name"</span>: <span className="text-emerald-300">"João Silva"</span>,</div>
+            <div className="pl-4"><span className="text-violet-300">"name"</span>: <span className="text-emerald-300">"João Silva"</span>,</div>
             <div className="pl-4"><span className="text-violet-300">"email"</span>: <span className="text-emerald-300">"joao@email.com"</span>,</div>
-            <div className="pl-4"><span className="text-violet-300">"whatsapp"</span>: <span className="text-emerald-300">"11999999999"</span>,</div>
+            <div className="pl-4"><span className="text-violet-300">"phone"</span>: <span className="text-emerald-300">"11999999999"</span>,</div>
             <div className="pl-4"><span className="text-violet-300">"utm_source"</span>: <span className="text-emerald-300">"facebook"</span>,</div>
             <div className="pl-4"><span className="text-violet-300">"utm_medium"</span>: <span className="text-emerald-300">"paid_social"</span>,</div>
             <div className="pl-4"><span className="text-violet-300">"utm_campaign"</span>: <span className="text-emerald-300">"Conversão_Leads_Q2"</span>,</div>
@@ -365,8 +365,8 @@ function LeadsTab() {
               <tbody>
                 {leads.slice(0, 50).map(l => (
                   <tr key={l.id} className="border-b border-white/[0.03] hover:bg-white/[0.02] transition-colors">
-                    <td className="px-4 py-2.5 text-zinc-300">{l.contact_name ?? "—"}</td>
-                    <td className="px-4 py-2.5 text-zinc-500">{l.email ?? l.whatsapp ?? "—"}</td>
+                    <td className="px-4 py-2.5 text-zinc-300">{l.name ?? "—"}</td>
+                    <td className="px-4 py-2.5 text-zinc-500">{l.email ?? l.phone ?? "—"}</td>
                     <td className="px-4 py-2.5 text-zinc-400 max-w-[140px] truncate" title={l.utm_campaign ?? ""}>{l.utm_campaign ?? "—"}</td>
                     <td className="px-4 py-2.5 text-zinc-400 max-w-[140px] truncate" title={l.utm_content ?? ""}>{l.utm_content ?? "—"}</td>
                     <td className="px-4 py-2.5 text-zinc-400 max-w-[140px] truncate" title={l.utm_term ?? ""}>{l.utm_term ?? "—"}</td>

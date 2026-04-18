@@ -8,7 +8,6 @@ export async function POST(req: NextRequest) {
 
   const supabase = createServiceClient()
 
-  // Find tenant by webhook_token
   const { data: config } = await supabase
     .from("agent_configs")
     .select("tenant_id, webhook_token")
@@ -21,10 +20,10 @@ export async function POST(req: NextRequest) {
 
   const { error } = await supabase.from("leads").insert({
     tenant_id:    config.tenant_id,
-    contact_name: body.contact_name ?? body.nome_completo ?? null,
+    name:         body.name ?? body.contact_name ?? body.nome_completo ?? null,
+    phone:        body.phone ?? body.whatsapp ?? null,
     email:        body.email ?? null,
-    whatsapp:     body.whatsapp ?? null,
-    company_name: body.company_name ?? body.nome_empresa ?? null,
+    segment:      body.segment ?? null,
     utm_source:   body.utm_source ?? null,
     utm_medium:   body.utm_medium ?? null,
     utm_campaign: body.utm_campaign ?? null,
