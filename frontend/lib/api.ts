@@ -43,6 +43,8 @@ export const api = {
     query: (message: string, model?: string, history?: { role: string; content: string }[]) =>
       fetchWithAuth("/agent/query", { method: "POST", body: JSON.stringify({ message, model, history }) }),
     logs: (limit = 50) => fetchWithAuth(`/agent/logs?limit=${limit}`),
+    messages: () => fetchWithAuth("/agent/messages"),
+    clearMessages: () => fetchWithAuth("/agent/messages", { method: "DELETE" }),
   },
 
   alerts: {

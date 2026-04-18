@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from "react"
 import { api } from "@/lib/api"
-import { ArrowUp, Bot, Search, BarChart2, Zap, Bell, Power, DollarSign, CheckCircle2, Clock, Sparkles, ChevronDown } from "lucide-react"
+import { ArrowUp, Bot, Search, BarChart2, Zap, Bell, Power, DollarSign, CheckCircle2, Clock, Sparkles, ChevronDown, Trash2 } from "lucide-react"
 import { cn } from "@/lib/utils"
 
 interface ToolCall { name: string; input: Record<string, any> }
@@ -74,12 +74,25 @@ export default function AgentePage() {
   const [messages, setMessages] = useState<Message[]>([])
   const [input, setInput] = useState("")
   const [loading, setLoading] = useState(false)
+  const [loadingHistory, setLoadingHistory] = useState(true)
   const [step, setStep] = useState(0)
   const [model, setModel] = useState("claude-sonnet-4-6")
   const [modelOpen, setModelOpen] = useState(false)
   const bottomRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const intervalRef = useRef<ReturnType<typeof setInterval> | undefined>(undefined)
+
+  // Load persistent history on mount
+  useEffect(() => {
+    api.agent.messages().then((rows: any[]) => {
+      setMessages(rows.map(r => ({
+        role: r.role,
+        content: r.content,
+        tools_used: r.tools_used ?? undefined,
+        actions: r.actions ?? undefined,
+      })))
+    }).catch(() => {}).finally(() => setLoadingHistory(false))
+  }, [])
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" })
@@ -95,6 +108,12 @@ export default function AgentePage() {
     return () => clearInterval(intervalRef.current)
   }, [loading])
 
+  async function clearHistory() {
+    if (!confirm("Apagar todo o histórico?")) return
+    await api.agent.clearMessages()
+    setMessages([])
+  }
+
   async function send(text: string) {
     if (!text.trim() || loading) return
     setInput("")
@@ -102,6 +121,7 @@ export default function AgentePage() {
     setMessages(p => [...p, { role: "user", content: text }])
     setLoading(true)
     try {
+      // Pass full conversation history for context (exclude the message we just added)
       const history = messages.map(m => ({ role: m.role, content: m.content }))
       const res = await api.agent.query(text, model, history)
       setMessages(p => [...p, { role: "assistant", content: res.message, tools_used: res.tools_used, actions: res.actions_taken }])
@@ -114,8 +134,21 @@ export default function AgentePage() {
 
   const StepIcon = STEPS[step].icon
 
+  if (loadingHistory) {
+    return <div className="flex items-center justify-center py-20 text-[13px] text-zinc-600">Carregando histórico...</div>
+  }
+
   return (
     <div className="relative min-h-[calc(100vh-10rem)] flex flex-col">
+
+      {/* Clear button — only when there are messages */}
+      {messages.length > 0 && (
+        <div className="flex justify-end mb-4">
+          <button onClick={clearHistory} className="flex items-center gap-1.5 px-3 py-1.5 text-[11px] text-zinc-600 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors">
+            <Trash2 size={11} /> Limpar conversa
+          </button>
+        </div>
+      )}
 
       {/* Empty state */}
       {messages.length === 0 && !loading && (
