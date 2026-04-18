@@ -82,6 +82,9 @@ const TOOLS: Anthropic.Tool[] = [
   { name: "get_audiences",              description: "Lista públicos customizados da conta.", input_schema: { ...o, properties: {} } },
   { name: "create_lookalike_audience",  description: "Cria um público lookalike a partir de um público existente.", input_schema: { ...o, properties: { source_audience_id: s, name: s, country: s, ratio: n }, required: ["source_audience_id", "name", "country"] } },
 
+  // ── UTM
+  { name: "generate_utm", description: "Gera parâmetros UTM com tokens dinâmicos do Meta para rastrear leads por campanha, conjunto e criativo. Retorna a string para colar em Parâmetros de URL do criativo.", input_schema: { ...o, properties: { source: { type: "string", enum: ["facebook", "instagram", "meta"] }, medium: s, include_ad_name: b, include_placement: b, base_url: s }, required: [] } },
+
   // ── Internal
   { name: "create_alert", description: "Registra um alerta interno no sistema.", input_schema: { ...o, properties: { type: { type: "string", enum: ["roas_baixo", "cpl_alto", "budget_esgotado", "campanha_rejeitada", "queda_performance"] }, message: s, campaign_id: s }, required: ["type", "message"] } },
 ]
@@ -194,6 +197,24 @@ async function executeTool(name: string, input: Record<string, any>, tenantId: s
     const pending = await requireApproval(`criar lookalike "${input.name}"`)
     if (pending) return pending
     return createLookalikeAudience(tenantId, input)
+  }
+
+  // ── UTM
+  if (name === "generate_utm") {
+    const src = input.source ?? "facebook"
+    const med = input.medium ?? "paid_social"
+    const parts: string[] = [
+      `utm_source=${src}`,
+      `utm_medium=${med}`,
+      `utm_campaign={{campaign.name}}`,
+      `utm_content={{adset.name}}`,
+    ]
+    if (input.include_ad_name !== false) parts.push(`utm_term={{ad.name}}`)
+    if (input.include_placement)         parts.push(`utm_placement={{placement}}`)
+    parts.push(`fbclid={{fbclid}}`)
+    const params = parts.join("&")
+    const full   = input.base_url ? `${String(input.base_url).replace(/\?$/, "")}?${params}` : null
+    return { params, full_url: full, instructions: "Cole o valor de `params` no campo Parâmetros de URL do criativo no gerenciador de anúncios (Rastreamento → Parâmetros de URL)." }
   }
 
   // ── Internal
