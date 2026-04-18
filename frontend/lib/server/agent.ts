@@ -114,13 +114,27 @@ function logAction(tenantId: string, action: string, params: any, result: any, s
 
 const ALLOWED_MODELS = ["claude-haiku-4-5-20251001", "claude-sonnet-4-6", "claude-opus-4-7"]
 
-export async function runAgent(tenantId: string, message: string, tenantConfig: Record<string, any>, modelId?: string) {
+export async function runAgent(
+  tenantId: string,
+  message: string,
+  tenantConfig: Record<string, any>,
+  modelId?: string,
+  history?: { role: string; content: string }[]
+) {
   const apiKey = await getAnthropicKey()
   const client = new Anthropic({ apiKey })
   const model = ALLOWED_MODELS.includes(modelId ?? "") ? modelId! : "claude-sonnet-4-6"
 
-  const userContent = `Configurações: objetivo=${tenantConfig.objetivo_principal}, ROAS mín=${tenantConfig.roas_minimo}, CPL máx=${tenantConfig.cpl_maximo}, modo supervisionado=${tenantConfig.modo_supervisionado}\n\n${message}`
-  const messages: Anthropic.MessageParam[] = [{ role: "user", content: userContent }]
+  const configCtx = `Configurações: objetivo=${tenantConfig.objetivo_principal}, ROAS mín=${tenantConfig.roas_minimo}, CPL máx=${tenantConfig.cpl_maximo}, modo supervisionado=${tenantConfig.modo_supervisionado}`
+
+  // Build messages: history first, then current message
+  const prior: Anthropic.MessageParam[] = (history ?? [])
+    .filter(m => m.role === "user" || m.role === "assistant")
+    .map(m => ({ role: m.role as "user" | "assistant", content: m.content }))
+
+  // Inject config only into the first user message if no history yet
+  const userContent = prior.length === 0 ? `${configCtx}\n\n${message}` : message
+  const messages: Anthropic.MessageParam[] = [...prior, { role: "user", content: userContent }]
   const actionsTaken: any[] = []
   const toolsUsed: { name: string; input: Record<string, any> }[] = []
 

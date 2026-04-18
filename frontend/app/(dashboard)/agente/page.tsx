@@ -102,7 +102,8 @@ export default function AgentePage() {
     setMessages(p => [...p, { role: "user", content: text }])
     setLoading(true)
     try {
-      const res = await api.agent.query(text, model)
+      const history = messages.map(m => ({ role: m.role, content: m.content }))
+      const res = await api.agent.query(text, model, history)
       setMessages(p => [...p, { role: "assistant", content: res.message, tools_used: res.tools_used, actions: res.actions_taken }])
     } catch {
       setMessages(p => [...p, { role: "assistant", content: "Erro ao processar. Verifique se o agente está configurado." }])

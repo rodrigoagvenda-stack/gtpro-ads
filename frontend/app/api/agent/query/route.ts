@@ -7,7 +7,7 @@ export async function POST(req: NextRequest) {
   const tenant = await getTenant(req)
   if (!tenant) return unauthorized()
 
-  const { message, model } = await req.json()
+  const { message, model, history } = await req.json()
   const supabase = createServiceClient()
   const { data: config } = await supabase
     .from("agent_configs")
@@ -15,6 +15,6 @@ export async function POST(req: NextRequest) {
     .eq("tenant_id", tenant.tenant_id)
     .single()
 
-  const result = await runAgent(tenant.tenant_id, message, config ?? {}, model)
+  const result = await runAgent(tenant.tenant_id, message, config ?? {}, model, history)
   return Response.json(result)
 }
