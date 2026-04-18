@@ -19,7 +19,7 @@ export default function OnboardingPage() {
   const [metaConnected, setMetaConnected] = useState(false)
   const [connectingMeta, setConnectingMeta] = useState(false)
   const [hasCreds, setHasCreds] = useState(false)
-  const [config, setConfig] = useState({ objetivo_principal: "LEADS", roas_minimo: 2, cpl_maximo: 50, modo_supervisionado: true })
+  const [config, setConfig] = useState({ objetivo_principal: "LEADS", roas_minimo: 2, cpl_maximo: 50, budget_mensal: "", limite_budget_sem_aprovacao: 100, modo_supervisionado: true })
   const [saving, setSaving] = useState(false)
 
   useEffect(() => {
@@ -47,7 +47,7 @@ export default function OnboardingPage() {
   async function finish() {
     setSaving(true)
     try {
-      await api.tenant.save({ ...config, roas_minimo: Number(config.roas_minimo), cpl_maximo: Number(config.cpl_maximo) })
+      await api.tenant.save({ ...config, roas_minimo: Number(config.roas_minimo), cpl_maximo: Number(config.cpl_maximo), budget_mensal: config.budget_mensal ? Number(config.budget_mensal) : null, limite_budget_sem_aprovacao: Number(config.limite_budget_sem_aprovacao) })
       router.push("/campanhas")
     } catch (e: any) {
       alert(e.message)
@@ -172,21 +172,19 @@ export default function OnboardingPage() {
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="block text-[11px] font-medium text-zinc-500 uppercase tracking-widest mb-1.5">ROAS mínimo</label>
-                <input
-                  type="number" step="0.1" min="0"
-                  value={config.roas_minimo}
-                  onChange={(e) => setConfig((c) => ({ ...c, roas_minimo: Number(e.target.value) }))}
-                  className="w-full px-3 py-2 bg-white/[0.04] ring-1 ring-white/[0.08] rounded-lg text-[13px] text-white focus:outline-none focus:ring-violet-500/50 transition-all"
-                />
+                <input type="number" step="0.1" min="0" value={config.roas_minimo} onChange={(e) => setConfig((c) => ({ ...c, roas_minimo: Number(e.target.value) }))} className="w-full px-3 py-2 bg-white/[0.04] ring-1 ring-white/[0.08] rounded-lg text-[13px] text-white focus:outline-none focus:ring-violet-500/50 transition-all" />
               </div>
               <div>
                 <label className="block text-[11px] font-medium text-zinc-500 uppercase tracking-widest mb-1.5">CPL máx (R$)</label>
-                <input
-                  type="number" step="1" min="0"
-                  value={config.cpl_maximo}
-                  onChange={(e) => setConfig((c) => ({ ...c, cpl_maximo: Number(e.target.value) }))}
-                  className="w-full px-3 py-2 bg-white/[0.04] ring-1 ring-white/[0.08] rounded-lg text-[13px] text-white focus:outline-none focus:ring-violet-500/50 transition-all"
-                />
+                <input type="number" step="1" min="0" value={config.cpl_maximo} onChange={(e) => setConfig((c) => ({ ...c, cpl_maximo: Number(e.target.value) }))} className="w-full px-3 py-2 bg-white/[0.04] ring-1 ring-white/[0.08] rounded-lg text-[13px] text-white focus:outline-none focus:ring-violet-500/50 transition-all" />
+              </div>
+              <div>
+                <label className="block text-[11px] font-medium text-zinc-500 uppercase tracking-widest mb-1.5">Budget mensal (R$)</label>
+                <input type="number" step="100" min="0" placeholder="Opcional" value={config.budget_mensal} onChange={(e) => setConfig((c) => ({ ...c, budget_mensal: e.target.value }))} className="w-full px-3 py-2 bg-white/[0.04] ring-1 ring-white/[0.08] rounded-lg text-[13px] text-white placeholder-zinc-600 focus:outline-none focus:ring-violet-500/50 transition-all" />
+              </div>
+              <div>
+                <label className="block text-[11px] font-medium text-zinc-500 uppercase tracking-widest mb-1.5">Limite sem aprovação (R$)</label>
+                <input type="number" step="50" min="0" value={config.limite_budget_sem_aprovacao} onChange={(e) => setConfig((c) => ({ ...c, limite_budget_sem_aprovacao: Number(e.target.value) }))} className="w-full px-3 py-2 bg-white/[0.04] ring-1 ring-white/[0.08] rounded-lg text-[13px] text-white focus:outline-none focus:ring-violet-500/50 transition-all" />
               </div>
             </div>
 
