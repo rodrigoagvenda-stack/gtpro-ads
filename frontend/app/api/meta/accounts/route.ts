@@ -9,25 +9,31 @@ export async function GET(req: NextRequest) {
   const supabase = createServiceClient()
   const { data } = await supabase
     .from("meta_connections")
-    .select("ad_account_id, name, created_at")
+    .select("id, ad_account_id, name, is_active, created_at")
     .eq("tenant_id", tenant.tenant_id)
     .eq("active", true)
-    .eq("is_active", true)
-    .single()
+    .order("created_at", { ascending: true })
 
-  return Response.json({
-    connected: !!data,
-    ad_account_id: data?.ad_account_id ?? null,
-    connected_at: data?.created_at ?? null,
-  })
+  return Response.json(data ?? [])
 }
 
-export async function DELETE(req: NextRequest) {
+export async function PATCH(req: NextRequest) {
   const tenant = await getTenant(req)
   if (!tenant) return unauthorized()
 
+  const { id } = await req.json()
   const supabase = createServiceClient()
-  await supabase.from("meta_connections").update({ active: false }).eq("tenant_id", tenant.tenant_id)
+
+  await supabase
+    .from("meta_connections")
+    .update({ is_active: false })
+    .eq("tenant_id", tenant.tenant_id)
+
+  await supabase
+    .from("meta_connections")
+    .update({ is_active: true })
+    .eq("id", id)
+    .eq("tenant_id", tenant.tenant_id)
 
   return Response.json({ success: true })
 }

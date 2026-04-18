@@ -5,29 +5,22 @@ import { createServiceClient } from "@/lib/server/supabase"
 export async function GET(req: NextRequest) {
   const tenant = await getTenant(req)
   if (!tenant) return unauthorized()
-
   const supabase = createServiceClient()
   const { data } = await supabase
-    .from("meta_connections")
-    .select("ad_account_id, name, created_at")
+    .from("agent_configs")
+    .select("report_schedule, report_whatsapp, report_last_sent_at")
     .eq("tenant_id", tenant.tenant_id)
-    .eq("active", true)
-    .eq("is_active", true)
     .single()
-
-  return Response.json({
-    connected: !!data,
-    ad_account_id: data?.ad_account_id ?? null,
-    connected_at: data?.created_at ?? null,
-  })
+  return Response.json(data ?? { report_schedule: "none", report_whatsapp: false, report_last_sent_at: null })
 }
 
-export async function DELETE(req: NextRequest) {
+export async function POST(req: NextRequest) {
   const tenant = await getTenant(req)
   if (!tenant) return unauthorized()
-
+  const { schedule, whatsapp } = await req.json()
   const supabase = createServiceClient()
-  await supabase.from("meta_connections").update({ active: false }).eq("tenant_id", tenant.tenant_id)
-
+  await supabase.from("agent_configs")
+    .update({ report_schedule: schedule, report_whatsapp: whatsapp })
+    .eq("tenant_id", tenant.tenant_id)
   return Response.json({ success: true })
 }

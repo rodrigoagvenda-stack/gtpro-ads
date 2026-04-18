@@ -28,6 +28,10 @@ export const api = {
     fetchWithAuth(path, { method: "PATCH", body: body ? JSON.stringify(body) : undefined }),
   delete: (path: string) => fetchWithAuth(path, { method: "DELETE" }),
 
+  home: {
+    get: () => fetchWithAuth("/home"),
+  },
+
   campaigns: {
     list: (datePreset = "last_7d") => fetchWithAuth(`/campaigns?date_preset=${datePreset}`),
     toggle: (campaignId: string, status: string) =>
@@ -63,6 +67,8 @@ export const api = {
     disconnect: () => fetchWithAuth("/meta/status", { method: "DELETE" }),
     saveToken: (access_token: string, ad_account_id: string) =>
       fetchWithAuth("/meta/token", { method: "POST", body: JSON.stringify({ access_token, ad_account_id }) }),
+    accounts: () => fetchWithAuth("/meta/accounts"),
+    switchAccount: (id: string) => fetchWithAuth("/meta/accounts", { method: "PATCH", body: JSON.stringify({ id }) }),
   },
 
   tenant: {
@@ -75,6 +81,8 @@ export const api = {
     list: () => fetchWithAuth("/reports"),
     generate: () => fetchWithAuth("/reports/generate", { method: "POST", body: JSON.stringify({}) }),
     downloadUrl: (id: string) => `/api/reports/${id}/download`,
+    getSchedule: () => fetchWithAuth("/reports/schedule"),
+    saveSchedule: (schedule: string, whatsapp: boolean) => fetchWithAuth("/reports/schedule", { method: "POST", body: JSON.stringify({ schedule, whatsapp }) }),
   },
 
   gtpro: {

@@ -2,11 +2,12 @@
 
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
-import { Megaphone, Bot, FileText, Bell, Settings, LogOut, Zap, BarChart2, Link2 } from "lucide-react"
+import { Megaphone, Bot, FileText, Bell, Settings, LogOut, Zap, BarChart2, Link2, Home } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { createClient } from "@/lib/supabase"
 
 const NAV_MAIN = [
+  { href: "/", label: "Home", icon: Home },
   { href: "/campanhas", label: "Campanhas", icon: Megaphone },
   { href: "/agente", label: "Agente IA", icon: Bot },
   { href: "/relatorios", label: "Relatórios", icon: FileText },
@@ -67,7 +68,7 @@ export default function Sidebar() {
       {/* Main nav */}
       <nav className="flex-1 px-2 pt-3 pb-2 space-y-0.5">
         {NAV_MAIN.map(({ href, label, icon }) => (
-          <NavLink key={href} href={href} label={label} icon={icon} active={pathname.startsWith(href)} />
+          <NavLink key={href} href={href} label={label} icon={icon} active={href === "/" ? pathname === "/" : pathname.startsWith(href)} />
         ))}
       </nav>
 

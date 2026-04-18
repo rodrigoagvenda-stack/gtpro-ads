@@ -125,6 +125,8 @@ function AgenteTab() {
 
 // ─── Tab: Meta Ads ────────────────────────────────────────────────────────────
 
+interface MetaAccount { id: string; ad_account_id: string; name: string; is_active: boolean; created_at: string }
+
 function MetaTab() {
   const searchParams = useSearchParams()
   const [platform, setPlatform] = useState({ anthropic_api_key_set: false, meta_app_id: "", meta_app_secret_set: false })
@@ -140,10 +142,17 @@ function MetaTab() {
   const [manualAccount, setManualAccount] = useState("")
   const [savingToken, setSavingToken] = useState(false)
   const [showManual, setShowManual] = useState(false)
+  const [accounts, setAccounts] = useState<MetaAccount[]>([])
+  const [switchingId, setSwitchingId] = useState<string | null>(null)
+
+  function loadAccounts() {
+    api.meta.accounts().then((d: MetaAccount[]) => setAccounts(Array.isArray(d) ? d : [])).catch(() => {})
+  }
 
   useEffect(() => {
     api.get("/settings/platform").then(d => { setPlatform(d); if (d.meta_app_id) setForm(f => ({ ...f, meta_app_id: d.meta_app_id })) })
     api.meta.status().then(setMetaStatus).catch(() => setMetaStatus({ connected: false }))
+    loadAccounts()
   }, [])
 
   useEffect(() => {
@@ -177,7 +186,17 @@ function MetaTab() {
       setMetaStatus(await api.meta.status())
       setMetaMsg({ type: "ok", text: "Token salvo com sucesso." })
       setManualToken(""); setManualAccount(""); setShowManual(false)
+      loadAccounts()
     } catch (e: any) { setMetaMsg({ type: "err", text: e.message }) } finally { setSavingToken(false) }
+  }
+
+  async function switchAccount(id: string) {
+    setSwitchingId(id)
+    try {
+      await api.meta.switchAccount(id)
+      setMetaStatus(await api.meta.status())
+      loadAccounts()
+    } catch (e: any) { setMetaMsg({ type: "err", text: e.message }) } finally { setSwitchingId(null) }
   }
 
   return (
@@ -237,6 +256,36 @@ function MetaTab() {
           </div>
         )}
       </Card>
+
+      {accounts.length > 1 && (
+        <Card>
+          <h2 className="text-[13px] font-semibold text-zinc-200">Contas conectadas</h2>
+          <p className="text-[12px] text-zinc-600 -mt-3">Selecione qual conta será usada para campanhas e insights.</p>
+          <div className="space-y-1.5">
+            {accounts.map(acc => (
+              <div key={acc.id} className={cn("flex items-center justify-between px-4 py-3 rounded-lg ring-1 transition-colors",
+                acc.is_active ? "bg-violet-500/10 ring-violet-500/30" : "bg-white/[0.02] ring-white/[0.06]"
+              )}>
+                <div className="flex items-center gap-3">
+                  <div className={cn("w-2 h-2 rounded-full shrink-0", acc.is_active ? "bg-violet-400" : "bg-zinc-600")} />
+                  <div>
+                    <p className="text-[13px] font-medium text-zinc-200">{acc.name || acc.ad_account_id}</p>
+                    <p className="text-[11px] text-zinc-600 mt-0.5">{acc.ad_account_id} · {new Date(acc.created_at).toLocaleDateString("pt-BR")}</p>
+                  </div>
+                </div>
+                {!acc.is_active && (
+                  <button onClick={() => switchAccount(acc.id)} disabled={!!switchingId}
+                    className="flex items-center gap-1.5 px-3 py-1.5 text-[12px] text-zinc-400 hover:text-white hover:bg-white/[0.06] rounded-lg transition-colors disabled:opacity-40">
+                    {switchingId === acc.id ? <Loader2 size={11} className="animate-spin" /> : null}
+                    Usar esta
+                  </button>
+                )}
+                {acc.is_active && <span className="text-[11px] text-violet-400 font-medium">Ativa</span>}
+              </div>
+            ))}
+          </div>
+        </Card>
+      )}
     </div>
   )
 }

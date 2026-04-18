@@ -2,8 +2,9 @@
 
 import { useEffect, useState } from "react"
 import { api } from "@/lib/api"
-import { FileText, Download, Loader2, Plus, ChevronDown, ChevronUp } from "lucide-react"
+import { FileText, Download, Loader2, Plus, ChevronDown, ChevronUp, CalendarClock, MessageCircle, Check, RefreshCw } from "lucide-react"
 import { createClient } from "@/lib/supabase"
+import { cn } from "@/lib/utils"
 
 interface Report {
   id: string
@@ -13,18 +14,40 @@ interface Report {
   created_at: string
 }
 
+const SCHEDULES = [
+  { id: "none",    label: "Desativado" },
+  { id: "weekly",  label: "Semanal" },
+  { id: "monthly", label: "Mensal" },
+]
+
 export default function RelatoriosPage() {
   const [reports, setReports] = useState<Report[]>([])
   const [loading, setLoading] = useState(true)
   const [generating, setGenerating] = useState(false)
   const [expanded, setExpanded] = useState<string | null>(null)
+  const [schedule, setSchedule] = useState("none")
+  const [scheduleWhatsapp, setScheduleWhatsapp] = useState(false)
+  const [savingSchedule, setSavingSchedule] = useState(false)
+  const [savedSchedule, setSavedSchedule] = useState(false)
 
   useEffect(() => {
     api.reports.list().then((d) => {
       setReports(Array.isArray(d) ? d : [])
       setLoading(false)
     }).catch(() => setLoading(false))
+    api.reports.getSchedule().then((d: any) => {
+      setSchedule(d.report_schedule ?? "none")
+      setScheduleWhatsapp(d.report_whatsapp ?? false)
+    }).catch(() => {})
   }, [])
+
+  async function saveSchedule() {
+    setSavingSchedule(true)
+    try {
+      await api.reports.saveSchedule(schedule, scheduleWhatsapp)
+      setSavedSchedule(true); setTimeout(() => setSavedSchedule(false), 3000)
+    } catch (e: any) { alert(e.message) } finally { setSavingSchedule(false) }
+  }
 
   async function generateReport() {
     setGenerating(true)
@@ -68,6 +91,43 @@ export default function RelatoriosPage() {
           className="flex items-center gap-2 px-3.5 py-2 bg-violet-600 hover:bg-violet-500 disabled:opacity-50 text-white text-[13px] font-medium rounded-lg transition-colors"
         >
           {generating ? <><Loader2 size={13} className="animate-spin" /> Gerando...</> : <><Plus size={13} /> Gerar relatório</>}
+        </button>
+      </div>
+
+      {/* Schedule settings */}
+      <div className="bg-white/[0.02] ring-1 ring-white/[0.06] rounded-xl p-5 space-y-4">
+        <div className="flex items-center gap-2">
+          <CalendarClock size={13} className="text-zinc-500" />
+          <p className="text-[13px] font-semibold text-zinc-200">Relatórios automáticos</p>
+        </div>
+        <div className="flex items-center gap-2">
+          {SCHEDULES.map(s => (
+            <button key={s.id} onClick={() => { setSchedule(s.id); setSavedSchedule(false) }}
+              className={cn("px-3 py-1.5 rounded-lg text-[12px] font-medium ring-1 transition-colors",
+                schedule === s.id ? "bg-violet-500/15 ring-violet-500/30 text-violet-300" : "bg-white/[0.03] ring-white/[0.07] text-zinc-500 hover:text-zinc-300"
+              )}>
+              {s.label}
+            </button>
+          ))}
+        </div>
+        {schedule !== "none" && (
+          <div className="flex items-center justify-between bg-white/[0.02] ring-1 ring-white/[0.06] rounded-lg px-4 py-3">
+            <div className="flex items-center gap-2.5">
+              <MessageCircle size={13} className="text-zinc-500" />
+              <div>
+                <p className="text-[13px] text-zinc-200">Enviar por WhatsApp</p>
+                <p className="text-[11px] text-zinc-600 mt-0.5">Requer WhatsApp configurado</p>
+              </div>
+            </div>
+            <button type="button" onClick={() => { setScheduleWhatsapp(v => !v); setSavedSchedule(false) }}
+              className={cn("shrink-0 w-11 h-6 rounded-full transition-colors relative", scheduleWhatsapp ? "bg-violet-600" : "bg-zinc-700")}>
+              <span className={cn("pointer-events-none absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform", scheduleWhatsapp ? "translate-x-5" : "translate-x-0")} />
+            </button>
+          </div>
+        )}
+        <button onClick={saveSchedule} disabled={savingSchedule}
+          className="flex items-center gap-1.5 px-4 py-2 bg-white/[0.06] hover:bg-white/[0.09] disabled:opacity-50 text-white text-[13px] font-medium rounded-lg ring-1 ring-white/[0.08] transition-colors">
+          {savedSchedule ? <><Check size={13} className="text-emerald-400" /> Salvo</> : savingSchedule ? <><RefreshCw size={13} className="animate-spin" /> Salvando...</> : "Salvar agendamento"}
         </button>
       </div>
 
