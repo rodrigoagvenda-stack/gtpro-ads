@@ -139,16 +139,20 @@ export default function AgentePage() {
   }
 
   return (
-    <div className="relative min-h-[calc(100vh-10rem)] flex flex-col">
+    <div className="flex flex-col" style={{ height: "calc(100vh - 3.5rem)" }}>
 
-      {/* Clear button — only when there are messages */}
+      {/* Clear button */}
       {messages.length > 0 && (
-        <div className="flex justify-end mb-4">
+        <div className="flex justify-end py-2 shrink-0">
           <button onClick={clearHistory} className="flex items-center gap-1.5 px-3 py-1.5 text-[11px] text-zinc-600 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors">
             <Trash2 size={11} /> Limpar conversa
           </button>
         </div>
       )}
+
+      {/* Scroll area */}
+      <div className="flex-1 min-h-0 overflow-y-auto scrollbar-thin">
+      <div className="max-w-2xl mx-auto w-full py-4">
 
       {/* Empty state */}
       {messages.length === 0 && !loading && (
@@ -173,7 +177,7 @@ export default function AgentePage() {
 
       {/* Messages */}
       {(messages.length > 0 || loading) && (
-        <div className="flex-1 py-2 space-y-8 max-w-2xl w-full mx-auto">
+        <div className="space-y-8">
           {messages.map((msg, i) => (
             <div key={i} className={cn("flex gap-3", msg.role === "user" ? "justify-end" : "justify-start items-start")}>
               {msg.role === "assistant" && (
@@ -247,12 +251,15 @@ export default function AgentePage() {
             </div>
           )}
 
-          <div ref={bottomRef} className="h-28" />
+          <div ref={bottomRef} className="h-4" />
         </div>
       )}
 
-      {/* Sticky input */}
-      <div className="sticky bottom-0 pb-6 pt-4 bg-gradient-to-t from-[#08080a] via-[#08080a]/95 to-transparent">
+      </div>{/* end inner max-w */}
+      </div>{/* end scroll area */}
+
+      {/* Input — fixed at bottom */}
+      <div className="shrink-0 pb-5 pt-3 bg-gradient-to-t from-[#08080a] via-[#08080a]/95 to-transparent">
         <div className="max-w-2xl mx-auto">
           <div className="bg-[#111113] ring-1 ring-white/[0.08] rounded-2xl transition-all focus-within:ring-white/[0.14]">
             {/* Textarea */}
