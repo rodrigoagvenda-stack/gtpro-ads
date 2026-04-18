@@ -40,8 +40,8 @@ export const api = {
   },
 
   agent: {
-    query: (message: string) =>
-      fetchWithAuth("/agent/query", { method: "POST", body: JSON.stringify({ message }) }),
+    query: (message: string, model?: string) =>
+      fetchWithAuth("/agent/query", { method: "POST", body: JSON.stringify({ message, model }) }),
     logs: (limit = 50) => fetchWithAuth(`/agent/logs?limit=${limit}`),
   },
 

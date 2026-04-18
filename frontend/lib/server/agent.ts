@@ -112,9 +112,12 @@ function logAction(tenantId: string, action: string, params: any, result: any, s
   supabase.from("agent_logs").insert({ tenant_id: tenantId, action, params, result, status, justification: "" })
 }
 
-export async function runAgent(tenantId: string, message: string, tenantConfig: Record<string, any>) {
+const ALLOWED_MODELS = ["claude-haiku-4-5-20251001", "claude-sonnet-4-6", "claude-opus-4-7"]
+
+export async function runAgent(tenantId: string, message: string, tenantConfig: Record<string, any>, modelId?: string) {
   const apiKey = await getAnthropicKey()
   const client = new Anthropic({ apiKey })
+  const model = ALLOWED_MODELS.includes(modelId ?? "") ? modelId! : "claude-sonnet-4-6"
 
   const userContent = `Configurações: objetivo=${tenantConfig.objetivo_principal}, ROAS mín=${tenantConfig.roas_minimo}, CPL máx=${tenantConfig.cpl_maximo}, modo supervisionado=${tenantConfig.modo_supervisionado}\n\n${message}`
   const messages: Anthropic.MessageParam[] = [{ role: "user", content: userContent }]
@@ -123,7 +126,7 @@ export async function runAgent(tenantId: string, message: string, tenantConfig: 
 
   while (true) {
     const response = await client.messages.create({
-      model: "claude-sonnet-4-6",
+      model,
       max_tokens: 4096,
       system: SYSTEM_PROMPT,
       tools: TOOLS,

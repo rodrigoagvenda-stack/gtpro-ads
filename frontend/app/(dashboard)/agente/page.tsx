@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from "react"
 import { api } from "@/lib/api"
-import { Send, Bot, Search, BarChart2, Zap, Bell, Power, DollarSign, CheckCircle2, Clock, Sparkles } from "lucide-react"
+import { ArrowUp, Bot, Search, BarChart2, Zap, Bell, Power, DollarSign, CheckCircle2, Clock, Sparkles, ChevronDown } from "lucide-react"
 import { cn } from "@/lib/utils"
 
 interface ToolCall { name: string; input: Record<string, any> }
@@ -21,6 +21,12 @@ const TOOL_META: Record<string, { label: string; icon: any; color: string; bg: s
   update_budget:   { label: "Budget",     icon: DollarSign, color: "text-emerald-400", bg: "bg-emerald-500/10 ring-emerald-500/20" },
   create_alert:    { label: "Alerta",     icon: Bell,       color: "text-red-400",     bg: "bg-red-500/10 ring-red-500/20" },
 }
+
+const MODELS = [
+  { id: "claude-haiku-4-5-20251001", label: "Haiku 4.5", desc: "Rápido" },
+  { id: "claude-sonnet-4-6",         label: "Sonnet 4.6", desc: "Equilibrado" },
+  { id: "claude-opus-4-7",           label: "Opus 4.7",  desc: "Mais capaz" },
+]
 
 const STEPS = [
   { icon: Zap,       text: "Pensando..." },
@@ -69,6 +75,8 @@ export default function AgentePage() {
   const [input, setInput] = useState("")
   const [loading, setLoading] = useState(false)
   const [step, setStep] = useState(0)
+  const [model, setModel] = useState("claude-sonnet-4-6")
+  const [modelOpen, setModelOpen] = useState(false)
   const bottomRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const intervalRef = useRef<ReturnType<typeof setInterval> | undefined>(undefined)
@@ -94,7 +102,7 @@ export default function AgentePage() {
     setMessages(p => [...p, { role: "user", content: text }])
     setLoading(true)
     try {
-      const res = await api.agent.query(text)
+      const res = await api.agent.query(text, model)
       setMessages(p => [...p, { role: "assistant", content: res.message, tools_used: res.tools_used, actions: res.actions_taken }])
     } catch {
       setMessages(p => [...p, { role: "assistant", content: "Erro ao processar. Verifique se o agente está configurado." }])
@@ -210,28 +218,72 @@ export default function AgentePage() {
       )}
 
       {/* Sticky input */}
-      <div className="sticky bottom-0 pb-6 pt-3 bg-gradient-to-t from-[#08080a] via-[#08080a]/90 to-transparent">
+      <div className="sticky bottom-0 pb-6 pt-4 bg-gradient-to-t from-[#08080a] via-[#08080a]/95 to-transparent">
         <div className="max-w-2xl mx-auto">
-          <div className="bg-white/[0.05] ring-1 ring-white/[0.09] rounded-2xl focus-within:ring-violet-500/30 transition-all overflow-hidden">
+          <div className="bg-[#111113] ring-1 ring-white/[0.08] rounded-2xl transition-all focus-within:ring-white/[0.14]">
+            {/* Textarea */}
             <textarea
               ref={textareaRef}
               rows={1}
               value={input}
-              onChange={e => { setInput(e.target.value); e.target.style.height = "auto"; e.target.style.height = Math.min(e.target.scrollHeight, 140) + "px" }}
+              onChange={e => {
+                setInput(e.target.value)
+                e.target.style.height = "auto"
+                e.target.style.height = Math.min(e.target.scrollHeight, 160) + "px"
+              }}
               onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(input) } }}
-              placeholder="Pergunte sobre suas campanhas..."
+              placeholder="Responder..."
               disabled={loading}
-              className="w-full px-4 pt-3.5 pb-11 bg-transparent text-[13px] text-white placeholder-zinc-600 focus:outline-none resize-none leading-relaxed disabled:opacity-40"
+              className="w-full px-4 pt-3.5 pb-2 bg-transparent text-[13px] text-white placeholder-zinc-600 focus:outline-none resize-none leading-relaxed disabled:opacity-40"
             />
-            <div className="absolute bottom-9 right-4 flex items-center gap-2">
-              <span className="text-[10px] text-zinc-700 hidden sm:block">Shift+↵ nova linha</span>
-              <button
-                onClick={() => send(input)}
-                disabled={loading || !input.trim()}
-                className="w-7 h-7 flex items-center justify-center bg-violet-600 hover:bg-violet-500 disabled:opacity-30 rounded-lg transition-colors"
-              >
-                <Send size={12} className="text-white" />
-              </button>
+
+            {/* Bottom bar */}
+            <div className="flex items-center justify-between px-3 pb-2.5 pt-1">
+              <span className="text-[11px] text-zinc-600">+</span>
+
+              <div className="flex items-center gap-2">
+                {/* Model selector */}
+                <div className="relative">
+                  <button
+                    onClick={() => setModelOpen(v => !v)}
+                    className="flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.05] transition-colors"
+                  >
+                    {MODELS.find(m => m.id === model)?.label ?? "Sonnet 4.6"}
+                    <ChevronDown size={10} className={cn("transition-transform", modelOpen && "rotate-180")} />
+                  </button>
+                  {modelOpen && (
+                    <div className="absolute bottom-full mb-1 right-0 bg-[#1a1a1e] ring-1 ring-white/[0.10] rounded-xl overflow-hidden z-20 min-w-[160px]">
+                      {MODELS.map(m => (
+                        <button
+                          key={m.id}
+                          onClick={() => { setModel(m.id); setModelOpen(false) }}
+                          className={cn(
+                            "w-full flex items-center justify-between px-4 py-2.5 text-left hover:bg-white/[0.05] transition-colors",
+                            model === m.id ? "text-white" : "text-zinc-400"
+                          )}
+                        >
+                          <span className="text-[12px] font-medium">{m.label}</span>
+                          <span className="text-[10px] text-zinc-600">{m.desc}</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* Send button — só aparece com texto */}
+                <button
+                  onClick={() => send(input)}
+                  disabled={loading || !input.trim()}
+                  className={cn(
+                    "w-7 h-7 flex items-center justify-center rounded-lg transition-all",
+                    input.trim() && !loading
+                      ? "bg-white text-zinc-900 hover:bg-zinc-100"
+                      : "bg-white/[0.06] text-zinc-600 cursor-default"
+                  )}
+                >
+                  <ArrowUp size={13} />
+                </button>
+              </div>
             </div>
           </div>
           <p className="text-center text-[11px] text-zinc-700 mt-2">GTPRO pode cometer erros — verifique decisões importantes.</p>
