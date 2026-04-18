@@ -90,7 +90,7 @@ export default function AgentePage() {
   const [expandedTools, setExpandedTools] = useState<number[]>([])
   const bottomRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
-  const thinkInterval = useRef<NodeJS.Timeout>()
+  const thinkInterval = useRef<NodeJS.Timeout | null>(null)
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" })
