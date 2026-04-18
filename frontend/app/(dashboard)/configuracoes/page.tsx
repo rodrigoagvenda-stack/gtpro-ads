@@ -293,8 +293,8 @@ function ConfiguracoesContent() {
             <p className="text-[13px] font-medium text-zinc-200">Modo supervisionado</p>
             <p className="text-[11px] text-zinc-600 mt-0.5">Agente propõe ações — você aprova antes de executar</p>
           </div>
-          <button onClick={() => setTenantConfig(c => ({ ...c, modo_supervisionado: !c.modo_supervisionado }))} className={cn("shrink-0 w-10 h-[22px] rounded-full transition-colors relative", tenantConfig.modo_supervisionado ? "bg-violet-600" : "bg-zinc-700")}>
-            <span className={cn("absolute top-[3px] w-4 h-4 bg-white rounded-full shadow transition-transform", tenantConfig.modo_supervisionado ? "translate-x-[22px]" : "translate-x-[3px]")} />
+          <button type="button" onClick={() => setTenantConfig(c => ({ ...c, modo_supervisionado: !c.modo_supervisionado }))} className={cn("shrink-0 w-11 h-6 rounded-full transition-colors relative", tenantConfig.modo_supervisionado ? "bg-violet-600" : "bg-zinc-700")}>
+            <span className={cn("pointer-events-none absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform", tenantConfig.modo_supervisionado ? "translate-x-5" : "translate-x-0")} />
           </button>
         </div>
 

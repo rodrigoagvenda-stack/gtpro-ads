@@ -197,10 +197,11 @@ export default function OnboardingPage() {
                 <p className="text-[11px] text-zinc-500 mt-0.5">Agente propõe — você aprova antes de executar</p>
               </div>
               <button
+                type="button"
                 onClick={() => setConfig((c) => ({ ...c, modo_supervisionado: !c.modo_supervisionado }))}
-                className={cn("shrink-0 w-10 h-[22px] rounded-full transition-colors relative", config.modo_supervisionado ? "bg-violet-600" : "bg-zinc-700")}
+                className={cn("shrink-0 w-11 h-6 rounded-full transition-colors relative", config.modo_supervisionado ? "bg-violet-600" : "bg-zinc-700")}
               >
-                <span className={cn("absolute top-[3px] w-4 h-4 bg-white rounded-full shadow transition-transform", config.modo_supervisionado ? "translate-x-[22px]" : "translate-x-[3px]")} />
+                <span className={cn("pointer-events-none absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform", config.modo_supervisionado ? "translate-x-5" : "translate-x-0")} />
               </button>
             </div>
 
