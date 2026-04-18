@@ -35,7 +35,7 @@ const TABS = [
 
 // ─── Shared components ────────────────────────────────────────────────────────
 
-const inputCls = "w-full px-3.5 py-2.5 bg-white/[0.04] ring-1 ring-white/[0.08] rounded-lg text-[13px] text-white placeholder-zinc-600 focus:outline-none focus:ring-violet-500/50 transition-all"
+const inputCls = "w-full px-3.5 py-2.5 bg-white/[0.04] ring-1 ring-white/[0.08] rounded-lg text-[13px] text-white placeholder-zinc-600 focus:outline-none focus:ring-violet-500/50 transition-all [color-scheme:dark]"
 
 function Field({ label, badge, children }: { label: string; badge?: string; children: React.ReactNode }) {
   return (
