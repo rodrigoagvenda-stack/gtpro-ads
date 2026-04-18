@@ -114,6 +114,7 @@ export async function runAgent(tenantId: string, message: string, tenantConfig: 
   const userContent = `Configurações: objetivo=${tenantConfig.objetivo_principal}, ROAS mín=${tenantConfig.roas_minimo}, CPL máx=${tenantConfig.cpl_maximo}, modo supervisionado=${tenantConfig.modo_supervisionado}\n\n${message}`
   const messages: Anthropic.MessageParam[] = [{ role: "user", content: userContent }]
   const actionsTaken: any[] = []
+  const toolsUsed: { name: string; input: Record<string, any> }[] = []
 
   while (true) {
     const response = await client.messages.create({
@@ -128,13 +129,14 @@ export async function runAgent(tenantId: string, message: string, tenantConfig: 
 
     if (response.stop_reason === "end_turn") {
       const text = response.content.find((b) => b.type === "text")
-      return { message: (text as any)?.text ?? "", actions_taken: actionsTaken }
+      return { message: (text as any)?.text ?? "", actions_taken: actionsTaken, tools_used: toolsUsed }
     }
 
     if (response.stop_reason === "tool_use") {
       const results: Anthropic.ToolResultBlockParam[] = []
       for (const block of response.content) {
         if (block.type !== "tool_use") continue
+        toolsUsed.push({ name: block.name, input: block.input as any })
         try {
           const result = await executeTool(block.name, block.input as any, tenantId, tenantConfig)
           logAction(tenantId, block.name, block.input, result, "success")
