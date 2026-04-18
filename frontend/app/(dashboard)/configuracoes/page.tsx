@@ -3,10 +3,11 @@
 import { useEffect, useState, Suspense } from "react"
 import { useSearchParams } from "next/navigation"
 import { api } from "@/lib/api"
-import { Check, Copy, Eye, EyeOff, Plus, Trash2, RefreshCw, Link2, Unlink, Loader2, LayoutGrid } from "lucide-react"
+import { Check, Copy, Eye, EyeOff, Plus, Trash2, RefreshCw, Link2, Unlink, Loader2, LayoutGrid, Pencil, X } from "lucide-react"
 import { cn } from "@/lib/utils"
 
 interface ApiKey { id: string; name: string; scope: string; active: boolean; created_at: string }
+interface Skill  { id: string; name: string; icon: string; color: string; prompt: string; is_default: boolean; tenant_id: string | null }
 
 const OBJETIVOS = [
   { value: "LEADS", label: "Geração de Leads" },
@@ -71,12 +72,19 @@ function ConfiguracoesContent() {
   const [copiedKey, setCopiedKey] = useState(false)
   const [creatingKey, setCreatingKey] = useState(false)
 
+  const [skills, setSkills] = useState<Skill[]>([])
+  const [editingSkill, setEditingSkill] = useState<Skill | null>(null)
+  const [newSkill, setNewSkill] = useState({ name: "", prompt: "", icon: "Zap", color: "violet" })
+  const [addingSkill, setAddingSkill] = useState(false)
+  const [savingSkill, setSavingSkill] = useState(false)
+
   useEffect(() => {
     api.get("/settings/platform").then((d) => {
       setPlatform(d)
       if (d.meta_app_id) setForm((f) => ({ ...f, meta_app_id: d.meta_app_id }))
     })
     api.get("/settings/api-keys").then((d) => setApiKeys(Array.isArray(d) ? d : []))
+    api.skills.list().then((d) => setSkills(Array.isArray(d) ? d : [])).catch(() => {})
     api.meta.status().then(setMetaStatus).catch(() => setMetaStatus({ connected: false }))
     api.tenant.get().then((d) => setTenantConfig({ objetivo_principal: d.objetivo_principal ?? "LEADS", roas_minimo: d.roas_minimo ?? 2, cpl_maximo: d.cpl_maximo ?? 50, budget_mensal: d.budget_mensal ?? "", modo_supervisionado: d.modo_supervisionado ?? true, limite_budget_sem_aprovacao: d.limite_budget_sem_aprovacao ?? 100 })).catch(() => {})
   }, [])
@@ -155,6 +163,33 @@ function ConfiguracoesContent() {
   }
 
   function copyKey(key: string) { navigator.clipboard.writeText(key); setCopiedKey(true); setTimeout(() => setCopiedKey(false), 2000) }
+
+  async function saveSkill() {
+    if (!newSkill.name.trim() || !newSkill.prompt.trim()) return
+    setSavingSkill(true)
+    try {
+      const d = await api.skills.create(newSkill)
+      setSkills(p => [...p, d])
+      setNewSkill({ name: "", prompt: "", icon: "Zap", color: "violet" })
+      setAddingSkill(false)
+    } catch (e: any) { alert(e.message) } finally { setSavingSkill(false) }
+  }
+
+  async function updateSkill() {
+    if (!editingSkill) return
+    setSavingSkill(true)
+    try {
+      const d = await api.skills.update(editingSkill.id, { name: editingSkill.name, prompt: editingSkill.prompt })
+      setSkills(p => p.map(s => s.id === d.id ? d : s))
+      setEditingSkill(null)
+    } catch (e: any) { alert(e.message) } finally { setSavingSkill(false) }
+  }
+
+  async function deleteSkill(id: string) {
+    if (!confirm("Deletar esta skill?")) return
+    await api.skills.delete(id)
+    setSkills(p => p.filter(s => s.id !== id))
+  }
 
   const SaveBtn = ({ saving, saved, onClick }: { saving: boolean; saved: boolean; onClick: () => void }) => (
     <button onClick={onClick} disabled={saving} className="flex items-center gap-1.5 px-4 py-2 bg-white/[0.06] hover:bg-white/[0.09] disabled:opacity-50 text-white text-[13px] font-medium rounded-lg ring-1 ring-white/[0.08] transition-colors">
@@ -299,6 +334,84 @@ function ConfiguracoesContent() {
         </div>
 
         <SaveBtn saving={savingTenant} saved={savedTenant} onClick={saveTenant} />
+      </Section>
+
+      {/* Skills */}
+      <Section title="Skills do agente" description="Atalhos de prompt para o chat. Edite o contexto de cada skill conforme seu nicho e produto.">
+        <div className="space-y-2">
+          {skills.map(skill => (
+            <div key={skill.id} className="bg-white/[0.02] ring-1 ring-white/[0.06] rounded-lg overflow-hidden">
+              {editingSkill?.id === skill.id ? (
+                <div className="p-4 space-y-3">
+                  <input
+                    value={editingSkill.name}
+                    onChange={e => setEditingSkill(s => s ? { ...s, name: e.target.value } : s)}
+                    className={cn(inputCls, "text-[12px]")}
+                    placeholder="Nome da skill"
+                  />
+                  <textarea
+                    value={editingSkill.prompt}
+                    onChange={e => setEditingSkill(s => s ? { ...s, prompt: e.target.value } : s)}
+                    rows={5}
+                    className={cn(inputCls, "text-[12px] resize-none leading-relaxed")}
+                    placeholder="Prompt enviado ao agente quando o usuário clicar nesta skill..."
+                  />
+                  <div className="flex items-center gap-2">
+                    <button onClick={updateSkill} disabled={savingSkill} className="px-3 py-1.5 bg-violet-600 hover:bg-violet-500 disabled:opacity-50 text-white text-[12px] font-medium rounded-lg transition-colors">
+                      {savingSkill ? "Salvando..." : "Salvar"}
+                    </button>
+                    <button onClick={() => setEditingSkill(null)} className="px-3 py-1.5 text-zinc-500 hover:text-zinc-300 text-[12px] transition-colors">Cancelar</button>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex items-start justify-between px-4 py-3 gap-3">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <p className="text-[13px] font-medium text-zinc-200">{skill.name}</p>
+                      {skill.is_default && <span className="text-[10px] text-zinc-600 bg-white/[0.04] px-1.5 py-0.5 rounded">padrão</span>}
+                      {!skill.tenant_id && <span className="text-[10px] text-zinc-600 bg-white/[0.04] px-1.5 py-0.5 rounded">plataforma</span>}
+                    </div>
+                    <p className="text-[11px] text-zinc-600 mt-1 truncate">{skill.prompt.slice(0, 100)}…</p>
+                  </div>
+                  <div className="flex items-center gap-1 shrink-0">
+                    {skill.tenant_id && (
+                      <>
+                        <button onClick={() => setEditingSkill(skill)} className="w-7 h-7 flex items-center justify-center hover:bg-white/[0.06] rounded-lg transition-colors">
+                          <Pencil size={12} className="text-zinc-500 hover:text-zinc-300" />
+                        </button>
+                        <button onClick={() => deleteSkill(skill.id)} className="w-7 h-7 flex items-center justify-center hover:bg-red-500/10 rounded-lg transition-colors">
+                          <Trash2 size={12} className="text-zinc-600 hover:text-red-400" />
+                        </button>
+                      </>
+                    )}
+                    {!skill.tenant_id && (
+                      <button onClick={() => setEditingSkill({ ...skill, tenant_id: "pending" })} className="flex items-center gap-1 px-2 py-1 text-[11px] text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.05] rounded-lg transition-colors">
+                        <Pencil size={10} /> Personalizar
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+
+        {addingSkill ? (
+          <div className="bg-white/[0.02] ring-1 ring-white/[0.07] rounded-lg p-4 space-y-3 mt-2">
+            <input value={newSkill.name} onChange={e => setNewSkill(s => ({ ...s, name: e.target.value }))} className={cn(inputCls, "text-[12px]")} placeholder="Nome da skill (ex: Revisar copy de produto)" />
+            <textarea value={newSkill.prompt} onChange={e => setNewSkill(s => ({ ...s, prompt: e.target.value }))} rows={5} className={cn(inputCls, "text-[12px] resize-none leading-relaxed")} placeholder="Prompt completo enviado ao agente. Inclua quais ferramentas usar e o que você quer analisar..." />
+            <div className="flex items-center gap-2">
+              <button onClick={saveSkill} disabled={savingSkill || !newSkill.name.trim() || !newSkill.prompt.trim()} className="px-3 py-1.5 bg-violet-600 hover:bg-violet-500 disabled:opacity-50 text-white text-[12px] font-medium rounded-lg transition-colors">
+                {savingSkill ? "Criando..." : "Criar skill"}
+              </button>
+              <button onClick={() => setAddingSkill(false)} className="px-3 py-1.5 text-zinc-500 hover:text-zinc-300 text-[12px] transition-colors">Cancelar</button>
+            </div>
+          </div>
+        ) : (
+          <button onClick={() => setAddingSkill(true)} className="flex items-center gap-1.5 px-3 py-2 text-[12px] text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.04] ring-1 ring-white/[0.06] rounded-lg transition-colors w-full justify-center mt-2">
+            <Plus size={12} /> Nova skill
+          </button>
+        )}
       </Section>
 
       {/* API Keys */}

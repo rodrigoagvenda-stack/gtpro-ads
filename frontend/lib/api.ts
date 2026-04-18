@@ -89,4 +89,11 @@ export const api = {
     get: () => fetchWithAuth("/settings/webhook"),
     regenerate: () => fetchWithAuth("/settings/webhook", { method: "POST" }),
   },
+
+  skills: {
+    list: () => fetchWithAuth("/skills"),
+    create: (body: Record<string, unknown>) => fetchWithAuth("/skills", { method: "POST", body: JSON.stringify(body) }),
+    update: (id: string, body: Record<string, unknown>) => fetchWithAuth(`/skills/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
+    delete: (id: string) => fetchWithAuth(`/skills/${id}`, { method: "DELETE" }),
+  },
 }

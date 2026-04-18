@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from "react"
 import { api } from "@/lib/api"
-import { ArrowUp, Bot, Search, BarChart2, Zap, Bell, Power, DollarSign, CheckCircle2, Clock, Sparkles, ChevronDown, Trash2 } from "lucide-react"
+import { ArrowUp, Bot, Search, BarChart2, Zap, Bell, Power, DollarSign, CheckCircle2, Clock, Sparkles, ChevronDown, Trash2, FileText, Users, Image } from "lucide-react"
 import { cn } from "@/lib/utils"
 
 interface ToolCall { name: string; input: Record<string, any> }
@@ -41,6 +41,18 @@ const SUGGESTIONS = [
   "Alguma campanha com CPL muito alto?",
 ]
 
+const SKILL_ICONS: Record<string, any> = {
+  BarChart2, Zap, Search, FileText, Users, Image, Bell, DollarSign, Power,
+}
+
+const SKILL_COLORS: Record<string, string> = {
+  violet:  "text-violet-400 bg-violet-500/10 ring-violet-500/20 hover:bg-violet-500/20",
+  blue:    "text-blue-400   bg-blue-500/10   ring-blue-500/20   hover:bg-blue-500/20",
+  emerald: "text-emerald-400 bg-emerald-500/10 ring-emerald-500/20 hover:bg-emerald-500/20",
+  amber:   "text-amber-400  bg-amber-500/10  ring-amber-500/20  hover:bg-amber-500/20",
+  red:     "text-red-400    bg-red-500/10    ring-red-500/20    hover:bg-red-500/20",
+}
+
 function renderMd(text: string) {
   return text.split("\n").map((line, i) => {
     if (line.startsWith("### ")) return <p key={i} className="text-[13px] font-semibold text-white mt-4 mb-1">{line.slice(4)}</p>
@@ -78,9 +90,14 @@ export default function AgentePage() {
   const [step, setStep] = useState(0)
   const [model, setModel] = useState("claude-sonnet-4-6")
   const [modelOpen, setModelOpen] = useState(false)
+  const [skills, setSkills] = useState<{ id: string; name: string; icon: string; color: string; prompt: string }[]>([])
   const bottomRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const intervalRef = useRef<ReturnType<typeof setInterval> | undefined>(undefined)
+
+  useEffect(() => {
+    api.skills.list().then((d: any[]) => setSkills(Array.isArray(d) ? d : [])).catch(() => {})
+  }, [])
 
   // Load persistent history on mount
   useEffect(() => {
@@ -261,6 +278,27 @@ export default function AgentePage() {
       {/* Input — fixed at bottom */}
       <div className="shrink-0 pb-5 pt-3 bg-gradient-to-t from-[#08080a] via-[#08080a]/95 to-transparent">
         <div className="max-w-2xl mx-auto">
+
+          {/* Skill chips */}
+          {skills.length > 0 && (
+            <div className="flex gap-2 overflow-x-auto pb-2 mb-2 scrollbar-thin">
+              {skills.map(skill => {
+                const Icon = SKILL_ICONS[skill.icon] ?? Zap
+                const cls = SKILL_COLORS[skill.color] ?? SKILL_COLORS.violet
+                return (
+                  <button
+                    key={skill.id}
+                    onClick={() => send(skill.prompt)}
+                    disabled={loading}
+                    className={cn("flex items-center gap-1.5 px-3 py-1.5 rounded-full ring-1 text-[11px] font-medium whitespace-nowrap transition-colors disabled:opacity-40 shrink-0", cls)}
+                  >
+                    <Icon size={10} />
+                    {skill.name}
+                  </button>
+                )
+              })}
+            </div>
+          )}
           <div className="bg-[#111113] ring-1 ring-white/[0.08] rounded-2xl transition-all focus-within:ring-white/[0.14]">
             {/* Textarea */}
             <textarea
