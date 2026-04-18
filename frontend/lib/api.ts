@@ -36,7 +36,12 @@ export const api = {
   },
 
   insights: {
-    get: (datePreset = "last_7d") => fetchWithAuth(`/insights?date_preset=${datePreset}`),
+    get: (datePreset = "last_7d", since?: string, until?: string) => {
+      const params = new URLSearchParams({ date_preset: datePreset })
+      if (since) params.set("since", since)
+      if (until) params.set("until", until)
+      return fetchWithAuth(`/insights?${params}`)
+    },
   },
 
   agent: {

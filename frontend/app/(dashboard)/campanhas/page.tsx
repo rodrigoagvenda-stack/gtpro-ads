@@ -8,17 +8,18 @@ import KpiCard from "@/components/dashboard/KpiCard"
 import CampaignRow from "@/components/dashboard/CampaignRow"
 import type { Campaign } from "@/types"
 import { cn } from "@/lib/utils"
-import { AlertTriangle, RefreshCw, Key } from "lucide-react"
+import { AlertTriangle, RefreshCw, Key, Calendar } from "lucide-react"
 
 function isTokenExpired(msg: string) {
   return msg.includes("190") || msg.includes("463") || msg.includes("Session has expired") || msg.includes("access token")
 }
 
 const PRESETS = [
-  { value: "today", label: "Hoje" },
-  { value: "last_7d", label: "7 dias" },
-  { value: "last_30d", label: "30 dias" },
+  { value: "today",      label: "Hoje" },
+  { value: "last_7d",    label: "7 dias" },
+  { value: "last_30d",   label: "30 dias" },
   { value: "this_month", label: "Este mês" },
+  { value: "custom",     label: "Personalizado" },
 ]
 
 export default function CampanhasPage() {
@@ -26,13 +27,22 @@ export default function CampanhasPage() {
   const [campaigns, setCampaigns] = useState<Campaign[]>([])
   const [insights, setInsights] = useState<Record<string, any>>({})
   const [preset, setPreset] = useState("last_7d")
+  const [since, setSince] = useState("")
+  const [until, setUntil] = useState("")
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
+  const isCustom = preset === "custom"
+  const customReady = isCustom && since && until && since <= until
+
   useEffect(() => {
+    if (isCustom && !customReady) return
     setLoading(true)
     setError(null)
-    Promise.all([api.campaigns.list(preset), api.insights.get(preset)])
+    const insightsCall = isCustom
+      ? api.insights.get("last_7d", since, until)
+      : api.insights.get(preset)
+    Promise.all([api.campaigns.list(preset), insightsCall])
       .then(([c, i]) => {
         setCampaigns(Array.isArray(c) ? c : [])
         setInsights(i && typeof i === "object" && !Array.isArray(i) ? i : {})
@@ -42,7 +52,7 @@ export default function CampanhasPage() {
         setError(err.message || "Erro ao carregar dados")
         setLoading(false)
       })
-  }, [preset])
+  }, [preset, customReady ? since : null, customReady ? until : null])
 
   async function toggleCampaign(id: string, status: string) {
     const next = status === "ACTIVE" ? "PAUSED" : "ACTIVE"
@@ -76,19 +86,41 @@ export default function CampanhasPage() {
           <h1 className="text-[17px] font-semibold text-white">Campanhas</h1>
           <p className="text-[12px] text-zinc-600 mt-0.5">Performance da conta Meta Ads</p>
         </div>
-        <div className="flex items-center bg-white/[0.04] rounded-lg p-0.5 ring-1 ring-white/[0.06]">
-          {PRESETS.map((p) => (
-            <button
-              key={p.value}
-              onClick={() => setPreset(p.value)}
-              className={cn(
-                "px-3 py-1.5 rounded-md text-[12px] font-medium transition-colors",
-                preset === p.value ? "bg-white/[0.08] text-white" : "text-zinc-500 hover:text-zinc-300"
-              )}
-            >
-              {p.label}
-            </button>
-          ))}
+        <div className="flex items-center gap-2 flex-wrap justify-end">
+          <div className="flex items-center bg-white/[0.04] rounded-lg p-0.5 ring-1 ring-white/[0.06]">
+            {PRESETS.map((p) => (
+              <button
+                key={p.value}
+                onClick={() => setPreset(p.value)}
+                className={cn(
+                  "px-3 py-1.5 rounded-md text-[12px] font-medium transition-colors flex items-center gap-1.5",
+                  preset === p.value ? "bg-white/[0.08] text-white" : "text-zinc-500 hover:text-zinc-300"
+                )}
+              >
+                {p.value === "custom" && <Calendar size={11} />}
+                {p.label}
+              </button>
+            ))}
+          </div>
+
+          {isCustom && (
+            <div className="flex items-center gap-2">
+              <input
+                type="date"
+                value={since}
+                onChange={e => setSince(e.target.value)}
+                className="bg-white/[0.04] ring-1 ring-white/[0.06] rounded-lg px-3 py-1.5 text-[12px] text-white focus:outline-none focus:ring-violet-500/50 [color-scheme:dark]"
+              />
+              <span className="text-zinc-600 text-[12px]">até</span>
+              <input
+                type="date"
+                value={until}
+                onChange={e => setUntil(e.target.value)}
+                min={since}
+                className="bg-white/[0.04] ring-1 ring-white/[0.06] rounded-lg px-3 py-1.5 text-[12px] text-white focus:outline-none focus:ring-violet-500/50 [color-scheme:dark]"
+              />
+            </div>
+          )}
         </div>
       </div>
 

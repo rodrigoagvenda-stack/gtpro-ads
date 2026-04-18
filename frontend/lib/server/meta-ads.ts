@@ -221,11 +221,15 @@ export async function deleteAd(tenantId: string, adId: string) {
 
 const INSIGHT_FIELDS = "impressions,clicks,spend,reach,ctr,cpm,cpc,actions,action_values,frequency,cost_per_action_type,video_avg_time_watched_actions,website_ctr"
 
-export async function getInsights(tenantId: string, datePreset = "last_7d") {
+export async function getInsights(tenantId: string, datePreset = "last_7d", since?: string, until?: string) {
   const { token, adAccountId } = await getTokenAndAccount(tenantId)
-  const data = await graphGet(`/act_${adAccountId}/insights`, {
-    access_token: token, fields: INSIGHT_FIELDS, date_preset: datePreset, level: "account",
-  })
+  const params: Record<string, string> = { access_token: token, fields: INSIGHT_FIELDS, level: "account" }
+  if (since && until) {
+    params.time_range = JSON.stringify({ since, until })
+  } else {
+    params.date_preset = datePreset
+  }
+  const data = await graphGet(`/act_${adAccountId}/insights`, params)
   return data.data?.[0] ?? {}
 }
 
