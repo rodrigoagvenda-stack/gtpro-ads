@@ -75,4 +75,13 @@ export const api = {
   gtpro: {
     status: () => fetchWithAuth("/gtpro/status"),
   },
+
+  leads: {
+    list: (datePreset = "last_30d") => fetchWithAuth(`/leads?date_preset=${datePreset}`),
+  },
+
+  webhook: {
+    get: () => fetchWithAuth("/settings/webhook"),
+    regenerate: () => fetchWithAuth("/settings/webhook", { method: "POST" }),
+  },
 }
