@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from "react"
 import { api } from "@/lib/api"
-import { Send, Bot, Search, BarChart2, TrendingUp, Zap, Bell, Power, DollarSign, CheckCircle2, Clock, Sparkles } from "lucide-react"
+import { Send, Bot, Search, BarChart2, Zap, Bell, Power, DollarSign, CheckCircle2, Clock, Sparkles } from "lucide-react"
 import { cn } from "@/lib/utils"
 
 interface ToolCall { name: string; input: Record<string, any> }
@@ -23,10 +23,9 @@ const TOOL_META: Record<string, { label: string; icon: any; color: string; bg: s
 }
 
 const STEPS = [
-  { icon: Search,     text: "Consultando campanhas..." },
-  { icon: BarChart2,  text: "Analisando métricas..." },
-  { icon: TrendingUp, text: "Verificando ROAS e CPL..." },
-  { icon: Zap,        text: "Preparando resposta..." },
+  { icon: Zap,       text: "Pensando..." },
+  { icon: Search,    text: "Buscando dados..." },
+  { icon: BarChart2, text: "Analisando..." },
 ]
 
 const SUGGESTIONS = [
@@ -80,7 +79,7 @@ export default function AgentePage() {
 
   useEffect(() => {
     if (loading) {
-      intervalRef.current = setInterval(() => setStep(s => (s + 1) % STEPS.length), 1800)
+      intervalRef.current = setInterval(() => setStep(s => Math.min(s + 1, STEPS.length - 1)), 3000)
     } else {
       clearInterval(intervalRef.current)
       setStep(0)
