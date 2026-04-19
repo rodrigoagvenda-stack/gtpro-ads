@@ -190,9 +190,10 @@ export async function deleteAdSet(tenantId: string, adSetId: string) {
 
 // ─── Ads ─────────────────────────────────────────────────────────────────────
 
-export async function getAds(tenantId: string, campaignId: string) {
+export async function getAds(tenantId: string, campaignId: string, datePreset = "last_7d") {
   const token = await getToken(tenantId)
-  const fields = "id,name,status,creative{id,name,thumbnail_url,body,title,image_url,object_story_spec}"
+  const adInsightFields = "impressions,reach,clicks,spend,ctr,cpc,cpm,actions,video_avg_time_watched_actions,video_p25_watched_actions,video_p50_watched_actions,video_p75_watched_actions,video_p100_watched_actions"
+  const fields = `id,name,status,creative{id,name,thumbnail_url,body,title,image_url,object_story_spec},insights.date_preset(${datePreset}){${adInsightFields}}`
   const data = await graphGet(`/${campaignId}/ads`, { access_token: token, fields, limit: "50" })
   return (data.data ?? []).map((ad: any) => {
     const c = ad.creative
@@ -352,6 +353,20 @@ export async function createLookalikeAudience(tenantId: string, params: Record<s
       country: params.country,
     }),
   })
+}
+
+// ─── Campaign Breakdowns ─────────────────────────────────────────────────────
+
+export async function getCampaignBreakdowns(tenantId: string, campaignId: string, breakdown: string, datePreset = "last_7d") {
+  const token = await getToken(tenantId)
+  const data = await graphGet(`/${campaignId}/insights`, {
+    access_token: token,
+    fields: "impressions,reach,clicks,spend,ctr,cpc,actions",
+    date_preset: datePreset,
+    breakdowns: breakdown,
+    limit: "500",
+  })
+  return data.data ?? []
 }
 
 // ─── Auth ─────────────────────────────────────────────────────────────────────

@@ -2,17 +2,19 @@
 
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
-import { Megaphone, Bot, FileText, Bell, Settings, LogOut, Zap, BarChart2, Link2, Home } from "lucide-react"
+import { Megaphone, Bot, FileText, Bell, Settings, LogOut, Zap, BarChart2, Link2, Home, Users, Building2 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { createClient } from "@/lib/supabase"
 
 const NAV_MAIN = [
-  { href: "/home", label: "Home", icon: Home },
-  { href: "/campanhas", label: "Campanhas", icon: Megaphone },
-  { href: "/agente", label: "Agente IA", icon: Bot },
-  { href: "/relatorios", label: "Relatórios", icon: FileText },
-  { href: "/alertas", label: "Alertas", icon: Bell },
-  { href: "/rastreamento", label: "Rastreamento UTM", icon: Link2 },
+  { href: "/home",       label: "Home",           icon: Home },
+  { href: "/campanhas",  label: "Campanhas",       icon: Megaphone },
+  { href: "/audiencias", label: "Audiências",      icon: Users },
+  { href: "/conta",      label: "Conta",           icon: Building2 },
+  { href: "/agente",     label: "Agente IA",       icon: Bot },
+  { href: "/relatorios", label: "Relatórios",      icon: FileText },
+  { href: "/alertas",    label: "Alertas",         icon: Bell },
+  { href: "/rastreamento", label: "Rastreamento",  icon: Link2 },
 ]
 
 const NAV_BOTTOM = [

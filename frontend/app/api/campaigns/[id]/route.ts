@@ -12,7 +12,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   try {
     const [adSets, ads, insights] = await Promise.all([
       getAdSets(tenant.tenant_id, id),
-      getAds(tenant.tenant_id, id),
+      getAds(tenant.tenant_id, id, datePreset),
       getCampaignInsights(tenant.tenant_id, id, datePreset),
     ])
     return Response.json({ ad_sets: adSets, ads, insights })

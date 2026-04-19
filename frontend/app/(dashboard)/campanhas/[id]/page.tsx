@@ -141,13 +141,25 @@ export default function CampaignDetailPage() {
   const [data, setData] = useState<{ ad_sets: AdSet[]; ads: Ad[]; insights: Insights } | null>(null)
   const [datePreset, setDatePreset] = useState("last_7d")
   const [loading, setLoading] = useState(true)
-  const [activeTab, setActiveTab] = useState<"adsets" | "ads">("ads")
+  const [activeTab, setActiveTab] = useState<"adsets" | "ads" | "breakdown">("ads")
+  const [breakdownType, setBreakdownType] = useState("age,gender")
+  const [breakdownData, setBreakdownData] = useState<any[]>([])
+  const [breakdownLoading, setBreakdownLoading] = useState(false)
   const [selectedAd, setSelectedAd] = useState<Ad | null>(null)
 
   useEffect(() => {
     setLoading(true)
     api.campaigns.detail(id, datePreset).then((d) => { setData(d); setLoading(false) })
   }, [id, datePreset])
+
+  useEffect(() => {
+    if (activeTab !== "breakdown" || !id) return
+    setBreakdownLoading(true)
+    api.breakdowns.get(id, breakdownType, datePreset)
+      .then((d: any) => setBreakdownData(Array.isArray(d) ? d : []))
+      .catch(() => setBreakdownData([]))
+      .finally(() => setBreakdownLoading(false))
+  }, [activeTab, breakdownType, datePreset, id])
 
   const insights = data?.insights ?? {}
   const adSets = data?.ad_sets ?? []
@@ -240,8 +252,9 @@ export default function CampaignDetailPage() {
           <div>
             <div className="flex items-center gap-1 mb-4 border-b border-white/[0.06]">
               {[
-                { id: "ads",     label: `Criativos${ads.length > 0 ? ` (${ads.length})` : ""}` },
-                { id: "adsets",  label: `Conjuntos${adSets.length > 0 ? ` (${adSets.length})` : ""}` },
+                { id: "ads",       label: `Criativos${ads.length > 0 ? ` (${ads.length})` : ""}` },
+                { id: "adsets",    label: `Conjuntos${adSets.length > 0 ? ` (${adSets.length})` : ""}` },
+                { id: "breakdown", label: "Breakdown" },
               ].map(t => (
                 <button key={t.id} onClick={() => setActiveTab(t.id as any)}
                   className={cn("px-4 py-2.5 text-[12px] font-medium border-b-2 -mb-px transition-colors",
@@ -278,13 +291,30 @@ export default function CampaignDetailPage() {
                           )}
                           <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors" />
                         </div>
-                        <div className="px-3 py-2.5">
+                        <div className="px-3 py-2.5 space-y-2">
                           <p className="text-[12px] font-medium text-zinc-200 truncate">{ad.name}</p>
-                          {ad.creative?.title && <p className="text-[11px] text-zinc-500 mt-0.5 truncate">{ad.creative.title}</p>}
-                          <div className="flex items-center gap-1 mt-1.5">
+                          {ad.creative?.title && <p className="text-[11px] text-zinc-500 truncate">{ad.creative.title}</p>}
+                          <div className="flex items-center gap-1">
                             <span className={cn("w-1.5 h-1.5 rounded-full shrink-0", st.dot)} />
                             <span className="text-[10px] text-zinc-600">{st.label}</span>
                           </div>
+                          {(() => {
+                            const ins = (ad as any).insights?.data?.[0]
+                            if (!ins) return null
+                            const spend = Number(ins.spend ?? 0)
+                            const leads = ins.actions?.find((a: any) => a.action_type === "lead")?.value
+                            const p100 = ins.video_p100_watched_actions?.[0]?.value
+                            return (
+                              <div className="border-t border-white/[0.05] pt-2 grid grid-cols-2 gap-1">
+                                {spend > 0 && <div><p className="text-[9px] text-zinc-700">Gasto</p><p className="text-[11px] font-semibold text-zinc-300">{formatCurrency(spend)}</p></div>}
+                                {ins.impressions && <div><p className="text-[9px] text-zinc-700">Imp.</p><p className="text-[11px] font-semibold text-zinc-300">{Number(ins.impressions).toLocaleString("pt-BR")}</p></div>}
+                                {ins.ctr && <div><p className="text-[9px] text-zinc-700">CTR</p><p className="text-[11px] font-semibold text-zinc-300">{Number(ins.ctr).toFixed(2)}%</p></div>}
+                                {ins.cpc && <div><p className="text-[9px] text-zinc-700">CPC</p><p className="text-[11px] font-semibold text-zinc-300">{formatCurrency(Number(ins.cpc))}</p></div>}
+                                {leads && <div><p className="text-[9px] text-zinc-700">Leads</p><p className="text-[11px] font-semibold text-emerald-400">{leads}</p></div>}
+                                {p100 && <div><p className="text-[9px] text-zinc-700">100%</p><p className="text-[11px] font-semibold text-violet-400">{Number(p100).toLocaleString("pt-BR")}</p></div>}
+                              </div>
+                            )
+                          })()}
                         </div>
                       </button>
                     )
@@ -294,6 +324,70 @@ export default function CampaignDetailPage() {
             )}
 
             {/* Ad Sets */}
+            {/* Breakdown */}
+            {activeTab === "breakdown" && (() => {
+              const BREAKDOWN_OPTIONS = [
+                { value: "age,gender",          label: "Idade / Gênero" },
+                { value: "publisher_platform",  label: "Plataforma" },
+                { value: "impression_device",   label: "Dispositivo" },
+                { value: "region",              label: "Região" },
+                { value: "country",             label: "País" },
+              ]
+              const maxSpend = Math.max(...breakdownData.map(r => Number(r.spend ?? 0)), 1)
+              return (
+                <div className="space-y-4">
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    {BREAKDOWN_OPTIONS.map(o => (
+                      <button key={o.value} onClick={() => setBreakdownType(o.value)}
+                        className={cn("px-3 py-1 rounded-full text-[11px] font-medium transition-colors",
+                          breakdownType === o.value ? "bg-violet-600 text-white" : "bg-white/[0.04] text-zinc-500 hover:text-zinc-300 ring-1 ring-white/[0.06]"
+                        )}>
+                        {o.label}
+                      </button>
+                    ))}
+                  </div>
+                  {breakdownLoading ? (
+                    <div className="flex items-center gap-2 text-zinc-600 text-[13px] py-8">
+                      <Loader2 size={14} className="animate-spin" /> Carregando...
+                    </div>
+                  ) : breakdownData.length === 0 ? (
+                    <p className="text-[13px] text-zinc-600 py-8 text-center">Sem dados para este período.</p>
+                  ) : (
+                    <div className="bg-white/[0.02] ring-1 ring-white/[0.06] rounded-xl overflow-hidden">
+                      <div className="divide-y divide-white/[0.04]">
+                        {breakdownData
+                          .sort((a, b) => Number(b.spend ?? 0) - Number(a.spend ?? 0))
+                          .map((row, i) => {
+                            const label = [row.age, row.gender === "male" ? "M" : row.gender === "female" ? "F" : row.gender, row.publisher_platform, row.impression_device, row.region, row.country].filter(Boolean).join(" · ")
+                            const spend = Number(row.spend ?? 0)
+                            const pct = maxSpend > 0 ? (spend / maxSpend) * 100 : 0
+                            const leads = row.actions?.find((a: any) => a.action_type === "lead")?.value
+                            return (
+                              <div key={i} className="px-5 py-3">
+                                <div className="flex items-center justify-between gap-3 mb-1.5">
+                                  <p className="text-[12px] font-medium text-zinc-300">{label || "—"}</p>
+                                  <div className="flex items-center gap-4 text-[11px] text-zinc-500 shrink-0">
+                                    {spend > 0 && <span>{formatCurrency(spend)}</span>}
+                                    {row.impressions && <span>{Number(row.impressions).toLocaleString("pt-BR")} imp.</span>}
+                                    {row.clicks && <span>{Number(row.clicks).toLocaleString("pt-BR")} cliques</span>}
+                                    {row.ctr && <span>{Number(row.ctr).toFixed(2)}% CTR</span>}
+                                    {leads && <span>{leads} leads</span>}
+                                  </div>
+                                </div>
+                                <div className="h-1 bg-white/[0.04] rounded-full overflow-hidden">
+                                  <div className="h-full bg-violet-500/60 rounded-full" style={{ width: `${pct}%` }} />
+                                </div>
+                              </div>
+                            )
+                          })
+                        }
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )
+            })()}
+
             {activeTab === "adsets" && (
               adSets.length === 0 ? (
                 <div className="bg-white/[0.02] ring-1 ring-white/[0.06] rounded-xl px-5 py-12 text-center text-[13px] text-zinc-600">Nenhum conjunto encontrado.</div>

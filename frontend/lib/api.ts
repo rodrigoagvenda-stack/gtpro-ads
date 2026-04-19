@@ -65,6 +65,23 @@ export const api = {
     videoSource: (videoId: string) => fetchWithAuth(`/creative/video?video_id=${videoId}`),
   },
 
+  account: {
+    get: () => fetchWithAuth("/account"),
+  },
+
+  audiences: {
+    list: () => fetchWithAuth("/audiences"),
+  },
+
+  pixels: {
+    list: () => fetchWithAuth("/pixels"),
+  },
+
+  breakdowns: {
+    get: (campaignId: string, breakdown: string, datePreset = "last_7d") =>
+      fetchWithAuth(`/campaigns/${campaignId}/breakdowns?breakdown=${breakdown}&date_preset=${datePreset}`),
+  },
+
   meta: {
     status: () => fetchWithAuth("/meta/status"),
     connect: () => fetchWithAuth("/meta/connect"),
