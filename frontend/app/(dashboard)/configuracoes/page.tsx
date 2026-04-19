@@ -144,6 +144,7 @@ function MetaTab() {
   const [showManual, setShowManual] = useState(false)
   const [accounts, setAccounts] = useState<MetaAccount[]>([])
   const [switchingId, setSwitchingId] = useState<string | null>(null)
+  const [showAddAccount, setShowAddAccount] = useState(false)
 
   function loadAccounts() {
     api.meta.accounts().then((d: MetaAccount[]) => setAccounts(Array.isArray(d) ? d : [])).catch(() => {})
@@ -185,7 +186,7 @@ function MetaTab() {
       await api.meta.saveToken(manualToken.trim(), manualAccount.trim())
       setMetaStatus(await api.meta.status())
       setMetaMsg({ type: "ok", text: "Token salvo com sucesso." })
-      setManualToken(""); setManualAccount(""); setShowManual(false)
+      setManualToken(""); setManualAccount(""); setShowManual(false); setShowAddAccount(false)
       loadAccounts()
     } catch (e: any) { setMetaMsg({ type: "err", text: e.message }) } finally { setSavingToken(false) }
   }
@@ -225,15 +226,29 @@ function MetaTab() {
         {metaStatus === null ? (
           <div className="flex items-center gap-2 text-zinc-600 text-[13px]"><Loader2 size={13} className="animate-spin" /> Verificando...</div>
         ) : metaStatus.connected ? (
-          <div className="flex items-center justify-between bg-white/[0.03] ring-1 ring-white/[0.07] rounded-lg px-4 py-3">
-            <div className="flex items-center gap-3">
-              <div className="w-7 h-7 rounded-lg bg-blue-500/15 flex items-center justify-center"><LayoutGrid size={13} className="text-blue-400" /></div>
-              <div>
-                <p className="text-[13px] font-medium text-zinc-200">Meta Ads conectado</p>
-                <p className="text-[11px] text-zinc-600 mt-0.5">Conta {metaStatus.ad_account_id}{metaStatus.connected_at ? ` · desde ${new Date(metaStatus.connected_at).toLocaleDateString("pt-BR")}` : ""}</p>
+          <div className="space-y-3">
+            <div className="flex items-center justify-between bg-white/[0.03] ring-1 ring-white/[0.07] rounded-lg px-4 py-3">
+              <div className="flex items-center gap-3">
+                <div className="w-7 h-7 rounded-lg bg-blue-500/15 flex items-center justify-center"><LayoutGrid size={13} className="text-blue-400" /></div>
+                <div>
+                  <p className="text-[13px] font-medium text-zinc-200">Meta Ads conectado</p>
+                  <p className="text-[11px] text-zinc-600 mt-0.5">Conta {metaStatus.ad_account_id}{metaStatus.connected_at ? ` · desde ${new Date(metaStatus.connected_at).toLocaleDateString("pt-BR")}` : ""}</p>
+                </div>
               </div>
+              <button onClick={async () => { if (!confirm("Desconectar?")) return; await api.meta.disconnect(); setMetaStatus({ connected: false }); setMetaMsg({ type: "info", text: "Conta desconectada." }) }} className="flex items-center gap-1.5 px-2.5 py-1.5 text-[12px] text-red-400 hover:bg-red-500/10 rounded-lg transition-colors"><Unlink size={11} /> Desconectar</button>
             </div>
-            <button onClick={async () => { if (!confirm("Desconectar?")) return; await api.meta.disconnect(); setMetaStatus({ connected: false }); setMetaMsg({ type: "info", text: "Conta desconectada." }) }} className="flex items-center gap-1.5 px-2.5 py-1.5 text-[12px] text-red-400 hover:bg-red-500/10 rounded-lg transition-colors"><Unlink size={11} /> Desconectar</button>
+            <button onClick={() => setShowAddAccount(v => !v)} className="flex items-center gap-1.5 text-[12px] text-zinc-500 hover:text-zinc-300 transition-colors">
+              <Plus size={12} /> {showAddAccount ? "Cancelar" : "Conectar outra conta de anúncios"}
+            </button>
+            {showAddAccount && (
+              <div className="space-y-2 pt-1">
+                <Field label="Access Token"><input type="password" placeholder="EAAxxxxx..." value={manualToken} onChange={e => setManualToken(e.target.value)} className={inputCls} /></Field>
+                <Field label="Ad Account ID"><input type="text" placeholder="act_123456789" value={manualAccount} onChange={e => setManualAccount(e.target.value)} className={inputCls} /></Field>
+                <button onClick={saveToken} disabled={savingToken || !manualToken.trim() || !manualAccount.trim()} className="flex items-center gap-1.5 px-4 py-2 bg-violet-600 hover:bg-violet-500 disabled:opacity-40 text-white text-[13px] font-medium rounded-lg transition-colors">
+                  {savingToken ? <><Loader2 size={13} className="animate-spin" /> Salvando...</> : "Salvar conta"}
+                </button>
+              </div>
+            )}
           </div>
         ) : (
           <div className="space-y-3">
@@ -257,7 +272,7 @@ function MetaTab() {
         )}
       </Card>
 
-      {accounts.length > 1 && (
+      {accounts.length >= 1 && (
         <Card>
           <h2 className="text-[13px] font-semibold text-zinc-200">Contas conectadas</h2>
           <p className="text-[12px] text-zinc-600 -mt-3">Selecione qual conta será usada para campanhas e insights.</p>
