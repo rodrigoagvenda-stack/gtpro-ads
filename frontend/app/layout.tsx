@@ -7,7 +7,6 @@ const inter = Inter({ subsets: ["latin"] })
 export const metadata: Metadata = {
   title: "GTPRO — Gestão de Tráfego com IA",
   description: "Plataforma SaaS de gestão de tráfego pago com inteligência artificial",
-  icons: { icon: "/favicon.png", apple: "/favicon.png" },
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
