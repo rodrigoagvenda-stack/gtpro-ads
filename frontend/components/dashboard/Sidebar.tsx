@@ -1,8 +1,9 @@
 "use client"
 
 import Link from "next/link"
+import Image from "next/image"
 import { usePathname, useRouter } from "next/navigation"
-import { Megaphone, Bot, FileText, Bell, Settings, LogOut, Zap, BarChart2, Link2, Home, Users, Building2 } from "lucide-react"
+import { Megaphone, Bot, FileText, Bell, Settings, LogOut, Zap, Link2, Home, Users, Building2 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { createClient } from "@/lib/supabase"
 
@@ -59,12 +60,7 @@ export default function Sidebar() {
     <aside className="w-52 shrink-0 flex flex-col bg-[#0b0b0d] border-r border-white/[0.05]">
       {/* Logo */}
       <div className="h-[52px] flex items-center px-4 border-b border-white/[0.05]">
-        <div className="flex items-center gap-2">
-          <div className="w-[26px] h-[26px] rounded-[6px] bg-violet-600 flex items-center justify-center">
-            <BarChart2 size={13} className="text-white" />
-          </div>
-          <span className="font-semibold text-[15px] text-white tracking-[-0.2px]">GTPRO</span>
-        </div>
+        <Image src="/logo.png" alt="GTPRO" width={90} height={28} className="object-contain" priority />
       </div>
 
       {/* Main nav */}

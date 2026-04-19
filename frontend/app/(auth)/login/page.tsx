@@ -3,7 +3,7 @@
 import { useState } from "react"
 import { createClient } from "@/lib/supabase"
 import { useRouter } from "next/navigation"
-import { BarChart2 } from "lucide-react"
+import Image from "next/image"
 
 export default function LoginPage() {
   const [email, setEmail] = useState("")
@@ -39,10 +39,7 @@ export default function LoginPage() {
 
         {/* Logo */}
         <div className="flex flex-col items-center mb-8">
-          <div className="w-9 h-9 rounded-[10px] bg-violet-600 flex items-center justify-center mb-4">
-            <BarChart2 size={18} className="text-white" />
-          </div>
-          <h1 className="text-[18px] font-semibold text-white tracking-tight">GTPRO</h1>
+          <Image src="/logo.png" alt="GTPRO" width={140} height={48} className="object-contain mb-2" priority />
           <p className="text-[13px] text-zinc-500 mt-1">Gestão de tráfego com inteligência artificial</p>
         </div>
 
