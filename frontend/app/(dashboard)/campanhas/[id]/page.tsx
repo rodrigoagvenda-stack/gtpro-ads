@@ -38,20 +38,26 @@ interface Insights {
 function CreativeModal({ ad, onClose }: { ad: Ad; onClose: () => void }) {
   const c = ad.creative
   const isVideo = !!c?.video_id
-  const thumb = c?.thumbnail_url || c?.image_url
   const st = STATUS_DOT[ad.status] ?? { dot: "bg-zinc-600", label: ad.status, badge: "text-zinc-500 bg-white/[0.04] ring-white/[0.08]" }
   const [videoSrc, setVideoSrc] = useState<string | null>(null)
+  const [videoPicture, setVideoPicture] = useState<string | null>(null)
   const [videoLoading, setVideoLoading] = useState(false)
 
   useEffect(() => {
     if (isVideo && c?.video_id) {
       setVideoLoading(true)
       api.creative.videoSource(c.video_id)
-        .then((d: any) => setVideoSrc(d.source ?? null))
+        .then((d: any) => {
+          setVideoSrc(d.source ?? null)
+          setVideoPicture(d.picture ?? null)
+        })
         .catch(() => {})
         .finally(() => setVideoLoading(false))
     }
   }, [isVideo, c?.video_id])
+
+  // Best available preview image: hi-res picture > image_url > thumbnail_url
+  const bestPreview = videoPicture || c?.image_url || c?.thumbnail_url
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm" onClick={onClose}>
@@ -72,30 +78,30 @@ function CreativeModal({ ad, onClose }: { ad: Ad; onClose: () => void }) {
         <div className="bg-black relative">
           {isVideo ? (
             videoSrc ? (
-              <video
-                src={videoSrc}
-                controls
-                autoPlay
-                playsInline
-                className="w-full max-h-[420px]"
-              />
+              <video src={videoSrc} controls autoPlay playsInline className="w-full max-h-[480px]" />
             ) : (
-              <div className="relative">
-                {thumb && <img src={thumb} alt={ad.name} className="w-full max-h-80 object-contain opacity-60" />}
-                <div className={cn("absolute inset-0 flex items-center justify-center", !thumb && "h-48")}>
-                  {videoLoading
-                    ? <Loader2 size={28} className="text-white animate-spin" />
-                    : <div className="w-14 h-14 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center ring-1 ring-white/30">
+              <div className="relative min-h-[200px]">
+                {videoLoading ? (
+                  <div className="flex items-center justify-center h-48">
+                    <Loader2 size={28} className="text-zinc-500 animate-spin" />
+                  </div>
+                ) : (
+                  <>
+                    {bestPreview && (
+                      <img src={bestPreview} alt={ad.name} className="w-full max-h-[480px] object-contain" />
+                    )}
+                    <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-black/40">
+                      <div className="w-14 h-14 rounded-full bg-black/60 backdrop-blur-sm flex items-center justify-center ring-1 ring-white/20">
                         <Play size={20} className="text-white ml-1" />
                       </div>
-                  }
-                </div>
+                      <p className="text-[10px] text-zinc-500">Preview de vídeo indisponível</p>
+                    </div>
+                  </>
+                )}
               </div>
             )
-          ) : c?.image_url ? (
-            <img src={c.image_url} alt={ad.name} className="w-full max-h-[420px] object-contain" />
-          ) : thumb ? (
-            <img src={thumb} alt={ad.name} className="w-full max-h-80 object-contain" />
+          ) : bestPreview ? (
+            <img src={bestPreview} alt={ad.name} className="w-full max-h-[480px] object-contain" />
           ) : (
             <div className="w-full h-48 flex items-center justify-center">
               <ImageOff size={32} className="text-zinc-700" />
@@ -240,7 +246,7 @@ export default function CampaignDetailPage() {
                   {ads.map((ad) => {
                     const st = STATUS_DOT[ad.status] ?? { dot: "bg-zinc-600", label: ad.status, badge: "" }
                     const isVideo = !!ad.creative?.video_id
-                    const thumb = ad.creative?.thumbnail_url || ad.creative?.image_url
+                    const thumb = ad.creative?.image_url || ad.creative?.thumbnail_url
                     return (
                       <button key={ad.id} onClick={() => setSelectedAd(ad)} className="text-left bg-white/[0.02] ring-1 ring-white/[0.06] rounded-xl overflow-hidden hover:ring-violet-500/30 hover:bg-white/[0.04] transition-all group">
                         <div className="aspect-video bg-zinc-900 flex items-center justify-center overflow-hidden relative">
