@@ -73,11 +73,36 @@ export async function getAccountInfo(tenantId: string) {
 
 // ─── Campaigns ──────────────────────────────────────────────────────────────
 
-export async function getCampaigns(tenantId: string) {
+export async function getCampaigns(tenantId: string, datePreset = "last_7d") {
   const { token, adAccountId } = await getTokenAndAccount(tenantId)
-  const fields = "id,name,status,objective,daily_budget,lifetime_budget,start_time,stop_time,budget_remaining,buying_type"
+  const insightFields = "spend,impressions,clicks,reach,ctr,cpc,cpm,actions,action_values"
+  const fields = `id,name,status,objective,daily_budget,lifetime_budget,start_time,stop_time,budget_remaining,buying_type,insights.date_preset(${datePreset}){${insightFields}}`
   const data = await graphGet(`/act_${adAccountId}/campaigns`, { access_token: token, fields, limit: "100" })
-  return data.data ?? []
+  return (data.data ?? []).map((c: any) => {
+    const ins = c.insights?.data?.[0] ?? {}
+    const spend = Number(ins.spend ?? 0)
+    const clicks = Number(ins.clicks ?? 0)
+    const impressions = Number(ins.impressions ?? 0)
+    const leads = ins.actions?.find((a: any) => a.action_type === "lead")?.value
+    const purchaseRev = ins.action_values?.find((a: any) => a.action_type === "purchase")?.value
+    const cpl = leads && spend > 0 ? spend / Number(leads) : null
+    const roas = purchaseRev && spend > 0 ? Number(purchaseRev) / spend : null
+    return {
+      ...c,
+      metrics: {
+        spend,
+        impressions,
+        clicks,
+        reach: Number(ins.reach ?? 0),
+        ctr: Number(ins.ctr ?? 0),
+        cpc: Number(ins.cpc ?? 0),
+        cpm: Number(ins.cpm ?? 0),
+        leads: leads ? Number(leads) : null,
+        cpl,
+        roas,
+      },
+    }
+  })
 }
 
 export async function createCampaign(tenantId: string, params: Record<string, any>) {
