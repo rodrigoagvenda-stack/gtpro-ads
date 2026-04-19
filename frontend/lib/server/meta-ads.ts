@@ -132,7 +132,14 @@ export async function updateBudget(tenantId: string, campaignId: string, dailyBu
 
 export async function getAdSets(tenantId: string, campaignId: string) {
   const token = await getToken(tenantId)
-  const fields = "id,name,status,daily_budget,lifetime_budget,optimization_goal,billing_event,bid_amount,targeting,start_time,end_time,budget_remaining"
+  const fields = [
+    "id,name,status,effective_status",
+    "daily_budget,lifetime_budget,budget_remaining",
+    "optimization_goal,billing_event,bid_amount,bid_strategy",
+    "targeting",
+    "start_time,end_time,created_time,updated_time",
+    "insights{impressions,reach,clicks,spend,ctr,cpc,cpm,actions,frequency}",
+  ].join(",")
   const data = await graphGet(`/${campaignId}/adsets`, { access_token: token, fields, limit: "50" })
   return data.data ?? []
 }

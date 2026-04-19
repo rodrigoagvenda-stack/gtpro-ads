@@ -21,8 +21,22 @@ const STATUS_DOT: Record<string, { dot: string; label: string; badge: string }> 
 }
 
 interface AdSet {
-  id: string; name: string; status: string
-  daily_budget?: number; lifetime_budget?: number; optimization_goal?: string
+  id: string; name: string; status: string; effective_status?: string
+  daily_budget?: number; lifetime_budget?: number; budget_remaining?: number
+  optimization_goal?: string; billing_event?: string; bid_amount?: number; bid_strategy?: string
+  start_time?: string; end_time?: string; created_time?: string
+  targeting?: {
+    age_min?: number; age_max?: number; genders?: number[]
+    geo_locations?: { countries?: string[]; cities?: { name: string; region?: string }[] }
+    interests?: { id: string; name: string }[]
+    custom_audiences?: { id: string; name: string }[]
+    excluded_custom_audiences?: { id: string; name: string }[]
+  }
+  insights?: { data?: Array<{
+    impressions?: string; reach?: string; clicks?: string; spend?: string
+    ctr?: string; cpc?: string; cpm?: string; frequency?: string
+    actions?: Array<{ action_type: string; value: string }>
+  }> }
 }
 interface Ad {
   id: string; name: string; status: string
@@ -281,36 +295,125 @@ export default function CampaignDetailPage() {
 
             {/* Ad Sets */}
             {activeTab === "adsets" && (
-              <div className="bg-white/[0.02] ring-1 ring-white/[0.06] rounded-xl overflow-hidden">
-                {adSets.length === 0 ? (
-                  <div className="px-5 py-12 text-center text-[13px] text-zinc-600">Nenhum conjunto encontrado.</div>
-                ) : (
-                  <div className="divide-y divide-white/[0.04]">
-                    {adSets.map((adSet) => {
-                      const st = STATUS_DOT[adSet.status] ?? { dot: "bg-zinc-600", label: adSet.status, badge: "" }
-                      return (
-                        <div key={adSet.id} className="flex items-center gap-4 px-5 py-3.5">
-                          <div className="flex-1 min-w-0">
-                            <p className="text-[13px] font-medium text-zinc-200 truncate">{adSet.name}</p>
-                            {adSet.optimization_goal && <p className="text-[11px] text-zinc-600 mt-0.5">{adSet.optimization_goal.replace(/_/g, " ")}</p>}
+              adSets.length === 0 ? (
+                <div className="bg-white/[0.02] ring-1 ring-white/[0.06] rounded-xl px-5 py-12 text-center text-[13px] text-zinc-600">Nenhum conjunto encontrado.</div>
+              ) : (
+                <div className="space-y-3">
+                  {adSets.map((adSet) => {
+                    const st = STATUS_DOT[adSet.status] ?? { dot: "bg-zinc-600", label: adSet.status, badge: "text-zinc-500 bg-white/[0.04] ring-white/[0.08]" }
+                    const ins = adSet.insights?.data?.[0]
+                    const t = adSet.targeting ?? {}
+                    const spend = ins?.spend ? Number(ins.spend) : 0
+                    const leads = ins?.actions?.find(a => a.action_type === "lead")?.value
+                    const msgs  = ins?.actions?.find(a =>
+                      a.action_type === "onsite_conversion.messaging_conversation_started_7d" ||
+                      a.action_type === "onsite_conversion.total_messaging_connection"
+                    )?.value
+                    const purchases = ins?.actions?.find(a => a.action_type === "purchase")?.value
+                    const cpl = leads && spend > 0 ? formatCurrency(spend / Number(leads)) : null
+                    const genderLabel = !t.genders ? "Todos" : t.genders.includes(1) && t.genders.includes(2) ? "Todos" : t.genders.includes(1) ? "Masculino" : "Feminino"
+                    const locLabel = [
+                      ...(t.geo_locations?.cities?.slice(0, 3).map(c => c.name) ?? []),
+                      ...(t.geo_locations?.countries ?? []),
+                    ].join(", ") || null
+
+                    return (
+                      <div key={adSet.id} className="bg-white/[0.02] ring-1 ring-white/[0.06] rounded-xl p-5 space-y-4">
+                        {/* Header */}
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <p className="text-[14px] font-semibold text-zinc-100">{adSet.name}</p>
+                            <div className="flex items-center gap-2 mt-1 flex-wrap">
+                              <span className={cn("inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium ring-1", st.badge)}>
+                                <span className={cn("w-1 h-1 rounded-full", st.dot)} />{st.label}
+                              </span>
+                              {adSet.optimization_goal && (
+                                <span className="text-[10px] text-zinc-600 bg-white/[0.03] ring-1 ring-white/[0.06] px-2 py-0.5 rounded-full">
+                                  {adSet.optimization_goal.replace(/_/g, " ")}
+                                </span>
+                              )}
+                              {adSet.billing_event && (
+                                <span className="text-[10px] text-zinc-600 bg-white/[0.03] ring-1 ring-white/[0.06] px-2 py-0.5 rounded-full">
+                                  {adSet.billing_event.replace(/_/g, " ")}
+                                </span>
+                              )}
+                            </div>
                           </div>
-                          <div className="flex items-center gap-1.5 shrink-0">
-                            <span className={cn("w-1.5 h-1.5 rounded-full", st.dot)} />
-                            <span className="text-[12px] text-zinc-500">{st.label}</span>
-                          </div>
-                          <div className="text-right text-[12px] text-zinc-500 shrink-0">
-                            {adSet.daily_budget
-                              ? <span>{formatCurrency(adSet.daily_budget / 100)}<span className="text-zinc-700">/dia</span></span>
-                              : adSet.lifetime_budget
-                              ? <span>{formatCurrency(adSet.lifetime_budget / 100)}</span>
-                              : "—"}
+                          <div className="text-right shrink-0">
+                            {adSet.daily_budget ? (
+                              <>
+                                <p className="text-[13px] font-semibold text-zinc-200">{formatCurrency(adSet.daily_budget / 100)}<span className="text-zinc-600 text-[11px]">/dia</span></p>
+                                {adSet.budget_remaining != null && (
+                                  <p className="text-[10px] text-zinc-600 mt-0.5">Restante: {formatCurrency(adSet.budget_remaining / 100)}</p>
+                                )}
+                              </>
+                            ) : adSet.lifetime_budget ? (
+                              <>
+                                <p className="text-[13px] font-semibold text-zinc-200">{formatCurrency(adSet.lifetime_budget / 100)}<span className="text-zinc-600 text-[11px]"> total</span></p>
+                                {adSet.budget_remaining != null && (
+                                  <p className="text-[10px] text-zinc-600 mt-0.5">Restante: {formatCurrency(adSet.budget_remaining / 100)}</p>
+                                )}
+                              </>
+                            ) : null}
                           </div>
                         </div>
-                      )
-                    })}
-                  </div>
-                )}
-              </div>
+
+                        {/* Insights */}
+                        {ins && (
+                          <div className="grid grid-cols-4 sm:grid-cols-7 gap-2">
+                            {[
+                              { label: "Gasto",       value: spend > 0 ? formatCurrency(spend) : "—" },
+                              { label: "Impressões",  value: ins.impressions ? Number(ins.impressions).toLocaleString("pt-BR") : "—" },
+                              { label: "Alcance",     value: ins.reach ? `${(Number(ins.reach)/1000).toFixed(1)}k` : "—" },
+                              { label: "Cliques",     value: ins.clicks ? Number(ins.clicks).toLocaleString("pt-BR") : "—" },
+                              { label: "CTR",         value: ins.ctr ? `${Number(ins.ctr).toFixed(2)}%` : "—" },
+                              { label: "CPC",         value: ins.cpc ? formatCurrency(Number(ins.cpc)) : "—" },
+                              { label: "CPM",         value: ins.cpm ? formatCurrency(Number(ins.cpm)) : "—" },
+                              ...(leads ? [{ label: "Leads", value: leads }] : []),
+                              ...(cpl ? [{ label: "CPL", value: cpl }] : []),
+                              ...(msgs ? [{ label: "Conversas", value: msgs }] : []),
+                              ...(purchases ? [{ label: "Compras", value: purchases }] : []),
+                              ...(ins.frequency ? [{ label: "Freq.", value: Number(ins.frequency).toFixed(1) }] : []),
+                            ].map(m => (
+                              <div key={m.label} className="bg-white/[0.03] rounded-lg px-3 py-2">
+                                <p className="text-[10px] text-zinc-600 uppercase tracking-wide">{m.label}</p>
+                                <p className="text-[12px] font-semibold text-zinc-200 mt-0.5">{m.value}</p>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+
+                        {/* Targeting + Schedule */}
+                        <div className="flex flex-wrap gap-x-6 gap-y-1.5 text-[11px] text-zinc-500 border-t border-white/[0.04] pt-3">
+                          {t.age_min != null && (
+                            <span><span className="text-zinc-700">Idade: </span>{t.age_min}–{t.age_max ?? "65+"}</span>
+                          )}
+                          <span><span className="text-zinc-700">Gênero: </span>{genderLabel}</span>
+                          {locLabel && <span><span className="text-zinc-700">Local: </span>{locLabel}</span>}
+                          {t.interests && t.interests.length > 0 && (
+                            <span><span className="text-zinc-700">Interesses: </span>{t.interests.slice(0, 3).map(i => i.name).join(", ")}{t.interests.length > 3 ? ` +${t.interests.length - 3}` : ""}</span>
+                          )}
+                          {t.custom_audiences && t.custom_audiences.length > 0 && (
+                            <span><span className="text-zinc-700">Públicos: </span>{t.custom_audiences.map(a => a.name).join(", ")}</span>
+                          )}
+                          {adSet.start_time && (
+                            <span><span className="text-zinc-700">Início: </span>{new Date(adSet.start_time).toLocaleDateString("pt-BR")}</span>
+                          )}
+                          {adSet.end_time && (
+                            <span><span className="text-zinc-700">Fim: </span>{new Date(adSet.end_time).toLocaleDateString("pt-BR")}</span>
+                          )}
+                          {adSet.bid_amount && (
+                            <span><span className="text-zinc-700">Lance: </span>{formatCurrency(adSet.bid_amount / 100)}</span>
+                          )}
+                          {adSet.bid_strategy && (
+                            <span><span className="text-zinc-700">Estratégia: </span>{adSet.bid_strategy.replace(/_/g, " ")}</span>
+                          )}
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              )
             )}
           </div>
         </>
