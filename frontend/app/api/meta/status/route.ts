@@ -12,6 +12,7 @@ export async function GET(req: NextRequest) {
     .select("ad_account_id, name, created_at")
     .eq("tenant_id", tenant.tenant_id)
     .eq("active", true)
+    .eq("is_active", true)
     .single()
 
   return Response.json({

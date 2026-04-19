@@ -11,6 +11,7 @@ async function getToken(tenantId: string): Promise<string> {
     .select("access_token_encrypted")
     .eq("tenant_id", tenantId)
     .eq("active", true)
+    .eq("is_active", true)
     .single()
   if (!data) throw new Error("Conta Meta não conectada")
   return decrypt(data.access_token_encrypted)
@@ -23,6 +24,7 @@ async function getAdAccountId(tenantId: string): Promise<string> {
     .select("ad_account_id")
     .eq("tenant_id", tenantId)
     .eq("active", true)
+    .eq("is_active", true)
     .single()
   if (!data) throw new Error("Conta Meta não conectada")
   return data.ad_account_id
@@ -350,10 +352,20 @@ export async function getAdAccounts(accessToken: string) {
 
 export async function saveMetaConnection(tenantId: string, accessToken: string, adAccountId: string) {
   const supabase = createServiceClient()
-  await supabase.from("meta_connections").upsert(
-    { tenant_id: tenantId, access_token_encrypted: encrypt(accessToken), ad_account_id: adAccountId, active: true, updated_at: new Date().toISOString() },
-    { onConflict: "tenant_id" }
-  )
+  // Desativa todas as conexões existentes
+  await supabase.from("meta_connections").update({ is_active: false }).eq("tenant_id", tenantId)
+  // Verifica se já existe uma conexão com esse ad_account_id
+  const { data: existing } = await supabase.from("meta_connections")
+    .select("id").eq("tenant_id", tenantId).eq("ad_account_id", adAccountId).single()
+  if (existing) {
+    await supabase.from("meta_connections")
+      .update({ access_token_encrypted: encrypt(accessToken), active: true, is_active: true })
+      .eq("id", existing.id)
+  } else {
+    await supabase.from("meta_connections").insert(
+      { tenant_id: tenantId, access_token_encrypted: encrypt(accessToken), ad_account_id: adAccountId, active: true, is_active: true }
+    )
+  }
 }
 
 export { encrypt, getToken }
