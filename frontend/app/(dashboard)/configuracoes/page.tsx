@@ -127,6 +127,69 @@ function AgenteTab() {
 
 interface MetaAccount { id: string; ad_account_id: string; name: string; is_active: boolean; created_at: string }
 
+function AccountRenameRow({ acc, onRenamed }: { acc: MetaAccount; onRenamed: () => void }) {
+  const [editing, setEditing] = useState(false)
+  const [value, setValue] = useState(acc.name || "")
+  const [saving, setSaving] = useState(false)
+
+  async function save() {
+    if (!value.trim()) return
+    setSaving(true)
+    try {
+      await api.meta.renameAccount(acc.id, value.trim())
+      onRenamed()
+      setEditing(false)
+    } catch {} finally { setSaving(false) }
+  }
+
+  return (
+    <div className={cn("flex items-center justify-between px-4 py-3 rounded-lg ring-1 transition-colors",
+      acc.is_active ? "bg-violet-500/10 ring-violet-500/30" : "bg-white/[0.02] ring-white/[0.06]"
+    )}>
+      <div className="flex items-center gap-3 flex-1 min-w-0">
+        <div className={cn("w-2 h-2 rounded-full shrink-0", acc.is_active ? "bg-violet-400" : "bg-zinc-600")} />
+        <div className="flex-1 min-w-0">
+          {editing ? (
+            <div className="flex items-center gap-2">
+              <input
+                autoFocus
+                value={value}
+                onChange={e => setValue(e.target.value)}
+                onKeyDown={e => { if (e.key === "Enter") save(); if (e.key === "Escape") setEditing(false) }}
+                placeholder="Nome da conta (ex: Tocli - BM)"
+                className="flex-1 bg-white/[0.06] ring-1 ring-violet-500/50 rounded-md px-2.5 py-1 text-[12px] text-white focus:outline-none"
+              />
+              <button onClick={save} disabled={saving} className="px-2.5 py-1 text-[11px] bg-violet-600 hover:bg-violet-500 disabled:opacity-50 text-white rounded-md transition-colors">
+                {saving ? "..." : "OK"}
+              </button>
+              <button onClick={() => setEditing(false)} className="px-2.5 py-1 text-[11px] text-zinc-500 hover:text-zinc-300 transition-colors">
+                ✕
+              </button>
+            </div>
+          ) : (
+            <div className="flex items-center gap-2 group">
+              <div>
+                <p className="text-[13px] font-medium text-zinc-200">{acc.name || <span className="text-zinc-600 italic">sem nome</span>}</p>
+                <p className="text-[11px] text-zinc-600 mt-0.5">{acc.ad_account_id} · {new Date(acc.created_at).toLocaleDateString("pt-BR")}</p>
+              </div>
+              <button onClick={() => { setValue(acc.name || ""); setEditing(true) }}
+                className="opacity-0 group-hover:opacity-100 transition-opacity p-1 hover:bg-white/[0.06] rounded-md">
+                <Pencil size={11} className="text-zinc-500" />
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+      <div className="shrink-0 ml-3">
+        {acc.is_active
+          ? <span className="text-[11px] text-violet-400 font-medium">Ativa</span>
+          : null
+        }
+      </div>
+    </div>
+  )
+}
+
 function MetaTab() {
   const searchParams = useSearchParams()
   const [platform, setPlatform] = useState({ anthropic_api_key_set: false, meta_app_id: "", meta_app_secret_set: false })
@@ -278,24 +341,17 @@ function MetaTab() {
           <p className="text-[12px] text-zinc-600 -mt-3">Selecione qual conta será usada para campanhas e insights.</p>
           <div className="space-y-1.5">
             {accounts.map(acc => (
-              <div key={acc.id} className={cn("flex items-center justify-between px-4 py-3 rounded-lg ring-1 transition-colors",
-                acc.is_active ? "bg-violet-500/10 ring-violet-500/30" : "bg-white/[0.02] ring-white/[0.06]"
-              )}>
-                <div className="flex items-center gap-3">
-                  <div className={cn("w-2 h-2 rounded-full shrink-0", acc.is_active ? "bg-violet-400" : "bg-zinc-600")} />
-                  <div>
-                    <p className="text-[13px] font-medium text-zinc-200">{acc.name || acc.ad_account_id}</p>
-                    <p className="text-[11px] text-zinc-600 mt-0.5">{acc.ad_account_id} · {new Date(acc.created_at).toLocaleDateString("pt-BR")}</p>
-                  </div>
+              <div key={acc.id} className="flex items-center gap-2">
+                <div className="flex-1 min-w-0">
+                  <AccountRenameRow acc={acc} onRenamed={loadAccounts} />
                 </div>
                 {!acc.is_active && (
                   <button onClick={() => switchAccount(acc.id)} disabled={!!switchingId}
-                    className="flex items-center gap-1.5 px-3 py-1.5 text-[12px] text-zinc-400 hover:text-white hover:bg-white/[0.06] rounded-lg transition-colors disabled:opacity-40">
+                    className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 text-[12px] text-zinc-400 hover:text-white hover:bg-white/[0.06] rounded-lg transition-colors disabled:opacity-40">
                     {switchingId === acc.id ? <Loader2 size={11} className="animate-spin" /> : null}
                     Usar esta
                   </button>
                 )}
-                {acc.is_active && <span className="text-[11px] text-violet-400 font-medium">Ativa</span>}
               </div>
             ))}
           </div>

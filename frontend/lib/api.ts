@@ -69,6 +69,7 @@ export const api = {
       fetchWithAuth("/meta/token", { method: "POST", body: JSON.stringify({ access_token, ad_account_id }) }),
     accounts: () => fetchWithAuth("/meta/accounts"),
     switchAccount: (id: string) => fetchWithAuth("/meta/accounts", { method: "PATCH", body: JSON.stringify({ id }) }),
+    renameAccount: (id: string, name: string) => fetchWithAuth(`/meta/accounts/${id}`, { method: "PATCH", body: JSON.stringify({ name }) }),
   },
 
   tenant: {
