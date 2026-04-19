@@ -17,7 +17,7 @@ export async function POST(req: NextRequest) {
   const now = new Date()
   const period = now.toLocaleDateString("pt-BR", { month: "long", year: "numeric" })
 
-  const message = `Gere um relatório detalhado de performance dos últimos 30 dias. Inclua: resumo executivo, campanhas com melhor e pior performance, métricas principais (ROAS, CPL, CTR, CPC, Impressões, Cliques), tendências identificadas, e recomendações de otimização prioritárias para o próximo período.`
+  const message = `Gere um relatório detalhado de performance dos últimos 30 dias focado apenas nas campanhas ATIVAS. Use get_campaigns para listar as campanhas, filtre somente as com status ACTIVE, e use get_campaign_insights para cada uma. Inclua: resumo executivo, ranking de campanhas ativas por ROAS e CPL, métricas principais (ROAS, CPL, CTR, CPC, Impressões, Cliques, Leads), identificação de campanhas para otimizar ou pausar, e recomendações prioritárias de ação para o próximo período. Seja objetivo e use listas.`
 
   const result = await runAgent(tenant.tenant_id, message, config ?? {})
 

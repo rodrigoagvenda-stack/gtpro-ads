@@ -22,15 +22,28 @@ const PRESETS = [
   { value: "custom",     label: "Personalizado" },
 ]
 
+const KPI_OBJECTIVES = [
+  { id: "geral",       label: "Geral" },
+  { id: "ecommerce",   label: "E-commerce" },
+  { id: "leads",       label: "Leads" },
+  { id: "whatsapp",    label: "WhatsApp" },
+  { id: "engajamento", label: "Engajamento" },
+  { id: "trafego",     label: "Tráfego" },
+  { id: "seguidores",  label: "Seguidores" },
+]
+
 export default function CampanhasPage() {
   const router = useRouter()
   const [campaigns, setCampaigns] = useState<Campaign[]>([])
+  const [page, setPage] = useState(1)
+  const PAGE_SIZE = 6
   const [insights, setInsights] = useState<Record<string, any>>({})
   const [preset, setPreset] = useState("last_7d")
   const [since, setSince] = useState("")
   const [until, setUntil] = useState("")
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [kpiPreset, setKpiPreset] = useState("geral")
 
   const isCustom = preset === "custom"
   const customReady = isCustom && since && until && since <= until
@@ -45,6 +58,7 @@ export default function CampanhasPage() {
     Promise.all([api.campaigns.list(preset), insightsCall])
       .then(([c, i]) => {
         setCampaigns(Array.isArray(c) ? c : [])
+        setPage(1)
         setInsights(i && typeof i === "object" && !Array.isArray(i) ? i : {})
         setLoading(false)
       })
@@ -124,13 +138,116 @@ export default function CampanhasPage() {
         </div>
       </div>
 
-      {/* KPIs */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <KpiCard label="Gasto total" value={formatCurrency(insights.spend || totalSpend)} highlight />
-        <KpiCard label="ROAS" value={insights.roas ? `${Number(insights.roas).toFixed(2)}x` : "—"} />
-        <KpiCard label="CPC" value={insights.cpc ? formatCurrency(Number(insights.cpc)) : "—"} />
-        <KpiCard label="CTR" value={insights.ctr ? `${Number(insights.ctr).toFixed(2)}%` : "—"} />
+      {/* KPI Objective filter */}
+      <div className="flex items-center gap-1.5 flex-wrap">
+        {KPI_OBJECTIVES.map((o) => (
+          <button
+            key={o.id}
+            onClick={() => setKpiPreset(o.id)}
+            className={cn(
+              "px-3 py-1 rounded-full text-[11px] font-medium transition-colors",
+              kpiPreset === o.id
+                ? "bg-violet-600 text-white"
+                : "bg-white/[0.04] text-zinc-500 hover:text-zinc-300 ring-1 ring-white/[0.06]"
+            )}
+          >
+            {o.label}
+          </button>
+        ))}
       </div>
+
+      {/* KPIs */}
+      {kpiPreset === "geral" && (
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          <KpiCard label="Gasto total" value={formatCurrency(insights.spend || totalSpend)} highlight />
+          <KpiCard label="ROAS" value={insights.roas ? `${Number(insights.roas).toFixed(2)}x` : "—"} />
+          <KpiCard label="CPC" value={insights.cpc ? formatCurrency(Number(insights.cpc)) : "—"} />
+          <KpiCard label="CTR" value={insights.ctr ? `${Number(insights.ctr).toFixed(2)}%` : "—"} />
+        </div>
+      )}
+      {kpiPreset === "ecommerce" && (() => {
+        const purchaseVal = insights.actions?.find((a: any) => a.action_type === "purchase")?.value
+        const purchaseRev = insights.action_values?.find((a: any) => a.action_type === "purchase")?.value
+        const numPurchases = purchaseVal ? Number(purchaseVal) : 0
+        const revenue = purchaseRev ? Number(purchaseRev) : 0
+        const spend = Number(insights.spend || totalSpend)
+        const cpa = numPurchases > 0 ? spend / numPurchases : 0
+        return (
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+            <KpiCard label="Gasto total" value={formatCurrency(spend)} highlight />
+            <KpiCard label="ROAS" value={insights.roas ? `${Number(insights.roas).toFixed(2)}x` : "—"} />
+            <KpiCard label="Receita" value={revenue > 0 ? formatCurrency(revenue) : "—"} />
+            <KpiCard label="CPA" value={cpa > 0 ? formatCurrency(cpa) : "—"} />
+          </div>
+        )
+      })()}
+      {kpiPreset === "leads" && (() => {
+        const leadsVal = insights.actions?.find((a: any) => a.action_type === "lead")?.value
+        const numLeads = leadsVal ? Number(leadsVal) : 0
+        const spend = Number(insights.spend || totalSpend)
+        const cpl = numLeads > 0 ? spend / numLeads : 0
+        return (
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+            <KpiCard label="Gasto total" value={formatCurrency(spend)} highlight />
+            <KpiCard label="Leads" value={numLeads > 0 ? numLeads.toLocaleString("pt-BR") : "—"} />
+            <KpiCard label="CPL" value={cpl > 0 ? formatCurrency(cpl) : "—"} />
+            <KpiCard label="CTR" value={insights.ctr ? `${Number(insights.ctr).toFixed(2)}%` : "—"} />
+          </div>
+        )
+      })()}
+      {kpiPreset === "whatsapp" && (() => {
+        const msgVal = insights.actions?.find((a: any) =>
+          a.action_type === "onsite_conversion.messaging_conversation_started_7d" ||
+          a.action_type === "onsite_conversion.total_messaging_connection"
+        )?.value
+        const numMsg = msgVal ? Number(msgVal) : 0
+        const spend = Number(insights.spend || totalSpend)
+        const cpm = numMsg > 0 ? spend / numMsg : 0
+        return (
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+            <KpiCard label="Gasto total" value={formatCurrency(spend)} highlight />
+            <KpiCard label="Conversas" value={numMsg > 0 ? numMsg.toLocaleString("pt-BR") : "—"} />
+            <KpiCard label="Custo/conversa" value={cpm > 0 ? formatCurrency(cpm) : "—"} />
+            <KpiCard label="Cliques" value={clicks > 0 ? clicks.toLocaleString("pt-BR") : "—"} />
+          </div>
+        )
+      })()}
+      {kpiPreset === "engajamento" && (() => {
+        const engVal = insights.actions?.find((a: any) => a.action_type === "post_engagement")?.value
+        const numEng = engVal ? Number(engVal) : 0
+        const spend = Number(insights.spend || totalSpend)
+        const cpe = numEng > 0 ? spend / numEng : 0
+        return (
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+            <KpiCard label="Gasto total" value={formatCurrency(spend)} highlight />
+            <KpiCard label="Alcance" value={reach > 0 ? `${(reach/1000).toFixed(1)}k` : "—"} />
+            <KpiCard label="Engajamentos" value={numEng > 0 ? numEng.toLocaleString("pt-BR") : "—"} />
+            <KpiCard label="Custo/eng." value={cpe > 0 ? formatCurrency(cpe) : "—"} />
+          </div>
+        )
+      })()}
+      {kpiPreset === "trafego" && (
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          <KpiCard label="Gasto total" value={formatCurrency(insights.spend || totalSpend)} highlight />
+          <KpiCard label="Cliques" value={clicks > 0 ? clicks.toLocaleString("pt-BR") : "—"} />
+          <KpiCard label="CPC" value={insights.cpc ? formatCurrency(Number(insights.cpc)) : "—"} />
+          <KpiCard label="CTR" value={insights.ctr ? `${Number(insights.ctr).toFixed(2)}%` : "—"} />
+        </div>
+      )}
+      {kpiPreset === "seguidores" && (() => {
+        const followVal = insights.actions?.find((a: any) => a.action_type === "like")?.value
+        const numFollow = followVal ? Number(followVal) : 0
+        const spend = Number(insights.spend || totalSpend)
+        const cpf = numFollow > 0 ? spend / numFollow : 0
+        return (
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+            <KpiCard label="Gasto total" value={formatCurrency(spend)} highlight />
+            <KpiCard label="Alcance" value={reach > 0 ? `${(reach/1000).toFixed(1)}k` : "—"} />
+            <KpiCard label="Seguidores/Curtidas" value={numFollow > 0 ? numFollow.toLocaleString("pt-BR") : "—"} />
+            <KpiCard label="Custo/seguidor" value={cpf > 0 ? formatCurrency(cpf) : "—"} />
+          </div>
+        )
+      })()}
 
       {/* Funnel */}
       {funnelSteps.length >= 3 && (
@@ -213,13 +330,40 @@ export default function CampanhasPage() {
           </div>
         ) : campaigns.length === 0 ? (
           <div className="px-5 py-14 text-center text-[13px] text-zinc-600">Nenhuma campanha encontrada.</div>
-        ) : (
-          <div className="divide-y divide-white/[0.04]">
-            {campaigns.map((c) => (
-              <CampaignRow key={c.id} campaign={c} onToggle={() => toggleCampaign(c.id, c.status)} />
-            ))}
-          </div>
-        )}
+        ) : (() => {
+          const pageCount = Math.ceil(campaigns.length / PAGE_SIZE)
+          const paginated = campaigns.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
+          return (
+            <>
+              <div className="divide-y divide-white/[0.04]">
+                {paginated.map((c) => (
+                  <CampaignRow key={c.id} campaign={c} onToggle={() => toggleCampaign(c.id, c.status)} />
+                ))}
+              </div>
+              {pageCount > 1 && (
+                <div className="flex items-center justify-between px-5 py-3 border-t border-white/[0.05]">
+                  <p className="text-[12px] text-zinc-600">{campaigns.length} campanhas · página {page} de {pageCount}</p>
+                  <div className="flex items-center gap-1">
+                    <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1}
+                      className="px-3 py-1.5 text-[12px] text-zinc-500 hover:text-zinc-200 disabled:opacity-30 hover:bg-white/[0.04] rounded-lg transition-colors">
+                      ← Anterior
+                    </button>
+                    {Array.from({ length: pageCount }, (_, i) => i + 1).map(n => (
+                      <button key={n} onClick={() => setPage(n)}
+                        className={cn("w-7 h-7 text-[12px] rounded-lg transition-colors", n === page ? "bg-white/[0.08] text-white" : "text-zinc-600 hover:text-zinc-300 hover:bg-white/[0.04]")}>
+                        {n}
+                      </button>
+                    ))}
+                    <button onClick={() => setPage(p => Math.min(pageCount, p + 1))} disabled={page === pageCount}
+                      className="px-3 py-1.5 text-[12px] text-zinc-500 hover:text-zinc-200 disabled:opacity-30 hover:bg-white/[0.04] rounded-lg transition-colors">
+                      Próxima →
+                    </button>
+                  </div>
+                </div>
+              )}
+            </>
+          )
+        })()}
       </div>
     </div>
   )
