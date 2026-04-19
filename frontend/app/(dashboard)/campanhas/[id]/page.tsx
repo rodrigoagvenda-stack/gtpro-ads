@@ -5,7 +5,7 @@ import { useParams, useRouter } from "next/navigation"
 import { api } from "@/lib/api"
 import { formatCurrency } from "@/lib/utils"
 import KpiCard from "@/components/dashboard/KpiCard"
-import { ArrowLeft, TrendingUp, TrendingDown, ImageOff, X, Play, ExternalLink } from "lucide-react"
+import { ArrowLeft, TrendingUp, TrendingDown, ImageOff, X, Play, ExternalLink, Loader2 } from "lucide-react"
 import { cn } from "@/lib/utils"
 
 const DATE_PRESETS = [
@@ -40,6 +40,18 @@ function CreativeModal({ ad, onClose }: { ad: Ad; onClose: () => void }) {
   const isVideo = !!c?.video_id
   const thumb = c?.thumbnail_url || c?.image_url
   const st = STATUS_DOT[ad.status] ?? { dot: "bg-zinc-600", label: ad.status, badge: "text-zinc-500 bg-white/[0.04] ring-white/[0.08]" }
+  const [videoSrc, setVideoSrc] = useState<string | null>(null)
+  const [videoLoading, setVideoLoading] = useState(false)
+
+  useEffect(() => {
+    if (isVideo && c?.video_id) {
+      setVideoLoading(true)
+      api.creative.videoSource(c.video_id)
+        .then((d: any) => setVideoSrc(d.source ?? null))
+        .catch(() => {})
+        .finally(() => setVideoLoading(false))
+    }
+  }, [isVideo, c?.video_id])
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm" onClick={onClose}>
@@ -58,18 +70,35 @@ function CreativeModal({ ad, onClose }: { ad: Ad; onClose: () => void }) {
 
         {/* Media */}
         <div className="bg-black relative">
-          {thumb ? (
+          {isVideo ? (
+            videoSrc ? (
+              <video
+                src={videoSrc}
+                controls
+                autoPlay
+                playsInline
+                className="w-full max-h-[420px]"
+              />
+            ) : (
+              <div className="relative">
+                {thumb && <img src={thumb} alt={ad.name} className="w-full max-h-80 object-contain opacity-60" />}
+                <div className={cn("absolute inset-0 flex items-center justify-center", !thumb && "h-48")}>
+                  {videoLoading
+                    ? <Loader2 size={28} className="text-white animate-spin" />
+                    : <div className="w-14 h-14 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center ring-1 ring-white/30">
+                        <Play size={20} className="text-white ml-1" />
+                      </div>
+                  }
+                </div>
+              </div>
+            )
+          ) : c?.image_url ? (
+            <img src={c.image_url} alt={ad.name} className="w-full max-h-[420px] object-contain" />
+          ) : thumb ? (
             <img src={thumb} alt={ad.name} className="w-full max-h-80 object-contain" />
           ) : (
             <div className="w-full h-48 flex items-center justify-center">
               <ImageOff size={32} className="text-zinc-700" />
-            </div>
-          )}
-          {isVideo && (
-            <div className="absolute inset-0 flex items-center justify-center bg-black/30">
-              <div className="w-14 h-14 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center ring-1 ring-white/30">
-                <Play size={20} className="text-white ml-1" />
-              </div>
             </div>
           )}
         </div>

@@ -187,12 +187,33 @@ export async function getAds(tenantId: string, campaignId: string) {
   const token = await getToken(tenantId)
   const fields = "id,name,status,creative{id,name,thumbnail_url,body,title,image_url,object_story_spec}"
   const data = await graphGet(`/${campaignId}/ads`, { access_token: token, fields, limit: "50" })
-  return (data.data ?? []).map((ad: any) => ({
-    ...ad,
-    creative: ad.creative
-      ? { ...ad.creative, thumbnail_url: ad.creative.thumbnail_url ? `${ad.creative.thumbnail_url}&access_token=${token}` : null }
-      : null,
-  }))
+  return (data.data ?? []).map((ad: any) => {
+    const c = ad.creative
+    if (!c) return ad
+    const spec = c.object_story_spec ?? {}
+    const video_id = spec.video_data?.video_id ?? null
+    const hi_image =
+      c.image_url ||
+      spec.link_data?.picture ||
+      spec.link_data?.image_url ||
+      spec.photo_data?.url ||
+      null
+    return {
+      ...ad,
+      creative: {
+        ...c,
+        video_id,
+        image_url: hi_image,
+        thumbnail_url: c.thumbnail_url ? `${c.thumbnail_url}&access_token=${token}` : null,
+      },
+    }
+  })
+}
+
+export async function getVideoSource(tenantId: string, videoId: string) {
+  const token = await getToken(tenantId)
+  const data = await graphGet(`/${videoId}`, { access_token: token, fields: "source,picture" })
+  return { source: data.source ?? null, picture: data.picture ?? null }
 }
 
 export async function getAdsByAdSet(tenantId: string, adSetId: string) {

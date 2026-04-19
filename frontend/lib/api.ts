@@ -61,6 +61,10 @@ export const api = {
     resolve: (id: string) => fetchWithAuth(`/alerts/${id}/resolve`, { method: "PATCH" }),
   },
 
+  creative: {
+    videoSource: (videoId: string) => fetchWithAuth(`/creative/video?video_id=${videoId}`),
+  },
+
   meta: {
     status: () => fetchWithAuth("/meta/status"),
     connect: () => fetchWithAuth("/meta/connect"),
