@@ -156,7 +156,8 @@ function AccountRenameRow({ acc, onRenamed }: { acc: MetaAccount; onRenamed: () 
                 value={value}
                 onChange={e => setValue(e.target.value)}
                 onKeyDown={e => { if (e.key === "Enter") save(); if (e.key === "Escape") setEditing(false) }}
-                placeholder="Nome da conta (ex: Tocli - BM)"
+                maxLength={20}
+                placeholder="Até 20 caracteres (ex: Tocli - BM)"
                 className="flex-1 bg-white/[0.06] ring-1 ring-violet-500/50 rounded-md px-2.5 py-1 text-[12px] text-white focus:outline-none"
               />
               <button onClick={save} disabled={saving} className="px-2.5 py-1 text-[11px] bg-violet-600 hover:bg-violet-500 disabled:opacity-50 text-white rounded-md transition-colors">

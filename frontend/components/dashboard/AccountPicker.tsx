@@ -43,10 +43,10 @@ export default function AccountPicker({ onSwitch }: { onSwitch?: () => void }) {
     <div ref={ref} className="relative">
       <button
         onClick={() => setOpen(v => !v)}
-        className="flex items-center gap-2 px-3 py-1.5 bg-white/[0.04] hover:bg-white/[0.07] ring-1 ring-white/[0.08] rounded-lg text-[12px] text-zinc-300 transition-colors"
+        className="w-44 flex items-center gap-2 px-3 py-1.5 bg-white/[0.04] hover:bg-white/[0.07] ring-1 ring-white/[0.08] rounded-lg text-[12px] text-zinc-300 transition-colors"
       >
         <span className="w-1.5 h-1.5 rounded-full bg-violet-400 shrink-0" />
-        <span className="max-w-[200px] truncate">{active?.name || active?.ad_account_id || "Selecionar conta"}</span>
+        <span className="flex-1 truncate text-left">{active?.name || active?.ad_account_id || "Selecionar conta"}</span>
         <ChevronDown size={11} className={cn("text-zinc-500 transition-transform shrink-0", open && "rotate-180")} />
       </button>
 
