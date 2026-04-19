@@ -361,7 +361,7 @@ export async function getCustomAudiences(tenantId: string) {
   const { token, adAccountId } = await getTokenAndAccount(tenantId)
   const data = await graphGet(`/act_${adAccountId}/customaudiences`, {
     access_token: token,
-    fields: "id,name,subtype,approximate_count,operation_status,time_created",
+    fields: "id,name,subtype,approximate_count_lower_bound,approximate_count_upper_bound,operation_status,time_created",
   })
   return data.data ?? []
 }
