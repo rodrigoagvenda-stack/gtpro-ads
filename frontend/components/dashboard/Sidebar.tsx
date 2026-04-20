@@ -53,16 +53,20 @@ export default function Sidebar() {
   const router = useRouter()
   const supabase = createClient()
   const [isAdmin, setIsAdmin] = useState(false)
+  const [onboardingDone, setOnboardingDone] = useState(true)
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (!session) return
       const email = session.user.email
-      if (email === "admin@vendai.pro" || email === process.env.NEXT_PUBLIC_SUPER_ADMIN_EMAIL) {
-        setIsAdmin(true)
-        return
-      }
-      api.get("/auth/me").then(me => { if (me?.is_admin) setIsAdmin(true) }).catch(() => {})
+      const isAdminEmail = email === "admin@vendai.pro" || email === process.env.NEXT_PUBLIC_SUPER_ADMIN_EMAIL
+      if (isAdminEmail) setIsAdmin(true)
+      api.get("/auth/me")
+        .then(me => {
+          if (me?.is_admin || isAdminEmail) setIsAdmin(true)
+          setOnboardingDone(me?.onboarding_completed ?? true)
+        })
+        .catch(() => {})
     })
   }, [])
 
@@ -90,7 +94,7 @@ export default function Sidebar() {
         {isAdmin && (
           <NavLink href="/admin" label="Admin" icon={Shield} active={pathname.startsWith("/admin")} />
         )}
-        {NAV_BOTTOM.map(({ href, label, icon }) => (
+        {NAV_BOTTOM.filter(({ href }) => href !== "/onboarding" || !onboardingDone).map(({ href, label, icon }) => (
           <NavLink key={href} href={href} label={label} icon={icon} active={pathname.startsWith(href)} />
         ))}
         <button
