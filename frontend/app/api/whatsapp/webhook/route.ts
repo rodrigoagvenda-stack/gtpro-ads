@@ -83,13 +83,17 @@ async function getSession(phone: string): Promise<Session> {
   return data ?? { step: "idle", context: {} }
 }
 
-async function saveSession(phone: string, tenantId: string, step: string, context: Record<string, any> = {}) {
+async function saveSession(phone: string, tenantId: string, step: string, context: Record<string, any> = {}): Promise<boolean> {
   const supabase = createServiceClient()
   const { error } = await supabase.from("whatsapp_sessions").upsert(
     { phone, tenant_id: tenantId, step, context, updated_at: new Date().toISOString() },
     { onConflict: "phone" }
   )
-  if (error) console.error("[saveSession] error:", error.message, "— rode a migration 010_whatsapp_agent.sql no Supabase")
+  if (error) {
+    console.error("[saveSession] error:", error.message)
+    return false
+  }
+  return true
 }
 
 async function getTenantByPhone(phone: string) {
@@ -152,14 +156,14 @@ export async function POST(req: NextRequest) {
   console.log("[WA webhook] isMenuTrigger:", isMenuTrigger)
 
   if (isMenuTrigger) {
-    await saveSession(from, tenantId, "menu")
-    console.log("[WA webhook] sending buttons to:", from)
-    try {
-      const result = await sendButtons(from, `${greeting()}! 👋 Sou o assistente GTPRO.\nComo posso te ajudar?`, MAIN_MENU_BUTTONS)
-      console.log("[WA webhook] sendButtons result:", result)
-    } catch (e: any) {
-      console.error("[WA webhook] sendButtons error:", e.message)
+    const saved = await saveSession(from, tenantId, "menu")
+    if (!saved) {
+      await sendText(from, "⚠️ Erro ao iniciar sessão. Tente novamente em instantes.")
+      return Response.json({ ok: true })
     }
+    console.log("[WA webhook] sending buttons to:", from)
+    const result = await sendButtons(from, `${greeting()}! 👋 Sou o assistente GTPRO.\nComo posso te ajudar?`, MAIN_MENU_BUTTONS)
+    console.log("[WA webhook] sendButtons result:", result)
     return Response.json({ ok: true })
   }
 
