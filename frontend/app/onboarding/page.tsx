@@ -65,17 +65,13 @@ export default function OnboardingPage() {
     return res.json()
   }
 
-  async function saveMeta() {
-    if (!metaAppId.trim()) return
-    setMetaSaving(true)
-    await apiPost("/settings/platform", { meta_app_id: metaAppId, meta_app_secret: metaSecret || undefined })
-    setMetaSaving(false)
-  }
-
   async function connectOAuth() {
-    await saveMeta()
-    const d = await apiGet("/meta/connect")
-    if (d.url) window.location.href = d.url
+    setMetaSaving(true)
+    try {
+      const d = await apiGet("/meta/connect")
+      if (d.url) window.location.href = d.url
+      else setMetaSaving(false)
+    } catch { setMetaSaving(false) }
   }
 
   async function checkMetaStatus() {
@@ -189,18 +185,28 @@ export default function OnboardingPage() {
             <div className="space-y-5">
               <div>
                 <h2 className="text-base font-semibold text-white">Conectar Meta Ads</h2>
-                <p className="text-[12px] text-zinc-500 mt-1">Informe as credenciais do seu aplicativo Meta para autenticação OAuth.</p>
+                <p className="text-[12px] text-zinc-500 mt-1 leading-relaxed">
+                  Conecte sua conta de anúncios para o GTPRO importar campanhas e insights automaticamente.
+                </p>
               </div>
 
-              <div className="space-y-3">
-                <div>
-                  <label className="text-[11px] text-zinc-500 uppercase tracking-widest font-medium mb-1.5 block">Meta App ID</label>
-                  <input type="text" placeholder="760386872538367" value={metaAppId} onChange={e => setMetaAppId(e.target.value)} className={inputCls} />
-                </div>
-                <div>
-                  <label className="text-[11px] text-zinc-500 uppercase tracking-widest font-medium mb-1.5 block">Meta App Secret</label>
-                  <input type="password" placeholder="••••••••••••••••" value={metaSecret} onChange={e => setMetaSecret(e.target.value)} className={inputCls} />
-                </div>
+              {/* How-to steps */}
+              <div className="space-y-2.5 bg-white/[0.02] ring-1 ring-white/[0.06] rounded-xl p-4">
+                <p className="text-[11px] font-medium text-zinc-500 uppercase tracking-widest">Como conectar</p>
+                {[
+                  "Clique em \"Conectar via OAuth\" abaixo",
+                  "Faça login com o Facebook vinculado ao seu BM",
+                  "Autorize o GTPRO a acessar seus anúncios",
+                  "Selecione a conta de anúncios e pronto!",
+                ].map((t, i) => (
+                  <div key={i} className="flex items-start gap-3 text-[12px] text-zinc-400">
+                    <div className="w-5 h-5 rounded-full bg-violet-500/20 ring-1 ring-violet-500/30 flex items-center justify-center text-[10px] text-violet-400 font-semibold shrink-0 mt-0.5">{i + 1}</div>
+                    {t}
+                  </div>
+                ))}
+                <p className="text-[11px] text-zinc-600 pt-1">
+                  Prefere usar um <strong className="text-zinc-400">System User Token</strong>? Pule agora e configure em <strong className="text-zinc-400">Configurações → Meta Ads</strong>.
+                </p>
               </div>
 
               {metaConnected ? (
@@ -212,7 +218,7 @@ export default function OnboardingPage() {
                 <div className="space-y-2">
                   <button
                     onClick={connectOAuth}
-                    disabled={!metaAppId.trim() || metaSaving}
+                    disabled={metaSaving}
                     className="w-full py-2.5 bg-[#1877f2] hover:bg-[#166fe5] disabled:opacity-40 text-white text-[13px] font-semibold rounded-lg transition-colors flex items-center justify-center gap-2"
                   >
                     {metaSaving ? <Loader2 size={14} className="animate-spin" /> : null}

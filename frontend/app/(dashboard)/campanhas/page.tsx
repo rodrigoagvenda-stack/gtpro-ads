@@ -8,11 +8,14 @@ import KpiCard from "@/components/dashboard/KpiCard"
 import CampaignRow from "@/components/dashboard/CampaignRow"
 import type { Campaign } from "@/types"
 import { cn } from "@/lib/utils"
-import { AlertTriangle, RefreshCw, Key, Calendar } from "lucide-react"
+import { AlertTriangle, RefreshCw, Key, Calendar, Link2, ArrowRight } from "lucide-react"
 import AccountPicker from "@/components/dashboard/AccountPicker"
 
 function isTokenExpired(msg: string) {
   return msg.includes("190") || msg.includes("463") || msg.includes("Session has expired") || msg.includes("access token")
+}
+function isNotConnected(msg: string) {
+  return msg.toLowerCase().includes("não conectada") || msg.toLowerCase().includes("not connected") || msg.toLowerCase().includes("no active") || msg.toLowerCase().includes("sem conta")
 }
 
 const PRESETS = [
@@ -307,7 +310,20 @@ export default function CampanhasPage() {
             <div className="w-10 h-10 rounded-full bg-amber-500/10 flex items-center justify-center">
               <AlertTriangle size={18} className="text-amber-400" />
             </div>
-            {isTokenExpired(error) ? (
+            {isNotConnected(error) ? (
+              <>
+                <div>
+                  <p className="text-[14px] font-medium text-white mb-1">Conta Meta Ads não conectada</p>
+                  <p className="text-[12px] text-zinc-500 max-w-sm leading-relaxed">
+                    Para visualizar campanhas, você precisa conectar sua conta de anúncios do Meta Ads.<br /><br />
+                    Vá em <strong className="text-zinc-300">Configurações → Meta Ads</strong> e clique em <strong className="text-zinc-300">Conectar via OAuth</strong> ou insira um System User Token permanente.
+                  </p>
+                </div>
+                <button onClick={() => router.push("/configuracoes?tab=meta")} className="flex items-center gap-1.5 px-4 py-2 bg-violet-600 hover:bg-violet-500 text-white text-[12px] font-medium rounded-lg transition-colors">
+                  <Link2 size={12} /> Conectar Meta Ads <ArrowRight size={12} />
+                </button>
+              </>
+            ) : isTokenExpired(error) ? (
               <>
                 <div>
                   <p className="text-[14px] font-medium text-white mb-1">Token Meta Ads expirado</p>
@@ -316,10 +332,10 @@ export default function CampanhasPage() {
                   </p>
                 </div>
                 <div className="flex items-center gap-2">
-                  <button onClick={() => router.push("/configuracoes")} className="flex items-center gap-1.5 px-4 py-2 bg-violet-600 hover:bg-violet-500 text-white text-[12px] font-medium rounded-lg transition-colors">
+                  <button onClick={() => router.push("/configuracoes?tab=meta")} className="flex items-center gap-1.5 px-4 py-2 bg-violet-600 hover:bg-violet-500 text-white text-[12px] font-medium rounded-lg transition-colors">
                     <RefreshCw size={12} /> Reconectar via OAuth
                   </button>
-                  <button onClick={() => router.push("/configuracoes")} className="flex items-center gap-1.5 px-4 py-2 bg-white/[0.06] hover:bg-white/[0.09] text-zinc-300 text-[12px] font-medium rounded-lg ring-1 ring-white/[0.08] transition-colors">
+                  <button onClick={() => router.push("/configuracoes?tab=meta")} className="flex items-center gap-1.5 px-4 py-2 bg-white/[0.06] hover:bg-white/[0.09] text-zinc-300 text-[12px] font-medium rounded-lg ring-1 ring-white/[0.08] transition-colors">
                     <Key size={12} /> Usar token permanente
                   </button>
                 </div>
