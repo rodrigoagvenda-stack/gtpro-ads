@@ -4,6 +4,7 @@ import { useState } from "react"
 import { createClient } from "@/lib/supabase"
 import { useRouter } from "next/navigation"
 import Image from "next/image"
+import Link from "next/link"
 
 export default function LoginPage() {
   const [email, setEmail] = useState("")
@@ -19,25 +20,19 @@ export default function LoginPage() {
     setError("")
     const { error } = await supabase.auth.signInWithPassword({ email, password })
     if (error) {
-      setError(error.message)
+      setError("E-mail ou senha incorretos.")
       setLoading(false)
       return
     }
     router.push("/campanhas")
   }
 
-  async function handleGoogle() {
-    await supabase.auth.signInWithOAuth({
-      provider: "google",
-      options: { redirectTo: `${window.location.origin}/campanhas` },
-    })
-  }
+  const inputCls = "w-full px-3.5 py-2.5 bg-white/[0.04] ring-1 ring-white/[0.08] rounded-lg text-[13px] text-white placeholder-zinc-600 focus:outline-none focus:ring-violet-500/50 transition-all"
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-[#08080a]">
       <div className="w-full max-w-[360px] px-4">
 
-        {/* Logo */}
         <div className="flex flex-col items-center mb-8">
           <Image src="/logo.png" alt="GTPRO" width={140} height={48} className="object-contain mb-2" priority />
           <p className="text-[13px] text-zinc-500 mt-1">Gestão de tráfego com inteligência artificial</p>
@@ -48,17 +43,17 @@ export default function LoginPage() {
             type="email"
             placeholder="E-mail"
             value={email}
-            onChange={(e) => setEmail(e.target.value)}
+            onChange={e => setEmail(e.target.value)}
             required
-            className="w-full px-3.5 py-2.5 bg-white/[0.04] ring-1 ring-white/[0.08] rounded-lg text-[13px] text-white placeholder-zinc-600 focus:outline-none focus:ring-violet-500/50 transition-all"
+            className={inputCls}
           />
           <input
             type="password"
             placeholder="Senha"
             value={password}
-            onChange={(e) => setPassword(e.target.value)}
+            onChange={e => setPassword(e.target.value)}
             required
-            className="w-full px-3.5 py-2.5 bg-white/[0.04] ring-1 ring-white/[0.08] rounded-lg text-[13px] text-white placeholder-zinc-600 focus:outline-none focus:ring-violet-500/50 transition-all"
+            className={inputCls}
           />
 
           {error && <p className="text-[12px] text-red-400">{error}</p>}
@@ -72,18 +67,12 @@ export default function LoginPage() {
           </button>
         </form>
 
-        <div className="flex items-center gap-3 my-4">
-          <div className="flex-1 h-px bg-white/[0.06]" />
-          <span className="text-[11px] text-zinc-600">ou</span>
-          <div className="flex-1 h-px bg-white/[0.06]" />
-        </div>
-
-        <button
-          onClick={handleGoogle}
-          className="w-full py-2.5 bg-white/[0.04] ring-1 ring-white/[0.08] hover:bg-white/[0.07] text-white text-[13px] font-medium rounded-lg transition-colors"
-        >
-          Continuar com Google
-        </button>
+        <p className="text-center text-[12px] text-zinc-600 mt-5">
+          Não tem uma conta?{" "}
+          <Link href="/cadastro" className="text-violet-400 hover:text-violet-300 transition-colors">
+            Criar conta
+          </Link>
+        </p>
       </div>
     </div>
   )
