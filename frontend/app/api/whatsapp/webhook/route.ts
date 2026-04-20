@@ -122,6 +122,139 @@ const MAIN_MENU_BUTTONS = [
   { id: "acoes",     label: "⚡ Ações"      },
 ]
 
+// ─── Report agent (Claude Sonnet + tools) ─────────────────────────────────────
+
+function splitIntoBlocks(text: string, maxLen: number): string[] {
+  // Split on --- separators first, then further split long blocks
+  const parts = text.split(/\s*---+\s*/).map(p => p.trim()).filter(Boolean)
+  const result: string[] = []
+
+  for (const part of parts) {
+    if (part.length <= maxLen) {
+      result.push(part)
+      continue
+    }
+    // Split long block by paragraph (\n\n), then by sentence if needed
+    const paragraphs = part.split(/\n\n+/)
+    let buf = ""
+    for (const para of paragraphs) {
+      if ((buf + "\n\n" + para).trimStart().length <= maxLen) {
+        buf = buf ? buf + "\n\n" + para : para
+      } else {
+        if (buf) result.push(buf.trim())
+        buf = para.length <= maxLen ? para : para.slice(0, maxLen)
+      }
+    }
+    if (buf.trim()) result.push(buf.trim())
+  }
+
+  return result.length ? result : [text.slice(0, maxLen)]
+}
+
+async function runReportAgent(tenantId: string, datePreset: string, periodLabel: string): Promise<string> {
+  const anthropicKey = await getAnthropicKey()
+  if (!anthropicKey) throw new Error("Anthropic API Key não configurada na plataforma")
+
+  const supabase = createServiceClient()
+  const { data: agentConfig } = await supabase
+    .from("agent_configs")
+    .select("min_roas, max_cpl, supervised_mode")
+    .eq("tenant_id", tenantId)
+    .single()
+
+  const minRoas = agentConfig?.min_roas ?? 2
+  const maxCpl  = agentConfig?.max_cpl  ?? 50
+
+  const systemPrompt = `Você é GTPRO, especialista em Meta Ads (Facebook/Instagram Ads). Responda SEMPRE em português brasileiro.
+
+Seu foco é resultado real: conversas iniciadas, leads gerados, CPL, ROAS. NÃO cite impressões, alcance ou CTR como métricas principais (são vaidade).
+
+Para campanhas de MENSAGENS/ENGAJAMENTO: foque em conversas e custo por conversa.
+Para LEADS: foque em leads, CPL vs meta (R$${maxCpl}).
+Para VENDAS/COMPRAS: foque em ROAS vs meta (${minRoas}x).
+
+Inclua análise por campanha, por conjunto de anúncios se disponível, e alertas de ação clara (o que fazer agora).
+
+Divida sua resposta em blocos de no máximo 700 caracteres, separando cada bloco com uma linha contendo apenas ---
+Comece pelo resumo geral, depois detalhes por campanha, depois análise e recomendações.`
+
+  const reportTools: Anthropic.Tool[] = [
+    {
+      name: "get_campaigns",
+      description: "Busca todas as campanhas do Meta Ads com métricas do período",
+      input_schema: {
+        type: "object",
+        properties: {
+          date_preset: {
+            type: "string",
+            enum: ["today", "last_7d", "last_30d", "last_14d"],
+            description: "Período das métricas",
+          },
+        },
+        required: ["date_preset"],
+      },
+    },
+  ]
+
+  const client = new Anthropic({ apiKey: anthropicKey })
+  const messages: Anthropic.MessageParam[] = [
+    {
+      role: "user",
+      content: `Gere um relatório completo do período: ${periodLabel}. Use a ferramenta get_campaigns com date_preset "${datePreset}". Analise profundamente os dados e forneça insights acionáveis.`,
+    },
+  ]
+
+  for (let i = 0; i < 6; i++) {
+    const response = await client.messages.create({
+      model: "claude-sonnet-4-6",
+      max_tokens: 4096,
+      system: systemPrompt,
+      tools: reportTools,
+      messages,
+    })
+
+    messages.push({ role: "assistant", content: response.content })
+
+    if (response.stop_reason === "end_turn") {
+      const text = response.content
+        .filter((b): b is Anthropic.TextBlock => b.type === "text")
+        .map(b => b.text)
+        .join("\n")
+      return text || "⚠️ O agente não retornou análise."
+    }
+
+    if (response.stop_reason === "tool_use") {
+      const toolResults: Anthropic.ToolResultBlockParam[] = []
+
+      for (const block of response.content) {
+        if (block.type !== "tool_use") continue
+
+        let result: unknown
+        try {
+          if (block.name === "get_campaigns") {
+            const input = block.input as { date_preset?: string }
+            result = await getCampaigns(tenantId, input.date_preset ?? datePreset)
+          } else {
+            result = { error: "tool not available" }
+          }
+        } catch (e: any) {
+          result = { error: e.message }
+        }
+
+        toolResults.push({
+          type: "tool_result",
+          tool_use_id: block.id,
+          content: JSON.stringify(result),
+        })
+      }
+
+      messages.push({ role: "user", content: toolResults })
+    }
+  }
+
+  return "⚠️ Limite de iterações atingido ao gerar relatório."
+}
+
 // ─── Handler ──────────────────────────────────────────────────────────────────
 
 export async function POST(req: NextRequest) {
@@ -246,118 +379,20 @@ export async function POST(req: NextRequest) {
 
   // ── Relatório — gerar ────────────────────────────────────────────────────────
   if (session.step === "report_period") {
-    const PERIODS: Record<string, string> = { today: "Hoje", last_7d: "7 dias", last_30d: "30 dias" }
+    const PERIODS: Record<string, string> = { today: "Hoje", last_7d: "Últimos 7 dias", last_30d: "Últimos 30 dias" }
     const datePreset  = PERIODS[intent] ? intent : "last_7d"
     const periodLabel = PERIODS[datePreset]
 
-    await sendText(from, "⏳ Buscando dados...")
+    await sendText(from, "⏳ Consultando o agente GTPRO...")
 
     try {
-      const campaigns = await getCampaigns(tenantId, datePreset)
-      if (!campaigns?.length) {
-        await sendText(from, "⚠️ Nenhuma campanha encontrada.")
-      } else {
-        const brl = (n: number) => `R$${n.toFixed(2).replace(".", ",")}`
-        const nm  = (s: string) => s.replace(/\[|\]/g, "").trim().slice(0, 24)
-
-        const active   = campaigns.filter((c: any) => c.status === "ACTIVE")
-        const withData = campaigns.filter((c: any) => (c.metrics?.spend ?? 0) > 0)
-        const totalSpend = withData.reduce((s: number, c: any) => s + c.metrics.spend, 0)
-
-        // Detectores de objetivo
-        const objIs = (obj: string, ...keys: string[]) =>
-          keys.some(k => (obj ?? "").toUpperCase().includes(k))
-
-        const objLabel = (obj: string) => obj?.replace("OUTCOME_", "").replace("_", " ") ?? "—"
-
-        // KPI principal por objetivo
-        function mainKpi(c: any) {
-          const m = c.metrics
-          const obj = c.objective ?? ""
-          if (objIs(obj, "MESSAGES", "ENGAG") && (m.conversations ?? 0) > 0)
-            return { value: m.conversations, cost: m.cpc_conv, label: "conv", type: "conv" }
-          if (objIs(obj, "ENGAG") && (m.engagements ?? 0) > 0)
-            return { value: m.engagements, cost: m.cpe, label: "eng", type: "eng" }
-          if ((m.leads ?? 0) > 0)
-            return { value: m.leads, cost: m.cpl, label: "leads", type: "lead" }
-          if ((m.roas ?? 0) > 0)
-            return { value: null, cost: null, label: `ROAS ${m.roas.toFixed(2)}x`, type: "roas" }
-          return { value: null, cost: null, label: `CTR ${m.ctr?.toFixed(2) ?? 0}%`, type: "traffic" }
-        }
-
-        // Totais por tipo de KPI
-        const totalConv  = withData.reduce((s: number, c: any) => s + (c.metrics.conversations ?? 0), 0)
-        const totalLeads = withData.reduce((s: number, c: any) => s + (c.metrics.leads ?? 0), 0)
-        const roasArr    = withData.filter((c: any) => (c.metrics.roas ?? 0) > 0)
-        const avgRoas    = roasArr.length ? roasArr.reduce((s: number, c: any) => s + c.metrics.roas, 0) / roasArr.length : 0
-
-        // ── Cabeçalho ─────────────────────────────────────────────────────────
-        const lines: string[] = [`📊 *${periodLabel}* | ${active.length} ativas | ${brl(totalSpend)}`]
-
-        if (totalConv > 0)  lines.push(`💬 Conversas: *${totalConv}* | custo/conv *${brl(totalSpend / totalConv)}*`)
-        if (totalLeads > 0) lines.push(`🎯 Leads: *${totalLeads}* | CPL *${brl(totalSpend / totalLeads)}*`)
-        if (avgRoas > 0)    lines.push(`📈 ROAS médio: *${avgRoas.toFixed(2)}x*`)
-
-        // ── Por campanha (top 3 por gasto) ────────────────────────────────────
-        const top3 = [...withData].sort((a: any, b: any) => b.metrics.spend - a.metrics.spend).slice(0, 3)
-        const allKpis = top3.map(mainKpi)
-        const avgCost = allKpis.filter(k => k.cost).reduce((s, k) => s + k.cost!, 0) / (allKpis.filter(k => k.cost).length || 1)
-
-        lines.push(``, `*Campanhas:*`)
-        for (let i = 0; i < top3.length; i++) {
-          const c = top3[i]
-          const m = c.metrics
-          const kpi = allKpis[i]
-          const obj = objLabel(c.objective)
-
-          let flag = "➡️"
-          if (kpi.cost && avgCost > 0) flag = kpi.cost <= avgCost * 0.85 ? "✅" : kpi.cost >= avgCost * 1.4 ? "⚠️" : "➡️"
-          else if (kpi.type === "roas") flag = m.roas >= 3 ? "✅" : m.roas >= 1.5 ? "➡️" : "⚠️"
-          else if (kpi.type === "traffic") flag = m.ctr >= 1.5 ? "✅" : m.ctr >= 0.8 ? "➡️" : "⚠️"
-
-          let line = `${flag} *${nm(c.name)}* (${obj})`
-          if (kpi.value && kpi.cost) line += `\n   ${kpi.value} ${kpi.label} | ${brl(kpi.cost)}/${kpi.label.replace(/s$/, "")} | ${brl(m.spend)}`
-          else                       line += `\n   ${kpi.label} | ${brl(m.spend)}`
-          lines.push(line)
-        }
-
-        // ── Análise + alertas ──────────────────────────────────────────────────
-        const alerts: string[] = []
-
-        // Custo/resultado muito acima da média
-        for (let i = 0; i < top3.length; i++) {
-          const k = allKpis[i]
-          if (k.cost && k.cost > avgCost * 1.4) {
-            const obj = top3[i].objective ?? ""
-            const what = objIs(obj, "MESSAGES") ? "custo/conversa alto" : objIs(obj, "ENGAG") ? "custo/engajamento alto" : "CPL alto"
-            alerts.push(`${nm(top3[i].name)}: ${what} — testar novo criativo ou restringir público`)
-          }
-        }
-
-        // Lead gen sem leads
-        const semConversao = withData.filter((c: any) =>
-          (objIs(c.objective, "LEADS", "MESSAGES") && (c.metrics.leads ?? 0) === 0 && (c.metrics.conversations ?? 0) === 0)
-        )
-        if (semConversao.length)
-          alerts.push(`${semConversao.length} camp. sem conversão registrada — confirmar pixel/evento configurado`)
-
-        // Campanha ativa sem gasto
-        const semGasto = active.filter((c: any) => (c.metrics?.spend ?? 0) === 0)
-        if (semGasto.length)
-          alerts.push(`${semGasto.length} camp. ativa sem entrega — checar aprovação de anúncio ou limite de conta`)
-
-        // ROAS abaixo do ponto de equilíbrio
-        if (avgRoas > 0 && avgRoas < 1)
-          alerts.push(`ROAS ${avgRoas.toFixed(2)}x abaixo de 1 — está gastando mais do que retorna. Pausar e revisar`)
-
-        if (alerts.length) {
-          lines.push(``, `*⚠️ Atenção:*`)
-          alerts.forEach(a => lines.push(`• ${a}`))
-        }
-
-        await sendText(from, lines.join("\n"))
+      const reportText = await runReportAgent(tenantId, datePreset, periodLabel)
+      const blocks = splitIntoBlocks(reportText, 700)
+      for (const block of blocks) {
+        await sendText(from, block)
       }
     } catch (e: any) {
+      console.error("[WA webhook] report agent error:", e)
       await sendText(from, `❌ Erro ao gerar relatório: ${e.message}`)
     }
 
