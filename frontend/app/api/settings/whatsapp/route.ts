@@ -19,7 +19,7 @@ export async function GET(req: NextRequest) {
 
   const { data: agentCfg } = await supabase
     .from("agent_configs")
-    .select("whatsapp_number, alerts_whatsapp_enabled")
+    .select("whatsapp_number, alerts_whatsapp_enabled, daily_analysis_enabled, daily_analysis_morning, daily_analysis_afternoon, user_name")
     .eq("tenant_id", ctx.tenant_id)
     .single()
 
@@ -39,6 +39,10 @@ export async function GET(req: NextRequest) {
     connected,
     whatsapp_number: agentCfg?.whatsapp_number ?? "",
     alerts_whatsapp_enabled: agentCfg?.alerts_whatsapp_enabled ?? false,
+    daily_analysis_enabled: agentCfg?.daily_analysis_enabled ?? false,
+    daily_analysis_morning: agentCfg?.daily_analysis_morning ?? 9,
+    daily_analysis_afternoon: agentCfg?.daily_analysis_afternoon ?? 15,
+    user_name: agentCfg?.user_name ?? "",
   })
 }
 
@@ -62,11 +66,16 @@ export async function POST(req: NextRequest) {
     await supabase.from("platform_settings").upsert({ key, value_encrypted: value, updated_at: new Date().toISOString() }, { onConflict: "key" })
   }
 
-  if (body.whatsapp_number !== undefined || body.alerts_whatsapp_enabled !== undefined) {
-    await supabase.from("agent_configs").update({
-      ...(body.whatsapp_number !== undefined ? { whatsapp_number: body.whatsapp_number } : {}),
-      ...(body.alerts_whatsapp_enabled !== undefined ? { alerts_whatsapp_enabled: body.alerts_whatsapp_enabled } : {}),
-    }).eq("tenant_id", ctx.tenant_id)
+  const agentUpdate: Record<string, unknown> = {}
+  if (body.whatsapp_number          !== undefined) agentUpdate.whatsapp_number          = body.whatsapp_number
+  if (body.alerts_whatsapp_enabled  !== undefined) agentUpdate.alerts_whatsapp_enabled  = body.alerts_whatsapp_enabled
+  if (body.daily_analysis_enabled   !== undefined) agentUpdate.daily_analysis_enabled   = body.daily_analysis_enabled
+  if (body.daily_analysis_morning   !== undefined) agentUpdate.daily_analysis_morning   = body.daily_analysis_morning
+  if (body.daily_analysis_afternoon !== undefined) agentUpdate.daily_analysis_afternoon = body.daily_analysis_afternoon
+  if (body.user_name                !== undefined) agentUpdate.user_name                = body.user_name
+
+  if (Object.keys(agentUpdate).length) {
+    await supabase.from("agent_configs").update(agentUpdate).eq("tenant_id", ctx.tenant_id)
   }
 
   return Response.json({ success: true })

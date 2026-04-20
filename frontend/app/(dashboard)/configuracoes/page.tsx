@@ -438,7 +438,7 @@ function AlertasTab() {
 // ─── Tab: WhatsApp ────────────────────────────────────────────────────────────
 
 function WhatsAppTab() {
-  const [cfg, setCfg] = useState({ provider: "", uazapi_url: "", uazapi_key: "", uazapi_instance: "", official_token: "", official_phone_id: "", whatsapp_number: "", alerts_whatsapp_enabled: false, qr: null as string | null, connected: false })
+  const [cfg, setCfg] = useState({ provider: "", uazapi_url: "", uazapi_key: "", uazapi_instance: "", official_token: "", official_phone_id: "", whatsapp_number: "", user_name: "", alerts_whatsapp_enabled: false, daily_analysis_enabled: false, daily_analysis_morning: 9, daily_analysis_afternoon: 15, qr: null as string | null, connected: false })
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
@@ -471,7 +471,7 @@ function WhatsAppTab() {
   async function save() {
     setSaving(true)
     try {
-      await api.post("/settings/whatsapp", { provider: cfg.provider, uazapi_url: cfg.uazapi_url, uazapi_key: cfg.uazapi_key, uazapi_instance: cfg.uazapi_instance, official_token: cfg.official_token, official_phone_id: cfg.official_phone_id, whatsapp_number: cfg.whatsapp_number, alerts_whatsapp_enabled: cfg.alerts_whatsapp_enabled })
+      await api.post("/settings/whatsapp", { provider: cfg.provider, uazapi_url: cfg.uazapi_url, uazapi_key: cfg.uazapi_key, uazapi_instance: cfg.uazapi_instance, official_token: cfg.official_token, official_phone_id: cfg.official_phone_id, whatsapp_number: cfg.whatsapp_number, user_name: cfg.user_name, alerts_whatsapp_enabled: cfg.alerts_whatsapp_enabled, daily_analysis_enabled: cfg.daily_analysis_enabled, daily_analysis_morning: cfg.daily_analysis_morning, daily_analysis_afternoon: cfg.daily_analysis_afternoon })
       setSaved(true); setTimeout(() => setSaved(false), 3000)
       load()
     } catch (e: any) { alert(e.message) } finally { setSaving(false) }
@@ -556,6 +556,9 @@ function WhatsAppTab() {
       <Card>
         <h2 className="text-[13px] font-semibold text-zinc-200">Meu número para alertas</h2>
         <p className="text-[12px] text-zinc-600 -mt-3">Número que receberá as notificações desta conta. Inclua o DDI.</p>
+        <Field label="Seu nome (para personalizar as mensagens)">
+          <input type="text" placeholder="Ex: João" value={cfg.user_name} onChange={e => setCfg(c => ({ ...c, user_name: e.target.value }))} className={inputCls} />
+        </Field>
         <Field label="WhatsApp (ex: 5511999999999)">
           <div className="flex items-center gap-2 bg-white/[0.04] ring-1 ring-white/[0.08] rounded-lg px-3 py-2.5">
             <Smartphone size={13} className="text-zinc-600 shrink-0" />
@@ -569,6 +572,43 @@ function WhatsAppTab() {
           </div>
           <Toggle value={cfg.alerts_whatsapp_enabled} onChange={v => { setCfg(c => ({ ...c, alerts_whatsapp_enabled: v })); setSaved(false) }} />
         </div>
+        <SaveBtn saving={saving} saved={saved} onClick={save} />
+      </Card>
+
+      {/* Daily analysis */}
+      <Card>
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h2 className="text-[13px] font-semibold text-zinc-200">Análise Diária Autônoma</h2>
+            <p className="text-[12px] text-zinc-600 mt-0.5">O agente analisa suas campanhas e envia um relatório pelo WhatsApp 2× ao dia, com insights e recomendações de ação.</p>
+          </div>
+          <Toggle value={cfg.daily_analysis_enabled} onChange={v => { setCfg(c => ({ ...c, daily_analysis_enabled: v })); setSaved(false) }} />
+        </div>
+
+        {cfg.daily_analysis_enabled && (
+          <div className="space-y-3 pt-1">
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="Horário da manhã">
+                <select value={cfg.daily_analysis_morning} onChange={e => setCfg(c => ({ ...c, daily_analysis_morning: +e.target.value }))}
+                  className={inputCls}>
+                  {Array.from({ length: 13 }, (_, i) => i + 6).map(h => (
+                    <option key={h} value={h}>{String(h).padStart(2, "0")}:00</option>
+                  ))}
+                </select>
+              </Field>
+              <Field label="Horário da tarde">
+                <select value={cfg.daily_analysis_afternoon} onChange={e => setCfg(c => ({ ...c, daily_analysis_afternoon: +e.target.value }))}
+                  className={inputCls}>
+                  {Array.from({ length: 12 }, (_, i) => i + 12).map(h => (
+                    <option key={h} value={h}>{String(h).padStart(2, "0")}:00</option>
+                  ))}
+                </select>
+              </Field>
+            </div>
+            <p className="text-[11px] text-zinc-600">Horários em fuso de Brasília (BRT). O agente irá buscar os dados das últimas 24h e comparar com os 7 dias anteriores.</p>
+          </div>
+        )}
+
         <SaveBtn saving={saving} saved={saved} onClick={save} />
       </Card>
     </div>
