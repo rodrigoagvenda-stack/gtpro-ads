@@ -471,7 +471,7 @@ function AlertasTab() {
 // ─── Tab: WhatsApp ────────────────────────────────────────────────────────────
 
 function WhatsAppTab() {
-  const [cfg, setCfg] = useState({ provider: "", uazapi_url: "", uazapi_key: "", uazapi_instance: "", official_token: "", official_phone_id: "", whatsapp_number: "", user_name: "", alerts_whatsapp_enabled: false, daily_analysis_enabled: false, daily_analysis_morning: 9, daily_analysis_afternoon: 15, qr: null as string | null, connected: false })
+  const [cfg, setCfg] = useState({ provider: "", uazapi_url: "", uazapi_key: "", uazapi_instance: "", official_token: "", official_phone_id: "", whatsapp_number: "", user_name: "", alerts_whatsapp_enabled: false, daily_analysis_enabled: false, daily_analysis_morning: 9, daily_analysis_afternoon: 15, qr: null as string | null, connected: false, _token_saved: false })
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
@@ -538,7 +538,9 @@ function WhatsAppTab() {
         {cfg.provider === "uazapi" && (
           <div className="space-y-3">
             <Field label="URL da instância"><input type="url" placeholder="https://api.uazapi.com" value={cfg.uazapi_url} onChange={e => setCfg(c => ({ ...c, uazapi_url: e.target.value }))} className={inputCls} /></Field>
-            <Field label="Token"><input type="password" placeholder="seu-token" value={cfg.uazapi_key} onChange={e => setCfg(c => ({ ...c, uazapi_key: e.target.value }))} className={inputCls} /></Field>
+            <Field label="Token" badge={!cfg.uazapi_key && cfg._token_saved ? "salvo" : undefined}>
+              <input type="password" placeholder={cfg._token_saved ? "••••••••••••• (deixe vazio para manter)" : "seu-token"} value={cfg.uazapi_key} onChange={e => setCfg(c => ({ ...c, uazapi_key: e.target.value }))} className={inputCls} />
+            </Field>
             <Field label="Nome da instância"><input type="text" placeholder="gtpro-alertas" value={cfg.uazapi_instance} onChange={e => setCfg(c => ({ ...c, uazapi_instance: e.target.value }))} className={inputCls} /></Field>
 
             <Field label="URL do Webhook (cole na UazAPI)">

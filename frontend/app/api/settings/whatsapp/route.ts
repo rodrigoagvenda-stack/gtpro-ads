@@ -12,7 +12,7 @@ export async function GET(req: NextRequest) {
   const { data: rows } = await supabase
     .from("platform_settings")
     .select("key, value_encrypted")
-    .in("key", ["whatsapp_provider", "whatsapp_uazapi_url", "whatsapp_uazapi_instance", "whatsapp_official_phone_id"])
+    .in("key", ["whatsapp_provider", "whatsapp_uazapi_url", "whatsapp_uazapi_instance", "whatsapp_official_phone_id", "whatsapp_uazapi_key"])
 
   const cfg: Record<string, string> = {}
   rows?.forEach(r => { cfg[r.key] = r.value_encrypted })
@@ -34,6 +34,7 @@ export async function GET(req: NextRequest) {
     provider: cfg.whatsapp_provider || null,
     uazapi_url: cfg.whatsapp_uazapi_url || "",
     uazapi_instance: cfg.whatsapp_uazapi_instance || "",
+    _token_saved: !!(cfg.whatsapp_uazapi_key),
     official_phone_id: cfg.whatsapp_official_phone_id || "",
     qr,
     connected,
@@ -57,9 +58,9 @@ export async function POST(req: NextRequest) {
   const platformKeys: Record<string, string> = {}
   if (body.provider !== undefined)           platformKeys.whatsapp_provider = body.provider
   if (body.uazapi_url !== undefined)         platformKeys.whatsapp_uazapi_url = body.uazapi_url
-  if (body.uazapi_key !== undefined)         platformKeys.whatsapp_uazapi_key = body.uazapi_key
+  if (body.uazapi_key)                        platformKeys.whatsapp_uazapi_key = body.uazapi_key
   if (body.uazapi_instance !== undefined)    platformKeys.whatsapp_uazapi_instance = body.uazapi_instance
-  if (body.official_token !== undefined)     platformKeys.whatsapp_official_token = body.official_token
+  if (body.official_token)                   platformKeys.whatsapp_official_token = body.official_token
   if (body.official_phone_id !== undefined)  platformKeys.whatsapp_official_phone_id = body.official_phone_id
 
   for (const [key, value] of Object.entries(platformKeys)) {
