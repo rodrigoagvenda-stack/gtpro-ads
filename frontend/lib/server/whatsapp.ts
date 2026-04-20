@@ -20,7 +20,7 @@ export async function sendWhatsApp(to: string, message: string): Promise<boolean
 
     const res = await fetch(`${baseUrl}/message/sendText/${instance}`, {
       method: "POST",
-      headers: { "Content-Type": "application/json", "apikey": apiKey },
+      headers: { "Content-Type": "application/json", "Authorization": `Bearer ${apiKey}` },
       body: JSON.stringify({ number: `${phone}@s.whatsapp.net`, text: message }),
     })
     return res.ok
@@ -49,14 +49,16 @@ export async function getUazapiQR(): Promise<{ qr: string | null; status: string
   if (!baseUrl || !apiKey || !instance) return { qr: null, status: "not_configured" }
 
   const statusRes = await fetch(`${baseUrl}/instance/connectionState/${instance}`, {
-    headers: { "apikey": apiKey },
+    headers: { "Authorization": `Bearer ${apiKey}` },
   }).then(r => r.json()).catch(() => ({}))
 
-  if (statusRes?.instance?.state === "open") return { qr: null, status: "connected" }
+  const state = statusRes?.instance?.state ?? statusRes?.state
+  if (state === "open") return { qr: null, status: "connected" }
 
   const qrRes = await fetch(`${baseUrl}/instance/connect/${instance}`, {
-    headers: { "apikey": apiKey },
+    headers: { "Authorization": `Bearer ${apiKey}` },
   }).then(r => r.json()).catch(() => ({}))
 
-  return { qr: qrRes?.base64 ?? null, status: "awaiting_scan" }
+  const qr = qrRes?.qrcode ?? qrRes?.base64 ?? null
+  return { qr, status: "awaiting_scan" }
 }

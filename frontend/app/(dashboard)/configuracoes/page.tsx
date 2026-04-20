@@ -505,7 +505,7 @@ function WhatsAppTab() {
         {cfg.provider === "uazapi" && (
           <div className="space-y-3">
             <Field label="URL da instância"><input type="url" placeholder="https://api.uazapi.com" value={cfg.uazapi_url} onChange={e => setCfg(c => ({ ...c, uazapi_url: e.target.value }))} className={inputCls} /></Field>
-            <Field label="API Key"><input type="password" placeholder="sua-api-key" value={cfg.uazapi_key} onChange={e => setCfg(c => ({ ...c, uazapi_key: e.target.value }))} className={inputCls} /></Field>
+            <Field label="Token"><input type="password" placeholder="seu-token" value={cfg.uazapi_key} onChange={e => setCfg(c => ({ ...c, uazapi_key: e.target.value }))} className={inputCls} /></Field>
             <Field label="Nome da instância"><input type="text" placeholder="gtpro-alertas" value={cfg.uazapi_instance} onChange={e => setCfg(c => ({ ...c, uazapi_instance: e.target.value }))} className={inputCls} /></Field>
 
             {cfg.connected ? (
