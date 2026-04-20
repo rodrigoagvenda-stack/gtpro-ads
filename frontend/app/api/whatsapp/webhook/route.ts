@@ -233,7 +233,8 @@ Comece pelo resumo geral, depois detalhes por campanha, depois análise e recome
         try {
           if (block.name === "get_campaigns") {
             const input = block.input as { date_preset?: string }
-            result = await getCampaigns(tenantId, input.date_preset ?? datePreset)
+            const all = await getCampaigns(tenantId, input.date_preset ?? datePreset)
+            result = Array.isArray(all) ? all.filter((c: any) => c.status === "ACTIVE") : all
           } else {
             result = { error: "tool not available" }
           }
