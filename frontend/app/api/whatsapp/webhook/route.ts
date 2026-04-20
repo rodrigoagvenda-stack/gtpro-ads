@@ -100,7 +100,7 @@ async function getTenantByPhone(phone: string) {
   const supabase = createServiceClient()
   const { data } = await supabase
     .from("agent_configs")
-    .select("tenant_id")
+    .select("tenant_id, user_name")
     .eq("whatsapp_number", phone)
     .single()
   return data
@@ -292,6 +292,7 @@ export async function POST(req: NextRequest) {
   }
 
   const tenantId = tenant.tenant_id
+  const userName = (tenant.user_name ?? "").trim()
   const session  = await getSession(from)
   console.log("[WA webhook] session:", JSON.stringify(session))
   const intent   = (buttonId ?? listId ?? text).toLowerCase().trim()
@@ -314,7 +315,8 @@ export async function POST(req: NextRequest) {
       return Response.json({ ok: true })
     }
     console.log("[WA webhook] sending buttons to:", from)
-    const result = await sendButtons(from, `${greeting()}! 👋 Sou o assistente GTPRO.\nComo posso te ajudar?`, MAIN_MENU_BUTTONS)
+    const saudacao = userName ? `${greeting()}, *${userName}*! 👋 Sou o assistente GTPRO.\nComo posso te ajudar?` : `${greeting()}! 👋 Sou o assistente GTPRO.\nComo posso te ajudar?`
+    const result = await sendButtons(from, saudacao, MAIN_MENU_BUTTONS)
     console.log("[WA webhook] sendButtons result:", result)
     return Response.json({ ok: true })
   }
