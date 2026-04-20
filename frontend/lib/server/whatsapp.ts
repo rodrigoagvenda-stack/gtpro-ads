@@ -12,6 +12,9 @@ async function getUazapiConfig() {
     getPlatformSetting("whatsapp_uazapi_key"),
     getPlatformSetting("whatsapp_uazapi_instance"),
   ])
+  if (!baseUrl || !token) {
+    console.error("[getUazapiConfig] MISSING config — baseUrl:", !!baseUrl, "token:", !!token, "instance:", !!instance)
+  }
   return { baseUrl, token, instance }
 }
 
@@ -21,13 +24,18 @@ export async function sendText(to: string, text: string): Promise<boolean> {
   const { baseUrl, token } = await getUazapiConfig()
   if (!baseUrl || !token) return false
 
-  const res = await fetch(`${baseUrl}/send/text`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", "token": token },
-    body: JSON.stringify({ number: to, text }),
-  })
-  if (!res.ok) console.error("[sendText] error:", await res.text().catch(() => ""))
-  return res.ok
+  try {
+    const res = await fetch(`${baseUrl}/send/text`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "token": token },
+      body: JSON.stringify({ number: to, text }),
+    })
+    if (!res.ok) console.error("[sendText] HTTP", res.status, await res.text().catch(() => ""))
+    return res.ok
+  } catch (e: any) {
+    console.error("[sendText] fetch error:", e.message)
+    return false
+  }
 }
 
 export async function sendButtons(
