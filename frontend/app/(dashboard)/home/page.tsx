@@ -52,16 +52,19 @@ export default function HomePage() {
   const [platform, setPlatform] = useState<any>(null)
   const [metaStatus, setMetaStatus] = useState<any>(null)
   const [refreshKey, setRefreshKey] = useState(0)
+  const [userName, setUserName] = useState("")
 
   useEffect(() => {
     Promise.allSettled([
       api.home.get(),
       api.get("/settings/platform"),
       api.meta.status(),
-    ]).then(([home, plat, meta]) => {
+      api.get("/auth/me"),
+    ]).then(([home, plat, meta, me]) => {
       if (home.status === "fulfilled")  setData(home.value)
       if (plat.status === "fulfilled")  setPlatform(plat.value)
       if (meta.status === "fulfilled")  setMetaStatus(meta.value)
+      if (me.status === "fulfilled" && me.value?.name) setUserName(me.value.name)
       setLoading(false)
     })
   }, [refreshKey])
@@ -89,7 +92,7 @@ export default function HomePage() {
     <div className="space-y-7">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-[17px] font-semibold text-white">{greeting} 👋</h1>
+          <h1 className="text-[17px] font-semibold text-white">{greeting}{userName ? `, ${userName}` : ""} 👋</h1>
           <p className="text-[12px] text-zinc-600 mt-0.5">Visão geral da conta — {new Date().toLocaleDateString("pt-BR", { weekday: "long", day: "numeric", month: "long" })}</p>
         </div>
         <div className="flex items-center gap-2">
