@@ -2,7 +2,7 @@ import { NextRequest } from "next/server"
 import Anthropic from "@anthropic-ai/sdk"
 import { createServiceClient } from "@/lib/server/supabase"
 import { sendText, sendButtons, sendList } from "@/lib/server/whatsapp"
-import { getCampaigns, updateBudget, toggleCampaign } from "@/lib/server/meta-ads"
+import { getCampaigns, updateBudget, toggleCampaign, filterCampaignsForAgent } from "@/lib/server/meta-ads"
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -234,7 +234,7 @@ Comece pelo resumo geral, depois detalhes por campanha, depois análise e recome
           if (block.name === "get_campaigns") {
             const input = block.input as { date_preset?: string }
             const all = await getCampaigns(tenantId, input.date_preset ?? datePreset)
-            result = Array.isArray(all) ? all.filter((c: any) => c.status === "ACTIVE") : all
+            result = Array.isArray(all) ? filterCampaignsForAgent(all) : all
           } else {
             result = { error: "tool not available" }
           }

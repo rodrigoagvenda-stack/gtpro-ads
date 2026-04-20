@@ -467,3 +467,37 @@ export async function saveMetaConnection(tenantId: string, accessToken: string, 
 }
 
 export { encrypt, getToken }
+
+// ─── Smart campaign filter for AI agents ─────────────────────────────────────
+// Top 15 active (by spend) + top 5 paused with actual results (so the agent
+// can surface "you paused a high-performing campaign" insights).
+// Anything else (archived, zero-spend active, ancient paused) is excluded.
+export function filterCampaignsForAgent(campaigns: any[]): any[] {
+  // Active with spend in period, top 20 by spend
+  const active = campaigns
+    .filter(c => c.status === "ACTIVE" && (c.metrics?.spend ?? 0) > 0)
+    .sort((a, b) => (b.metrics?.spend ?? 0) - (a.metrics?.spend ?? 0))
+    .slice(0, 20)
+
+  // Paused with spend in period — ranked by efficiency, not volume
+  // Lower CPL = better lead campaign; higher ROAS = better sales campaign
+  // Campaigns with no CPL/ROAS fallback to cost per conversation, then spend
+  const efficiencyScore = (c: any): number => {
+    const m = c.metrics
+    const obj = (c.objective ?? "").toUpperCase()
+    if (obj.includes("SALES") || obj.includes("PURCHASE")) {
+      return (m.roas ?? 0) * 1000 // higher ROAS = better
+    }
+    if (m.cpl && m.cpl > 0)   return 10000 / m.cpl   // lower CPL = higher score
+    if (m.cpc_conv && m.cpc_conv > 0) return 1000 / m.cpc_conv
+    return m.spend ?? 0
+  }
+
+  const paused = campaigns
+    .filter(c => c.status === "PAUSED" && (c.metrics?.spend ?? 0) > 0)
+    .sort((a, b) => efficiencyScore(b) - efficiencyScore(a))
+    .slice(0, 5)
+    .map(c => ({ ...c, _agent_note: "PAUSADA no período — estava ativa e gerando resultado" }))
+
+  return [...active, ...paused]
+}

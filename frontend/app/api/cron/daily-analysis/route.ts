@@ -2,7 +2,7 @@ import { NextRequest } from "next/server"
 import Anthropic from "@anthropic-ai/sdk"
 import { createServiceClient } from "@/lib/server/supabase"
 import { sendText } from "@/lib/server/whatsapp"
-import { getCampaigns } from "@/lib/server/meta-ads"
+import { getCampaigns, filterCampaignsForAgent } from "@/lib/server/meta-ads"
 
 // ─── Auth ─────────────────────────────────────────────────────────────────────
 
@@ -114,7 +114,7 @@ NÃO comece com "Olá ${userName}" — isso é adicionado automaticamente.`
         try {
           const input = block.input as { date_preset?: string }
           const all = await getCampaigns(tenantId, input.date_preset ?? "last_7d")
-          result = Array.isArray(all) ? all.filter((c: any) => c.status === "ACTIVE") : all
+          result = Array.isArray(all) ? filterCampaignsForAgent(all) : all
         } catch (e: any) {
           result = { error: e.message }
         }
