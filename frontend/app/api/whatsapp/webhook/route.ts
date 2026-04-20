@@ -24,10 +24,20 @@ function parseIncoming(body: any): { from: string; text: string; buttonId?: stri
       const from = normalizePhone(m.chatid ?? body.chat.wa_chatid ?? "")
       if (!from) return null
 
-      const text     = m.text || m.content || ""
+      // buttonOrListid is the selected button/list ID
       const buttonId = m.buttonOrListid || undefined
 
-      return { from, text, buttonId: buttonId || undefined }
+      // content can be object (button reply) or string (text)
+      let text = ""
+      if (typeof m.content === "string") {
+        text = m.content
+      } else if (typeof m.content === "object" && m.content !== null) {
+        text = m.content.selectedDisplayText ?? m.content.selectedID ?? ""
+      } else if (typeof m.text === "string") {
+        text = m.text
+      }
+
+      return { from, text, buttonId }
     }
 
     // Evolution API / generic format fallback
@@ -75,10 +85,11 @@ async function getSession(phone: string): Promise<Session> {
 
 async function saveSession(phone: string, tenantId: string, step: string, context: Record<string, any> = {}) {
   const supabase = createServiceClient()
-  await supabase.from("whatsapp_sessions").upsert(
+  const { error } = await supabase.from("whatsapp_sessions").upsert(
     { phone, tenant_id: tenantId, step, context, updated_at: new Date().toISOString() },
     { onConflict: "phone" }
   )
+  if (error) console.error("[saveSession] error:", error.message, "— rode a migration 010_whatsapp_agent.sql no Supabase")
 }
 
 async function getTenantByPhone(phone: string) {
@@ -131,9 +142,12 @@ export async function POST(req: NextRequest) {
   console.log("[WA webhook] intent:", intent)
 
   // ── Menu trigger ────────────────────────────────────────────────────────────
-  const isMenuTrigger =
-    session.step === "idle" ||
-    ["menu", "oi", "ola", "olá", "inicio", "início", "voltar", "start"].includes(intent)
+  // Se buttonId está setado, o usuário clicou num botão — não mostrar menu de novo
+  // a menos que seja explicitamente o botão "menu"
+  const MENU_WORDS = ["menu", "oi", "ola", "olá", "inicio", "início", "voltar", "start"]
+  const isMenuTrigger = buttonId === "menu" || (
+    !buttonId && (session.step === "idle" || MENU_WORDS.includes(intent))
+  )
 
   console.log("[WA webhook] isMenuTrigger:", isMenuTrigger)
 
