@@ -9,7 +9,6 @@ import CampaignRow from "@/components/dashboard/CampaignRow"
 import type { Campaign } from "@/types"
 import { cn } from "@/lib/utils"
 import { AlertTriangle, RefreshCw, Key, Calendar, Link2, ArrowRight } from "lucide-react"
-import AccountPicker from "@/components/dashboard/AccountPicker"
 
 function isTokenExpired(msg: string) {
   return msg.includes("190") || msg.includes("463") || msg.includes("Session has expired") || msg.includes("access token")
@@ -106,7 +105,6 @@ export default function CampanhasPage() {
           <p className="text-[12px] text-zinc-600 mt-0.5">Performance da conta Meta Ads</p>
         </div>
         <div className="flex items-center gap-2 flex-wrap justify-end">
-          <AccountPicker onSwitch={() => setRefreshKey(k => k + 1)} />
           <div className="flex items-center bg-white/[0.04] rounded-lg p-0.5 ring-1 ring-white/[0.06]">
             {PRESETS.map((p) => (
               <button

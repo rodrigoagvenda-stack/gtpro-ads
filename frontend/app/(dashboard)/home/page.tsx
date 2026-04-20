@@ -7,7 +7,6 @@ import { api } from "@/lib/api"
 import { formatCurrency } from "@/lib/utils"
 import { Megaphone, Bell, Users, Bot, AlertTriangle, CheckCircle, ArrowRight, Zap, TrendingUp, TrendingDown, Sparkles, BarChart2, Key, Link2 } from "lucide-react"
 import { cn } from "@/lib/utils"
-import AccountPicker from "@/components/dashboard/AccountPicker"
 
 function KpiCard({ label, value, sub, trend }: { label: string; value: string; sub?: string; trend?: "up" | "down" | null }) {
   return (
@@ -96,8 +95,7 @@ export default function HomePage() {
           <p className="text-[12px] text-zinc-600 mt-0.5">Visão geral da conta — {new Date().toLocaleDateString("pt-BR", { weekday: "long", day: "numeric", month: "long" })}</p>
         </div>
         <div className="flex items-center gap-2">
-          <AccountPicker onSwitch={() => setRefreshKey(k => k + 1)} />
-          <button onClick={() => router.push("/agente")} className="flex items-center gap-2 px-4 py-2 bg-violet-600 hover:bg-violet-500 text-white text-[13px] font-medium rounded-lg transition-colors">
+<button onClick={() => router.push("/agente")} className="flex items-center gap-2 px-4 py-2 bg-violet-600 hover:bg-violet-500 text-white text-[13px] font-medium rounded-lg transition-colors">
             <Sparkles size={13} /> Perguntar ao agente
           </button>
         </div>
