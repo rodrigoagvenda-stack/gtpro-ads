@@ -226,6 +226,7 @@ function AccountRenameRow({ acc, onRenamed }: { acc: MetaAccount; onRenamed: () 
 
 function MetaTab() {
   const searchParams = useSearchParams()
+  const [isAdmin, setIsAdmin] = useState(false)
   const [platform, setPlatform] = useState({ anthropic_api_key_set: false, meta_app_id: "", meta_app_secret_set: false })
   const [form, setForm] = useState({ meta_app_id: "", meta_app_secret: "" })
   const [showSecret, setShowSecret] = useState(false)
@@ -248,6 +249,7 @@ function MetaTab() {
   }
 
   useEffect(() => {
+    api.get("/auth/me").then(me => { if (me?.is_admin) setIsAdmin(true) }).catch(() => {})
     api.get("/settings/platform").then(d => { setPlatform(d); if (d.meta_app_id) setForm(f => ({ ...f, meta_app_id: d.meta_app_id })) })
     api.meta.status().then(setMetaStatus).catch(() => setMetaStatus({ connected: false }))
     loadAccounts()
@@ -299,23 +301,25 @@ function MetaTab() {
 
   return (
     <div className="space-y-4 max-w-xl">
-      <Card>
-        <h2 className="text-[13px] font-semibold text-zinc-200">Credenciais do App</h2>
-        <p className="text-[12px] text-zinc-600 -mt-3">Necessário para autenticação OAuth com o Meta.</p>
-        {error && <div className="text-[12px] text-red-400 bg-red-500/10 ring-1 ring-red-500/20 rounded-lg px-3 py-2">{error}</div>}
-        <div className="space-y-3">
-          <Field label="Meta App ID">
-            <input type="text" placeholder={platform.meta_app_id || "1234567890"} value={form.meta_app_id} onChange={e => setForm(f => ({ ...f, meta_app_id: e.target.value }))} className={inputCls} />
-          </Field>
-          <Field label="Meta App Secret" badge={platform.meta_app_secret_set ? "configurado" : undefined}>
-            <div className="relative">
-              <input type={showSecret ? "text" : "password"} placeholder={platform.meta_app_secret_set ? "Deixe vazio para manter" : "App Secret"} value={form.meta_app_secret} onChange={e => setForm(f => ({ ...f, meta_app_secret: e.target.value }))} className={cn(inputCls, "pr-10")} />
-              <button type="button" onClick={() => setShowSecret(v => !v)} className="absolute right-3 top-2.5 text-zinc-600 hover:text-zinc-400">{showSecret ? <EyeOff size={13} /> : <Eye size={13} />}</button>
-            </div>
-          </Field>
-        </div>
-        <SaveBtn saving={saving} saved={saved} onClick={saveCreds} />
-      </Card>
+      {isAdmin && (
+        <Card>
+          <h2 className="text-[13px] font-semibold text-zinc-200">Credenciais do App</h2>
+          <p className="text-[12px] text-zinc-600 -mt-3">Necessário para autenticação OAuth com o Meta.</p>
+          {error && <div className="text-[12px] text-red-400 bg-red-500/10 ring-1 ring-red-500/20 rounded-lg px-3 py-2">{error}</div>}
+          <div className="space-y-3">
+            <Field label="Meta App ID">
+              <input type="text" placeholder={platform.meta_app_id || "1234567890"} value={form.meta_app_id} onChange={e => setForm(f => ({ ...f, meta_app_id: e.target.value }))} className={inputCls} />
+            </Field>
+            <Field label="Meta App Secret" badge={platform.meta_app_secret_set ? "configurado" : undefined}>
+              <div className="relative">
+                <input type={showSecret ? "text" : "password"} placeholder={platform.meta_app_secret_set ? "Deixe vazio para manter" : "App Secret"} value={form.meta_app_secret} onChange={e => setForm(f => ({ ...f, meta_app_secret: e.target.value }))} className={cn(inputCls, "pr-10")} />
+                <button type="button" onClick={() => setShowSecret(v => !v)} className="absolute right-3 top-2.5 text-zinc-600 hover:text-zinc-400">{showSecret ? <EyeOff size={13} /> : <Eye size={13} />}</button>
+              </div>
+            </Field>
+          </div>
+          <SaveBtn saving={saving} saved={saved} onClick={saveCreds} />
+        </Card>
+      )}
 
       <Card>
         <h2 className="text-[13px] font-semibold text-zinc-200">Conexão da conta</h2>
@@ -349,8 +353,8 @@ function MetaTab() {
           </div>
         ) : (
           <div className="space-y-3">
-            {!platform.meta_app_id && <p className="text-[12px] text-amber-400">Configure o Meta App ID acima antes de conectar via OAuth.</p>}
-            <button onClick={async () => { setConnecting(true); try { const { url } = await api.meta.connect(); window.open(url, "_blank") } catch (e: any) { setMetaMsg({ type: "err", text: e.message }) } finally { setConnecting(false) } }} disabled={connecting || !platform.meta_app_id} className="flex items-center gap-2 px-4 py-2.5 bg-white text-zinc-900 text-[13px] font-semibold rounded-lg hover:bg-zinc-100 disabled:opacity-40 transition-colors">
+            {isAdmin && !platform.meta_app_id && <p className="text-[12px] text-amber-400">Configure o Meta App ID acima antes de conectar via OAuth.</p>}
+            <button onClick={async () => { setConnecting(true); try { const { url } = await api.meta.connect(); window.open(url, "_blank") } catch (e: any) { setMetaMsg({ type: "err", text: e.message }) } finally { setConnecting(false) } }} disabled={connecting || (isAdmin && !platform.meta_app_id)} className="flex items-center gap-2 px-4 py-2.5 bg-white text-zinc-900 text-[13px] font-semibold rounded-lg hover:bg-zinc-100 disabled:opacity-40 transition-colors">
               {connecting ? <><Loader2 size={13} className="animate-spin" /> Redirecionando...</> : <><Link2 size={13} /> Conectar via OAuth</>}
             </button>
             <div className="border-t border-white/[0.05] pt-3">
@@ -847,6 +851,13 @@ type TabId = "agente" | "meta" | "alertas" | "whatsapp" | "skills" | "plataforma
 
 function ConfiguracoesContent() {
   const [tab, setTab] = useState<TabId>("agente")
+  const [isAdmin, setIsAdmin] = useState(false)
+
+  useEffect(() => {
+    api.get("/auth/me").then(me => { if (me?.is_admin) setIsAdmin(true) }).catch(() => {})
+  }, [])
+
+  const visibleTabs = isAdmin ? TABS : TABS.filter(t => t.id !== "plataforma")
 
   return (
     <div className="space-y-6">
@@ -857,7 +868,7 @@ function ConfiguracoesContent() {
 
       {/* Tabs */}
       <div className="flex items-center gap-1 border-b border-white/[0.06] overflow-x-auto">
-        {TABS.map(t => {
+        {visibleTabs.map(t => {
           const Icon = t.icon
           return (
             <button key={t.id} onClick={() => setTab(t.id as TabId)}
@@ -876,7 +887,7 @@ function ConfiguracoesContent() {
       {tab === "alertas"    && <AlertasTab />}
       {tab === "whatsapp"   && <WhatsAppTab />}
       {tab === "skills"     && <SkillsTab />}
-      {tab === "plataforma" && <PlataformaTab />}
+      {tab === "plataforma" && isAdmin && <PlataformaTab />}
     </div>
   )
 }
