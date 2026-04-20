@@ -6,6 +6,8 @@ export interface TenantContext {
   tenant_id: string
   auth_type: "jwt" | "api_key"
   scope?: string
+  user_id?: string
+  user_email?: string
 }
 
 export async function getTenant(req: NextRequest): Promise<TenantContext | null> {
@@ -18,13 +20,12 @@ export async function getTenant(req: NextRequest): Promise<TenantContext | null>
     const supabase = createServiceClient()
     const { data: { user } } = await supabase.auth.getUser(token)
     if (user) {
-      // New users have tenant_id in app_metadata; legacy users have user.id == tenant.id
       const tenantId = user.app_metadata?.tenant_id ?? user.id
-      return { tenant_id: tenantId, auth_type: "jwt" }
+      return { tenant_id: tenantId, auth_type: "jwt", user_id: user.id, user_email: user.email }
     }
   } catch {}
 
-  // Tenta como API Key (para MAX e agentes externos)
+  // Tenta como API Key
   const supabase = createServiceClient()
   const { data } = await supabase
     .from("api_keys")
