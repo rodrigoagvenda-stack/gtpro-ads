@@ -2,9 +2,12 @@ import { NextRequest } from "next/server"
 import { getTenant, unauthorized } from "@/lib/server/auth"
 import { createServiceClient } from "@/lib/server/supabase"
 
+const SUPER_ADMIN_EMAIL = process.env.SUPER_ADMIN_EMAIL ?? "admin@vendai.pro"
+
 async function requireAdmin(req: NextRequest) {
   const ctx = await getTenant(req)
   if (!ctx) return null
+  if (ctx.user_email === SUPER_ADMIN_EMAIL) return ctx
   const supabase = createServiceClient()
   const { data } = await supabase
     .from("tenant_members")
