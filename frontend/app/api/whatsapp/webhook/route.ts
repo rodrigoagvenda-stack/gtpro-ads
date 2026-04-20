@@ -315,7 +315,7 @@ export async function POST(req: NextRequest) {
       return Response.json({ ok: true })
     }
     console.log("[WA webhook] sending buttons to:", from)
-    const saudacao = userName ? `${greeting()}, *${userName}*! 👋 Sou o assistente GTPRO.\nComo posso te ajudar?` : `${greeting()}! 👋 Sou o assistente GTPRO.\nComo posso te ajudar?`
+    const saudacao = userName ? `${greeting()}, ${userName}! 👋 Sou o assistente GTPRO.\nComo posso te ajudar?` : `${greeting()}! 👋 Sou o assistente GTPRO.\nComo posso te ajudar?`
     const result = await sendButtons(from, saudacao, MAIN_MENU_BUTTONS)
     console.log("[WA webhook] sendButtons result:", result)
     return Response.json({ ok: true })
@@ -363,7 +363,7 @@ export async function POST(req: NextRequest) {
       await saveSession(from, tenantId, "report_period", { connection_id: contas[0].id })
       await sendButtons(
         from,
-        `Conta: *${contas[0].name ?? contas[0].ad_account_id}*\n\nQual período?`,
+        `Conta: ${contas[0].name ?? contas[0].ad_account_id}\n\nQual período?`,
         [
           { id: "today",   label: "Hoje"           },
           { id: "last_7d", label: "Últimos 7 dias"  },
@@ -407,7 +407,7 @@ export async function POST(req: NextRequest) {
     await saveSession(from, tenantId, "report_filter", { datePreset, periodLabel })
     await sendButtons(
       from,
-      `Período: *${periodLabel}*\n\nQuer incluir campanhas pausadas no relatório?`,
+      `Período: ${periodLabel}\n\nQuer incluir campanhas pausadas no relatório?`,
       [
         { id: "filter_active",   label: "✅ Só ativas"      },
         { id: "filter_all",      label: "📊 Incluir pausadas" },
