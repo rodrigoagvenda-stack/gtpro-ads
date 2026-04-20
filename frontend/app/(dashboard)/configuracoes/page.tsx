@@ -69,6 +69,41 @@ function Card({ children, className }: { children: React.ReactNode; className?: 
   return <div className={cn("bg-white/[0.02] ring-1 ring-white/[0.06] rounded-xl p-6 space-y-5", className)}>{children}</div>
 }
 
+function Select({ value, onChange, options }: { value: string | number; onChange: (v: string) => void; options: { value: string | number; label: string }[] }) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+  const current = options.find(o => String(o.value) === String(value))
+
+  useEffect(() => {
+    function onClickOutside(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
+    }
+    if (open) document.addEventListener("mousedown", onClickOutside)
+    return () => document.removeEventListener("mousedown", onClickOutside)
+  }, [open])
+
+  return (
+    <div ref={ref} className="relative w-full">
+      <button type="button" onClick={() => setOpen(o => !o)}
+        className="w-full flex items-center justify-between px-3.5 py-2.5 bg-white/[0.04] ring-1 ring-white/[0.08] rounded-lg text-[13px] text-white focus:outline-none focus:ring-violet-500/50 transition-all text-left">
+        <span>{current?.label ?? "—"}</span>
+        <svg className={cn("w-3.5 h-3.5 text-zinc-500 transition-transform shrink-0", open && "rotate-180")} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" /></svg>
+      </button>
+      {open && (
+        <div className="absolute z-50 mt-1 w-full bg-zinc-900 ring-1 ring-white/[0.1] rounded-lg overflow-hidden shadow-xl">
+          {options.map(o => (
+            <button key={o.value} type="button"
+              onClick={() => { onChange(String(o.value)); setOpen(false) }}
+              className={cn("w-full text-left px-3.5 py-2.5 text-[13px] transition-colors", String(o.value) === String(value) ? "bg-violet-500/20 text-violet-200" : "text-zinc-300 hover:bg-white/[0.06]")}>
+              {o.label}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ─── Tab: Agente ──────────────────────────────────────────────────────────────
 
 function AgenteTab() {
@@ -95,9 +130,7 @@ function AgenteTab() {
         <p className="text-[12px] text-zinc-600 -mt-3">Valores que o agente usa para avaliar campanhas e tomar decisões.</p>
         <div className="space-y-3">
           <Field label="Objetivo principal">
-            <select value={cfg.objetivo_principal} onChange={e => setCfg(c => ({ ...c, objetivo_principal: e.target.value }))} className={inputCls}>
-              {OBJETIVOS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-            </select>
+            <Select value={cfg.objetivo_principal} onChange={v => setCfg(c => ({ ...c, objetivo_principal: v }))} options={OBJETIVOS} />
           </Field>
           <div className="grid grid-cols-2 gap-3">
             <Field label="ROAS mínimo"><input type="number" step="0.1" min="0" value={cfg.roas_minimo} onChange={e => setCfg(c => ({ ...c, roas_minimo: Number(e.target.value) }))} className={inputCls} /></Field>
@@ -589,20 +622,18 @@ function WhatsAppTab() {
           <div className="space-y-3 pt-1">
             <div className="grid grid-cols-2 gap-3">
               <Field label="Horário da manhã">
-                <select value={cfg.daily_analysis_morning} onChange={e => setCfg(c => ({ ...c, daily_analysis_morning: +e.target.value }))}
-                  className={inputCls}>
-                  {Array.from({ length: 13 }, (_, i) => i + 6).map(h => (
-                    <option key={h} value={h}>{String(h).padStart(2, "0")}:00</option>
-                  ))}
-                </select>
+                <Select
+                  value={cfg.daily_analysis_morning}
+                  onChange={v => setCfg(c => ({ ...c, daily_analysis_morning: +v }))}
+                  options={Array.from({ length: 13 }, (_, i) => i + 6).map(h => ({ value: h, label: `${String(h).padStart(2, "0")}:00` }))}
+                />
               </Field>
               <Field label="Horário da tarde">
-                <select value={cfg.daily_analysis_afternoon} onChange={e => setCfg(c => ({ ...c, daily_analysis_afternoon: +e.target.value }))}
-                  className={inputCls}>
-                  {Array.from({ length: 12 }, (_, i) => i + 12).map(h => (
-                    <option key={h} value={h}>{String(h).padStart(2, "0")}:00</option>
-                  ))}
-                </select>
+                <Select
+                  value={cfg.daily_analysis_afternoon}
+                  onChange={v => setCfg(c => ({ ...c, daily_analysis_afternoon: +v }))}
+                  options={Array.from({ length: 12 }, (_, i) => i + 12).map(h => ({ value: h, label: `${String(h).padStart(2, "0")}:00` }))}
+                />
               </Field>
             </div>
             <p className="text-[11px] text-zinc-600">Horários em fuso de Brasília (BRT). O agente irá buscar os dados das últimas 24h e comparar com os 7 dias anteriores.</p>
