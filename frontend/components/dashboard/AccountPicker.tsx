@@ -36,6 +36,7 @@ export default function AccountPicker({ onSwitch }: { onSwitch?: () => void }) {
       await api.meta.switchAccount(acc.id)
       load()
       onSwitch?.()
+      window.dispatchEvent(new CustomEvent("account-switched", { detail: { accountId: acc.id } }))
     } catch {} finally { setSwitching(null); setOpen(false) }
   }
 

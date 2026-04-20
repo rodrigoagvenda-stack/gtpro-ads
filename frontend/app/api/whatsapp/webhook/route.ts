@@ -156,6 +156,7 @@ async function runReportAgent(
   datePreset: string,
   periodLabel: string,
   includeInactive: boolean,
+  connectionId?: string,
 ): Promise<string> {
   const anthropicKey = await getAnthropicKey()
   if (!anthropicKey) throw new Error("Anthropic API Key não configurada na plataforma")
@@ -247,7 +248,7 @@ O que está bom, o que está mal, e exatamente o que fazer agora. Direto ao pont
         try {
           if (block.name === "get_campaigns") {
             const input = block.input as { date_preset?: string }
-            const all = await getCampaigns(tenantId, input.date_preset ?? datePreset)
+            const all = await getCampaigns(tenantId, input.date_preset ?? datePreset, connectionId)
             result = Array.isArray(all)
               ? filterCampaignsForAgent(all, includeInactive, input.date_preset ?? datePreset)
               : all
@@ -404,7 +405,8 @@ export async function POST(req: NextRequest) {
     const datePreset  = PERIODS[intent] ? intent : "last_7d"
     const periodLabel = PERIODS[datePreset]
 
-    await saveSession(from, tenantId, "report_filter", { datePreset, periodLabel })
+    // Carry connection_id forward
+    await saveSession(from, tenantId, "report_filter", { ...session.context, datePreset, periodLabel })
     await sendButtons(
       from,
       `Período: ${periodLabel}\n\nQuer incluir campanhas pausadas no relatório?`,
@@ -423,8 +425,9 @@ export async function POST(req: NextRequest) {
 
     await sendText(from, "⏳ Agente GTPRO gerando relatório, por favor aguarde...")
 
+    const connectionId = (session.context as any).connection_id
     try {
-      const reportText = await runReportAgent(tenantId, datePreset, periodLabel, includeInactive)
+      const reportText = await runReportAgent(tenantId, datePreset, periodLabel, includeInactive, connectionId)
       const blocks = splitIntoBlocks(reportText, 700)
       for (const block of blocks) {
         await sendText(from, block)
@@ -434,8 +437,13 @@ export async function POST(req: NextRequest) {
       await sendText(from, `❌ Erro ao gerar relatório: ${e.message}`)
     }
 
-    await saveSession(from, tenantId, "menu")
-    await sendButtons(from, "O que mais posso fazer?", MAIN_MENU_BUTTONS)
+    // Keep connection_id in context so subsequent actions use the same account
+    await saveSession(from, tenantId, "action", { connection_id: connectionId })
+    await sendButtons(from, "O que mais posso fazer?", [
+      { id: "acoes",     label: "⚡ Executar ação"  },
+      { id: "relatorio", label: "📊 Novo relatório"  },
+      { id: "menu",      label: "🏠 Menu"             },
+    ])
     return Response.json({ ok: true })
   }
 
@@ -458,7 +466,8 @@ export async function POST(req: NextRequest) {
         return Response.json({ ok: true })
       }
 
-      const campaigns = await getCampaigns(tenantId, "today")
+      const actionConnectionId = (session.context as any).connection_id as string | undefined
+      const campaigns = await getCampaigns(tenantId, "today", actionConnectionId)
       // Só campanhas ativas, campos mínimos para o Claude
       const activeCampaigns = campaigns
         .filter((c: any) => c.status === "ACTIVE")

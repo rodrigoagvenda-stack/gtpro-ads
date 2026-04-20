@@ -1,6 +1,7 @@
 import Anthropic from "@anthropic-ai/sdk"
 import { getAnthropicKey } from "./platform"
 import { createServiceClient } from "./supabase"
+import { sendText } from "./whatsapp"
 import {
   getCampaigns, getInsights, getCampaignInsights, getAdSetInsights, getAdInsights, getInsightsByBreakdown,
   createCampaign, updateCampaign, duplicateCampaign, deleteCampaign, toggleCampaign, updateBudget,
@@ -27,7 +28,9 @@ Regras de formatação — OBRIGATÓRIAS:
 Regras de comportamento:
 - Para saudações ou perguntas simples, responda brevemente sem buscar dados
 - Só use ferramentas quando o usuário pedir análise, métricas ou ações concretas
-- Em modo supervisionado: SEMPRE descreva o que vai fazer e peça confirmação antes de qualquer criação, edição, duplicação ou deleção
+- Em modo supervisionado: na PRIMEIRA menção de uma ação de escrita (criar, editar, pausar, ativar, deletar, duplicar), descreva exatamente o que vai fazer e pergunte "Posso executar?" ou "Confirma?". Se o usuário confirmar com qualquer palavra de aprovação ("sim", "pode", "vai", "faz", "confirmo", "execute", "ok", "isso"), execute a ação IMEDIATAMENTE usando a ferramenta correta. Não pergunte duas vezes.
+- Em modo NÃO supervisionado: execute ações diretamente sem pedir confirmação.
+- NUNCA pergunte "em qual conta?" — use sempre a conta de anúncios informada no contexto
 - Nunca delete sem confirmação explícita do usuário
 - Justifique cada ação com dados
 - Ao criar campanhas, sempre crie com status PAUSED por padrão`
@@ -95,16 +98,6 @@ const WRITE_TOOLS = new Set(["create_campaign","update_campaign","duplicate_camp
 
 async function executeTool(name: string, input: Record<string, any>, tenantId: string, tenantConfig: Record<string, any>) {
   const supabase = createServiceClient()
-  const sup = tenantConfig.modo_supervisionado
-
-  // Helper: block write tools in supervised mode
-  async function requireApproval(action: string) {
-    if (sup) {
-      await supabase.from("alerts").insert({ tenant_id: tenantId, type: "roas_baixo", message: `Aguardando aprovação: ${action}`, status: "active" })
-      return { status: "pending_approval", action }
-    }
-    return null
-  }
 
   // ── Account
   if (name === "get_account_info")       return getAccountInfo(tenantId)
@@ -114,58 +107,26 @@ async function executeTool(name: string, input: Record<string, any>, tenantId: s
   if (name === "get_account_insights")   return getInsights(tenantId, input.date_preset)
   if (name === "get_campaign_insights")  return getCampaignInsights(tenantId, input.campaign_id, input.date_preset)
   if (name === "get_insights_breakdown") return getInsightsByBreakdown(tenantId, input.breakdown, input.date_preset)
-  if (name === "create_campaign") {
-    const pending = await requireApproval(`criar campanha "${input.name}"`)
-    if (pending) return pending
-    return createCampaign(tenantId, input)
-  }
+  if (name === "create_campaign")        return createCampaign(tenantId, input)
   if (name === "update_campaign") {
     const { campaign_id, ...params } = input
-    const pending = await requireApproval(`atualizar campanha ${campaign_id}`)
-    if (pending) return pending
     return updateCampaign(tenantId, campaign_id, params)
   }
-  if (name === "duplicate_campaign") {
-    const pending = await requireApproval(`duplicar campanha ${input.campaign_id}`)
-    if (pending) return pending
-    return duplicateCampaign(tenantId, input.campaign_id, input.new_name)
-  }
-  if (name === "delete_campaign") {
-    const pending = await requireApproval(`DELETAR campanha ${input.campaign_id}`)
-    if (pending) return pending
-    return deleteCampaign(tenantId, input.campaign_id)
-  }
-  if (name === "toggle_campaign") {
-    const pending = await requireApproval(`${input.status === "ACTIVE" ? "ativar" : "pausar"} campanha ${input.campaign_id}`)
-    if (pending) return pending
-    return toggleCampaign(tenantId, input.campaign_id, input.status)
-  }
+  if (name === "duplicate_campaign")     return duplicateCampaign(tenantId, input.campaign_id, input.new_name)
+  if (name === "delete_campaign")        return deleteCampaign(tenantId, input.campaign_id)
+  if (name === "toggle_campaign")        return toggleCampaign(tenantId, input.campaign_id, input.status)
 
   // ── Ad Sets
   if (name === "get_adsets")         return getAdSets(tenantId, input.campaign_id)
   if (name === "get_adset")          return getAdSetById(tenantId, input.adset_id)
   if (name === "get_adset_insights") return getAdSetInsights(tenantId, input.adset_id, input.date_preset)
-  if (name === "create_adset") {
-    const pending = await requireApproval(`criar ad set "${input.name}"`)
-    if (pending) return pending
-    return createAdSet(tenantId, input)
-  }
+  if (name === "create_adset")       return createAdSet(tenantId, input)
   if (name === "update_adset") {
     const { adset_id, ...params } = input
-    const pending = await requireApproval(`atualizar ad set ${adset_id}`)
-    if (pending) return pending
     return updateAdSet(tenantId, adset_id, params)
   }
-  if (name === "duplicate_adset") {
-    const pending = await requireApproval(`duplicar ad set ${input.adset_id}`)
-    if (pending) return pending
-    return duplicateAdSet(tenantId, input.adset_id, input.campaign_id)
-  }
-  if (name === "delete_adset") {
-    const pending = await requireApproval(`DELETAR ad set ${input.adset_id}`)
-    if (pending) return pending
-    return deleteAdSet(tenantId, input.adset_id)
-  }
+  if (name === "duplicate_adset")    return duplicateAdSet(tenantId, input.adset_id, input.campaign_id)
+  if (name === "delete_adset")       return deleteAdSet(tenantId, input.adset_id)
 
   // ── Ads
   if (name === "get_ads")          return getAds(tenantId, input.campaign_id)
@@ -173,20 +134,10 @@ async function executeTool(name: string, input: Record<string, any>, tenantId: s
   if (name === "get_ad_insights")  return getAdInsights(tenantId, input.ad_id, input.date_preset)
   if (name === "update_ad") {
     const { ad_id, ...params } = input
-    const pending = await requireApproval(`atualizar anúncio ${ad_id}`)
-    if (pending) return pending
     return updateAd(tenantId, ad_id, params)
   }
-  if (name === "duplicate_ad") {
-    const pending = await requireApproval(`duplicar anúncio ${input.ad_id}`)
-    if (pending) return pending
-    return duplicateAd(tenantId, input.ad_id, input.adset_id)
-  }
-  if (name === "delete_ad") {
-    const pending = await requireApproval(`DELETAR anúncio ${input.ad_id}`)
-    if (pending) return pending
-    return deleteAd(tenantId, input.ad_id)
-  }
+  if (name === "duplicate_ad")           return duplicateAd(tenantId, input.ad_id, input.adset_id)
+  if (name === "delete_ad")              return deleteAd(tenantId, input.ad_id)
 
   // ── Pixel
   if (name === "get_pixels")             return getPixels(tenantId)
@@ -195,11 +146,7 @@ async function executeTool(name: string, input: Record<string, any>, tenantId: s
 
   // ── Audiences
   if (name === "get_audiences")             return getCustomAudiences(tenantId)
-  if (name === "create_lookalike_audience") {
-    const pending = await requireApproval(`criar lookalike "${input.name}"`)
-    if (pending) return pending
-    return createLookalikeAudience(tenantId, input)
-  }
+  if (name === "create_lookalike_audience") return createLookalikeAudience(tenantId, input)
 
   // ── UTM
   if (name === "generate_utm") {
@@ -222,6 +169,11 @@ async function executeTool(name: string, input: Record<string, any>, tenantId: s
   // ── Internal
   if (name === "create_alert") {
     const { data } = await supabase.from("alerts").insert({ tenant_id: tenantId, ...input, status: "active" }).select().single()
+    const { data: ac } = await supabase.from("agent_configs").select("whatsapp_number").eq("tenant_id", tenantId).single()
+    if (ac?.whatsapp_number) {
+      const phone = (ac.whatsapp_number as string).replace(/\D/g, "")
+      try { await sendText(phone, `🔔 *Alerta GTPRO*\n\n${input.message}`) } catch {}
+    }
     return data
   }
 
@@ -240,13 +192,14 @@ export async function runAgent(
   message: string,
   tenantConfig: Record<string, any>,
   modelId?: string,
-  history?: { role: string; content: string }[]
+  history?: { role: string; content: string }[],
+  adAccountId?: string
 ) {
   const apiKey = await getAnthropicKey()
   const client = new Anthropic({ apiKey })
   const model = ALLOWED_MODELS.includes(modelId ?? "") ? modelId! : "claude-sonnet-4-6"
 
-  const configCtx = `Configurações do cliente: objetivo=${tenantConfig.objetivo_principal}, ROAS mín=${tenantConfig.roas_minimo}, CPL máx=R$${tenantConfig.cpl_maximo}, budget mensal=R$${tenantConfig.budget_mensal ?? "não definido"}, modo supervisionado=${tenantConfig.modo_supervisionado ? "ATIVO — descreva ações e aguarde confirmação" : "DESATIVADO — pode executar diretamente"}`
+  const configCtx = `Configurações: objetivo=${tenantConfig.objetivo_principal}, ROAS mín=${tenantConfig.roas_minimo}, CPL máx=R$${tenantConfig.cpl_maximo}, budget mensal=R$${tenantConfig.budget_mensal ?? "não definido"}, modo supervisionado=${tenantConfig.modo_supervisionado ? "ATIVO" : "DESATIVADO"}. Conta de anúncios ativa: ${adAccountId ?? "padrão"} — use SOMENTE esta conta em todas as operações.`
 
   const prior: Anthropic.MessageParam[] = (history ?? [])
     .filter(m => m.role === "user" || m.role === "assistant")

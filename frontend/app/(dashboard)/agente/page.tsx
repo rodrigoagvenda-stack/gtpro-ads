@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from "react"
 import { api } from "@/lib/api"
-import { ArrowUp, Bot, Search, BarChart2, Zap, Bell, Power, DollarSign, CheckCircle2, Clock, Sparkles, ChevronDown, Trash2, FileText, Users, Image, X } from "lucide-react"
+import { ArrowUp, Bot, Search, BarChart2, Zap, Bell, Power, DollarSign, CheckCircle2, Clock, Sparkles, ChevronDown, Trash2, FileText, Users, Image, X, ListChecks, XCircle, RefreshCw } from "lucide-react"
 import { cn } from "@/lib/utils"
 
 interface ToolCall { name: string; input: Record<string, any> }
@@ -12,6 +12,14 @@ interface Message {
   content: string
   tools_used?: ToolCall[]
   actions?: Action[]
+}
+interface LogEntry {
+  id: string
+  action: string
+  params: Record<string, any> | null
+  result: Record<string, any> | null
+  status: string
+  created_at: string
 }
 
 const TOOL_META: Record<string, { label: string; icon: any; color: string; bg: string }> = {
@@ -92,6 +100,9 @@ export default function AgentePage() {
   const [modelOpen, setModelOpen] = useState(false)
   const [skills, setSkills] = useState<{ id: string; name: string; icon: string; color: string; prompt: string }[]>([])
   const [skillsOpen, setSkillsOpen] = useState(false)
+  const [logs, setLogs] = useState<LogEntry[]>([])
+  const [logsOpen, setLogsOpen] = useState(false)
+  const [logsLoading, setLogsLoading] = useState(false)
   const bottomRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const intervalRef = useRef<ReturnType<typeof setInterval> | undefined>(undefined)
@@ -109,8 +120,8 @@ export default function AgentePage() {
     return () => document.removeEventListener("mousedown", handleClick)
   }, [])
 
-  // Load persistent history on mount
-  useEffect(() => {
+  function loadMessages() {
+    setLoadingHistory(true)
     api.agent.messages().then((rows: any[]) => {
       setMessages(rows.map(r => ({
         role: r.role,
@@ -119,6 +130,21 @@ export default function AgentePage() {
         actions: r.actions ?? undefined,
       })))
     }).catch(() => {}).finally(() => setLoadingHistory(false))
+  }
+
+  // Load persistent history on mount
+  useEffect(() => {
+    loadMessages()
+  }, [])
+
+  // Reload when active account switches
+  useEffect(() => {
+    function handleSwitch() {
+      setMessages([])
+      loadMessages()
+    }
+    window.addEventListener("account-switched", handleSwitch)
+    return () => window.removeEventListener("account-switched", handleSwitch)
   }, [])
 
   useEffect(() => {
@@ -139,6 +165,21 @@ export default function AgentePage() {
     if (!confirm("Apagar todo o histórico?")) return
     await api.agent.clearMessages()
     setMessages([])
+  }
+
+  async function loadLogs() {
+    setLogsLoading(true)
+    try {
+      const data = await api.agent.logs(30)
+      setLogs(Array.isArray(data) ? data : [])
+    } catch {} finally {
+      setLogsLoading(false)
+    }
+  }
+
+  function toggleLogs() {
+    if (!logsOpen) loadLogs()
+    setLogsOpen(v => !v)
   }
 
   async function send(text: string) {
@@ -168,12 +209,63 @@ export default function AgentePage() {
   return (
     <div className="flex flex-col" style={{ height: "calc(100vh - 3.5rem)" }}>
 
-      {/* Clear button */}
-      {messages.length > 0 && (
-        <div className="flex justify-end py-2 shrink-0">
+      {/* Top bar: logs toggle + clear */}
+      <div className="flex items-center justify-between py-2 shrink-0">
+        <button
+          onClick={toggleLogs}
+          className={cn("flex items-center gap-1.5 px-3 py-1.5 text-[11px] rounded-lg transition-colors",
+            logsOpen ? "text-violet-400 bg-violet-500/10" : "text-zinc-600 hover:text-zinc-300 hover:bg-white/[0.05]"
+          )}
+        >
+          <ListChecks size={11} />
+          Logs do agente
+          <ChevronDown size={10} className={cn("transition-transform", logsOpen && "rotate-180")} />
+        </button>
+        {messages.length > 0 && (
           <button onClick={clearHistory} className="flex items-center gap-1.5 px-3 py-1.5 text-[11px] text-zinc-600 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors">
             <Trash2 size={11} /> Limpar conversa
           </button>
+        )}
+      </div>
+
+      {/* Logs panel */}
+      {logsOpen && (
+        <div className="shrink-0 mb-2 bg-[#0e0e11] ring-1 ring-white/[0.07] rounded-xl overflow-hidden">
+          <div className="flex items-center justify-between px-4 py-2.5 border-b border-white/[0.06]">
+            <span className="text-[11px] font-semibold text-zinc-500 uppercase tracking-wider">Últimas 30 ações</span>
+            <button onClick={loadLogs} disabled={logsLoading} className="text-zinc-600 hover:text-zinc-400 transition-colors disabled:opacity-40">
+              <RefreshCw size={11} className={cn(logsLoading && "animate-spin")} />
+            </button>
+          </div>
+          <div className="max-h-48 overflow-y-auto scrollbar-thin divide-y divide-white/[0.04]">
+            {logsLoading && <div className="px-4 py-3 text-[11px] text-zinc-600">Carregando...</div>}
+            {!logsLoading && logs.length === 0 && <div className="px-4 py-3 text-[11px] text-zinc-600">Nenhuma ação registrada.</div>}
+            {logs.map(log => {
+              const ok = log.status === "success"
+              return (
+                <div key={log.id} className="flex items-start gap-3 px-4 py-2.5">
+                  {ok
+                    ? <CheckCircle2 size={11} className="text-emerald-400 shrink-0 mt-0.5" />
+                    : <XCircle size={11} className="text-red-400 shrink-0 mt-0.5" />
+                  }
+                  <div className="flex-1 min-w-0">
+                    <span className="text-[12px] font-medium text-zinc-300">{log.action}</span>
+                    {log.params && Object.keys(log.params).length > 0 && (
+                      <span className="ml-2 text-[10px] text-zinc-600 font-mono truncate">
+                        {JSON.stringify(log.params).slice(0, 80)}
+                      </span>
+                    )}
+                    {!ok && log.result?.error && (
+                      <p className="text-[11px] text-red-400/80 mt-0.5 truncate">{log.result.error}</p>
+                    )}
+                  </div>
+                  <span className="text-[10px] text-zinc-700 shrink-0">
+                    {new Date(log.created_at).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}
+                  </span>
+                </div>
+              )
+            })}
+          </div>
         </div>
       )}
 
@@ -272,13 +364,11 @@ export default function AgentePage() {
                     {msg.actions.map((a, j) => {
                       const m = TOOL_META[a.tool] ?? TOOL_META.get_campaigns
                       const Icon = m.icon
-                      const pending = a.result?.status === "pending_approval"
                       return (
                         <div key={j} className="flex items-center gap-2 px-3 py-2 bg-white/[0.03] ring-1 ring-white/[0.06] rounded-lg">
-                          {pending ? <Clock size={12} className="text-amber-400 shrink-0" /> : <CheckCircle2 size={12} className="text-emerald-400 shrink-0" />}
+                          <CheckCircle2 size={12} className="text-emerald-400 shrink-0" />
                           <Icon size={11} className={m.color} />
                           <span className="text-[12px] text-zinc-400">{m.label}</span>
-                          {pending && <span className="ml-auto text-[11px] text-amber-400">Aguarda aprovação</span>}
                         </div>
                       )
                     })}

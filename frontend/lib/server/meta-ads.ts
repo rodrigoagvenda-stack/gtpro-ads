@@ -4,35 +4,26 @@ import { getMetaAppId, getMetaAppSecret } from "./platform"
 
 const GRAPH = "https://graph.facebook.com/v20.0"
 
-async function getToken(tenantId: string): Promise<string> {
-  const supabase = createServiceClient()
-  const { data } = await supabase
-    .from("meta_connections")
-    .select("access_token_encrypted")
-    .eq("tenant_id", tenantId)
-    .eq("active", true)
-    .eq("is_active", true)
-    .single()
-  if (!data) throw new Error("Conta Meta não conectada")
-  return decrypt(data.access_token_encrypted)
+async function getToken(tenantId: string) {
+  const { token } = await getTokenAndAccount(tenantId)
+  return token
 }
 
-async function getAdAccountId(tenantId: string): Promise<string> {
+async function getTokenAndAccount(tenantId: string, connectionId?: string) {
   const supabase = createServiceClient()
-  const { data } = await supabase
+  let q = supabase
     .from("meta_connections")
-    .select("ad_account_id")
+    .select("access_token_encrypted, ad_account_id")
     .eq("tenant_id", tenantId)
     .eq("active", true)
-    .eq("is_active", true)
-    .single()
+  if (connectionId) {
+    q = (q as any).eq("id", connectionId)
+  } else {
+    q = (q as any).eq("is_active", true)
+  }
+  const { data } = await (q as any).single()
   if (!data) throw new Error("Conta Meta não conectada")
-  return data.ad_account_id
-}
-
-async function getTokenAndAccount(tenantId: string) {
-  const [token, adAccountId] = await Promise.all([getToken(tenantId), getAdAccountId(tenantId)])
-  return { token, adAccountId }
+  return { token: decrypt(data.access_token_encrypted), adAccountId: data.ad_account_id }
 }
 
 async function graphGet(path: string, params: Record<string, string>) {
@@ -73,8 +64,8 @@ export async function getAccountInfo(tenantId: string) {
 
 // ─── Campaigns ──────────────────────────────────────────────────────────────
 
-export async function getCampaigns(tenantId: string, datePreset = "last_7d") {
-  const { token, adAccountId } = await getTokenAndAccount(tenantId)
+export async function getCampaigns(tenantId: string, datePreset = "last_7d", connectionId?: string) {
+  const { token, adAccountId } = await getTokenAndAccount(tenantId, connectionId)
   const insightFields = "spend,impressions,clicks,reach,ctr,cpc,cpm,actions,action_values"
   const fields = `id,name,status,objective,daily_budget,lifetime_budget,start_time,stop_time,budget_remaining,buying_type,insights.date_preset(${datePreset}){${insightFields}}`
   const data = await graphGet(`/act_${adAccountId}/campaigns`, { access_token: token, fields, limit: "100" })

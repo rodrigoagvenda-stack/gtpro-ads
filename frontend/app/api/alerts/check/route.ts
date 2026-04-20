@@ -2,6 +2,7 @@ import { NextRequest } from "next/server"
 import { getTenant, unauthorized } from "@/lib/server/auth"
 import { createServiceClient } from "@/lib/server/supabase"
 import { getCampaigns, getInsights, getCampaignInsights } from "@/lib/server/meta-ads"
+import { sendText } from "@/lib/server/whatsapp"
 
 export async function POST(req: NextRequest) {
   const tenant = await getTenant(req)
@@ -9,9 +10,10 @@ export async function POST(req: NextRequest) {
   const tid = tenant.tenant_id
   const supabase = createServiceClient()
 
-  const { data: cfg } = await supabase.from("agent_configs").select("roas_minimo,cpl_maximo").eq("tenant_id", tid).single()
-  const roasMin = cfg?.roas_minimo ?? 2
-  const cplMax  = cfg?.cpl_maximo  ?? 50
+  const { data: cfg } = await supabase.from("agent_configs").select("roas_minimo,cpl_maximo,whatsapp_number").eq("tenant_id", tid).single()
+  const roasMin    = cfg?.roas_minimo   ?? 2
+  const cplMax     = cfg?.cpl_maximo   ?? 50
+  const whaPhone   = cfg?.whatsapp_number ? (cfg.whatsapp_number as string).replace(/\D/g, "") : null
 
   let campaigns: any[] = []
   let accountInsights: any = {}
@@ -28,6 +30,9 @@ export async function POST(req: NextRequest) {
     if (existing) return
     await supabase.from("alerts").insert({ tenant_id: tid, type, message, status: "active", campaign_id: campaignId ?? null })
     created.push(type)
+    if (whaPhone) {
+      try { await sendText(whaPhone, `🔔 *Alerta GTPRO*\n\n${message}`) } catch {}
+    }
   }
 
   // Account-level: ROAS baixo
