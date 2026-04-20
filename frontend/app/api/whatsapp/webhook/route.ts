@@ -242,54 +242,69 @@ export async function POST(req: NextRequest) {
 
   // ── Relatório — gerar ────────────────────────────────────────────────────────
   if (session.step === "report_period") {
-    const PERIODS: Record<string, string> = {
-      today:    "Hoje",
-      last_7d:  "Últimos 7 dias",
-      last_30d: "Últimos 30 dias",
-    }
+    const PERIODS: Record<string, string> = { today: "Hoje", last_7d: "7 dias", last_30d: "30 dias" }
     const datePreset  = PERIODS[intent] ? intent : "last_7d"
     const periodLabel = PERIODS[datePreset]
 
-    await sendText(from, "⏳ Gerando relatório...")
+    await sendText(from, "⏳ Buscando dados...")
 
     try {
       const campaigns = await getCampaigns(tenantId, datePreset)
-      const active    = campaigns.filter((c: any) => c.status === "ACTIVE")
+      if (!campaigns?.length) {
+        await sendText(from, "⚠️ Nenhuma campanha encontrada para este período.")
+      } else {
+        const active = campaigns.filter((c: any) => c.status === "ACTIVE")
+        const withData = campaigns.filter((c: any) => (c.metrics?.spend ?? 0) > 0)
 
-      const totalSpend       = campaigns.reduce((s: number, c: any) => s + (c.metrics?.spend       ?? 0), 0)
-      const totalImpressions = campaigns.reduce((s: number, c: any) => s + (c.metrics?.impressions ?? 0), 0)
-      const totalClicks      = campaigns.reduce((s: number, c: any) => s + (c.metrics?.clicks      ?? 0), 0)
-      const totalLeads       = campaigns.reduce((s: number, c: any) => s + (c.metrics?.leads       ?? 0), 0)
-      const avgCtr           = totalImpressions > 0 ? (totalClicks / totalImpressions) * 100 : 0
-      const avgCpl           = totalLeads > 0 ? totalSpend / totalLeads : 0
+        // Totais — apenas de campanhas com dados reais
+        const spend       = withData.reduce((s: number, c: any) => s + (c.metrics.spend       ?? 0), 0)
+        const impressions = withData.reduce((s: number, c: any) => s + (c.metrics.impressions ?? 0), 0)
+        const clicks      = withData.reduce((s: number, c: any) => s + (c.metrics.clicks      ?? 0), 0)
+        const leads       = withData.reduce((s: number, c: any) => s + (c.metrics.leads       ?? 0), 0)
+        const ctr         = impressions > 0 ? (clicks / impressions) * 100 : 0
+        const cpl         = leads > 0 ? spend / leads : 0
+        const roasArr     = withData.filter((c: any) => c.metrics?.roas > 0).map((c: any) => c.metrics.roas)
+        const roas        = roasArr.length ? roasArr.reduce((a: number, b: number) => a + b, 0) / roasArr.length : 0
 
-      const roasCampaigns = campaigns.filter((c: any) => c.metrics?.roas)
-      const avgRoas = roasCampaigns.length > 0
-        ? roasCampaigns.reduce((s: number, c: any) => s + c.metrics.roas, 0) / roasCampaigns.length
-        : 0
+        const brl = (n: number) => `R$${n.toFixed(2).replace(".", ",")}`
 
-      const top = [...campaigns].sort((a: any, b: any) => (b.metrics?.spend ?? 0) - (a.metrics?.spend ?? 0))[0]
+        const lines: string[] = [
+          `📊 *${periodLabel}* — ${active.length} ativas / ${campaigns.length} total`,
+          ``,
+          `💰 Gasto: *${brl(spend)}*`,
+          `👁 Impressões: *${impressions.toLocaleString("pt-BR")}*`,
+          `🖱 Cliques: *${clicks.toLocaleString("pt-BR")}* (CTR ${ctr.toFixed(2)}%)`,
+        ]
+        if (leads > 0)  lines.push(`🎯 Leads: *${leads}* | CPL *${brl(cpl)}*`)
+        if (roas  > 0)  lines.push(`⭐ ROAS médio: *${roas.toFixed(2)}x*`)
 
-      const fmt = (n: number) => `R$ ${n.toFixed(2).replace(".", ",")}`
+        // Top 3 por gasto (com dados reais)
+        const top3 = [...withData]
+          .sort((a: any, b: any) => b.metrics.spend - a.metrics.spend)
+          .slice(0, 3)
 
-      let report = `📊 *Relatório — ${periodLabel}*\n\n`
-      report += `💰 Gasto total: *${fmt(totalSpend)}*\n`
-      report += `👁️ Impressões: *${totalImpressions.toLocaleString("pt-BR")}*\n`
-      report += `🖱️ Cliques: *${totalClicks.toLocaleString("pt-BR")}*\n`
-      report += `📈 CTR médio: *${avgCtr.toFixed(2)}%*\n`
-      if (avgCpl > 0)  report += `💡 CPL médio: *${fmt(avgCpl)}*\n`
-      if (avgRoas > 0) report += `⭐ ROAS médio: *${avgRoas.toFixed(2)}x*\n`
-      report += `\n🟢 Campanhas ativas: *${active.length}*`
+        if (top3.length) {
+          lines.push(``, `🏆 *Top campanhas:*`)
+          for (const c of top3) {
+            const m = c.metrics
+            let line = `• ${c.name.slice(0, 30)}: ${brl(m.spend)}`
+            if (m.leads > 0)   line += ` | ${m.leads}L | ${brl(m.cpl)}/L`
+            else if (m.roas > 0) line += ` | ROAS ${m.roas.toFixed(2)}x`
+            else                 line += ` | CTR ${m.ctr?.toFixed(2) ?? 0}%`
+            lines.push(line)
+          }
+        }
 
-      if (top) {
-        report += `\n\n🏆 *Maior gasto:*\n${top.name}\n`
-        report += `Gasto: ${fmt(top.metrics?.spend ?? 0)}`
-        if (top.metrics?.roas) report += ` | ROAS: ${top.metrics.roas.toFixed(2)}x`
+        // Alertas de campanha ativa sem entrega
+        const semEntrega = active.filter((c: any) => (c.metrics?.impressions ?? 0) === 0)
+        if (semEntrega.length) {
+          lines.push(``, `⚠️ Sem entrega: ${semEntrega.map((c: any) => c.name.slice(0, 20)).join(", ")}`)
+        }
+
+        await sendText(from, lines.join("\n"))
       }
-
-      await sendText(from, report)
     } catch (e: any) {
-      await sendText(from, `❌ Erro ao gerar relatório: ${e.message}`)
+      await sendText(from, `❌ Erro: ${e.message}`)
     }
 
     await saveSession(from, tenantId, "menu")
@@ -300,10 +315,7 @@ export async function POST(req: NextRequest) {
   // ── Ações — entrar no modo ───────────────────────────────────────────────────
   if (intent === "acoes") {
     await saveSession(from, tenantId, "action")
-    await sendText(
-      from,
-      `⚡ *Modo de ações*\n\nDescreva o que deseja fazer. Exemplos:\n\n• _"Aumentar orçamento da campanha X em 5%"_\n• _"Pausar campanha Verão"_\n• _"Ativar campanha Promoção"_\n\nEnvie *menu* para voltar.`
-    )
+    await sendText(from, `⚡ *Ações*\n\nO que deseja fazer?\n_Ex: "Aumentar orçamento campanha X em 5%", "Pausar campanha Y"_\n\n_menu_ para voltar.`)
     return Response.json({ ok: true })
   }
 
@@ -320,33 +332,38 @@ export async function POST(req: NextRequest) {
       }
 
       const campaigns = await getCampaigns(tenantId, "today")
-      const campaignList = campaigns.map((c: any) => ({
-        id: c.id, name: c.name, status: c.status,
-        daily_budget: c.daily_budget ? c.daily_budget / 100 : null,
-      }))
+      // Só campanhas ativas, campos mínimos para o Claude
+      const activeCampaigns = campaigns
+        .filter((c: any) => c.status === "ACTIVE")
+        .slice(0, 15)
+        .map((c: any) => ({
+          id: c.id,
+          name: c.name,
+          budget_brl: c.daily_budget ? +(c.daily_budget / 100).toFixed(2) : null,
+        }))
 
       const client = new Anthropic({ apiKey: anthropicKey })
 
       const aiRes = await client.messages.create({
         model: "claude-haiku-4-5-20251001",
-        max_tokens: 512,
+        max_tokens: 256,
         tools: [
           {
             name: "update_budget",
-            description: "Atualiza o orçamento diário de uma campanha em BRL",
+            description: "Atualiza orçamento diário (BRL)",
             input_schema: {
               type: "object" as const,
               properties: {
                 campaign_id:   { type: "string" },
                 campaign_name: { type: "string" },
-                new_budget:    { type: "number", description: "Valor em BRL" },
+                new_budget:    { type: "number" },
               },
               required: ["campaign_id", "campaign_name", "new_budget"],
             },
           },
           {
             name: "set_campaign_status",
-            description: "Pausa ou ativa uma campanha",
+            description: "Pausa (PAUSED) ou ativa (ACTIVE) campanha",
             input_schema: {
               type: "object" as const,
               properties: {
@@ -358,10 +375,7 @@ export async function POST(req: NextRequest) {
             },
           },
         ],
-        system: `Você é um assistente de gestão de tráfego pago. Responda de forma objetiva e direta, em português.
-Campanhas disponíveis: ${JSON.stringify(campaignList)}
-Se o usuário pedir aumento/redução percentual, calcule o novo valor com base no daily_budget atual.
-Se não encontrar a campanha pelo nome, liste as disponíveis.`,
+        system: `Gestor de tráfego pago. Resposta curta em português. Campanhas ativas: ${JSON.stringify(activeCampaigns)}. Para % calcule sobre budget_brl.`,
         messages: [{ role: "user", content: text }],
       })
 
