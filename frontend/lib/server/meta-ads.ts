@@ -79,39 +79,56 @@ export async function getCampaigns(tenantId: string, datePreset = "last_7d") {
   const fields = `id,name,status,objective,daily_budget,lifetime_budget,start_time,stop_time,budget_remaining,buying_type,insights.date_preset(${datePreset}){${insightFields}}`
   const data = await graphGet(`/act_${adAccountId}/campaigns`, { access_token: token, fields, limit: "100" })
   return (data.data ?? []).map((c: any) => {
-    const ins = c.insights?.data?.[0] ?? {}
-    const spend = Number(ins.spend ?? 0)
-    const clicks = Number(ins.clicks ?? 0)
-    const impressions = Number(ins.impressions ?? 0)
-    // Lead: vários action_types possíveis dependendo do tipo de campanha
-    const LEAD_TYPES = [
-      "lead",
-      "onsite_conversion.lead_grouped",
-      "onsite_conversion.messaging_conversation_started_7d",
-      "contact_total",
-      "onsite_conversion.total_messaging_connection",
-      "onsite_conversion.post_save",
-    ]
-    const leadsAction = ins.actions?.find((a: any) => LEAD_TYPES.includes(a.action_type) && Number(a.value) > 0)
-    const leads = leadsAction?.value
+    const ins     = c.insights?.data?.[0] ?? {}
+    const actions = ins.actions ?? []
+    const spend   = Number(ins.spend ?? 0)
 
-    // Purchase/ROAS
+    const pick = (...types: string[]) => {
+      const a = actions.find((x: any) => types.includes(x.action_type) && Number(x.value) > 0)
+      return a ? Number(a.value) : null
+    }
+
+    // Leads / conversões
+    const leads = pick(
+      "lead", "onsite_conversion.lead_grouped",
+      "contact_total", "onsite_conversion.post_save",
+    )
+
+    // Conversas WhatsApp / Messenger
+    const conversations = pick(
+      "onsite_conversion.messaging_conversation_started_7d",
+      "onsite_conversion.total_messaging_connection",
+      "onsite_conversion.messaging_first_reply",
+    )
+
+    // Engajamento
+    const engagements = pick("post_engagement", "page_engagement")
+
+    // Compras / ROAS
     const PURCHASE_TYPES = ["purchase", "omni_purchase", "offsite_conversion.fb_pixel_purchase"]
-    const purchaseRev = ins.action_values?.find((a: any) => PURCHASE_TYPES.includes(a.action_type))?.value
-    const cpl = leads && spend > 0 ? spend / Number(leads) : null
+    const purchaseRev = (ins.action_values ?? []).find((a: any) => PURCHASE_TYPES.includes(a.action_type))?.value
+
     const roas = purchaseRev && spend > 0 ? Number(purchaseRev) / spend : null
+    const cpl  = leads && spend > 0 ? spend / leads : null
+    const cpc_conv = conversations && spend > 0 ? spend / conversations : null
+    const cpe  = engagements && spend > 0 ? spend / engagements : null
+
     return {
       ...c,
       metrics: {
         spend,
-        impressions,
-        clicks,
-        reach: Number(ins.reach ?? 0),
-        ctr: Number(ins.ctr ?? 0),
-        cpc: Number(ins.cpc ?? 0),
-        cpm: Number(ins.cpm ?? 0),
-        leads: leads ? Number(leads) : null,
+        impressions: Number(ins.impressions ?? 0),
+        clicks:      Number(ins.clicks ?? 0),
+        reach:       Number(ins.reach ?? 0),
+        ctr:         Number(ins.ctr ?? 0),
+        cpc:         Number(ins.cpc ?? 0),
+        cpm:         Number(ins.cpm ?? 0),
+        leads,
         cpl,
+        conversations,
+        cpc_conv,
+        engagements,
+        cpe,
         roas,
       },
     }

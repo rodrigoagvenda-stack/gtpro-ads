@@ -257,100 +257,102 @@ export async function POST(req: NextRequest) {
       if (!campaigns?.length) {
         await sendText(from, "⚠️ Nenhuma campanha encontrada.")
       } else {
-        const brl  = (n: number) => `R$${n.toFixed(2).replace(".", ",")}`
-        const nm   = (s: string) => s.replace(/\[|\]/g, "").slice(0, 22)
+        const brl = (n: number) => `R$${n.toFixed(2).replace(".", ",")}`
+        const nm  = (s: string) => s.replace(/\[|\]/g, "").trim().slice(0, 24)
 
         const active   = campaigns.filter((c: any) => c.status === "ACTIVE")
         const withData = campaigns.filter((c: any) => (c.metrics?.spend ?? 0) > 0)
-
-        // ── Totais reais ──────────────────────────────────────────────────────
         const totalSpend = withData.reduce((s: number, c: any) => s + c.metrics.spend, 0)
+
+        // Detectores de objetivo
+        const objIs = (obj: string, ...keys: string[]) =>
+          keys.some(k => (obj ?? "").toUpperCase().includes(k))
+
+        const objLabel = (obj: string) => obj?.replace("OUTCOME_", "").replace("_", " ") ?? "—"
+
+        // KPI principal por objetivo
+        function mainKpi(c: any) {
+          const m = c.metrics
+          const obj = c.objective ?? ""
+          if (objIs(obj, "MESSAGES", "ENGAG") && (m.conversations ?? 0) > 0)
+            return { value: m.conversations, cost: m.cpc_conv, label: "conv", type: "conv" }
+          if (objIs(obj, "ENGAG") && (m.engagements ?? 0) > 0)
+            return { value: m.engagements, cost: m.cpe, label: "eng", type: "eng" }
+          if ((m.leads ?? 0) > 0)
+            return { value: m.leads, cost: m.cpl, label: "leads", type: "lead" }
+          if ((m.roas ?? 0) > 0)
+            return { value: null, cost: null, label: `ROAS ${m.roas.toFixed(2)}x`, type: "roas" }
+          return { value: null, cost: null, label: `CTR ${m.ctr?.toFixed(2) ?? 0}%`, type: "traffic" }
+        }
+
+        // Totais por tipo de KPI
+        const totalConv  = withData.reduce((s: number, c: any) => s + (c.metrics.conversations ?? 0), 0)
         const totalLeads = withData.reduce((s: number, c: any) => s + (c.metrics.leads ?? 0), 0)
-        const totalCpl   = totalLeads > 0 ? totalSpend / totalLeads : 0
-
-        const roasCamps  = withData.filter((c: any) => (c.metrics.roas ?? 0) > 0)
-        const avgRoas    = roasCamps.length
-          ? roasCamps.reduce((s: number, c: any) => s + c.metrics.roas, 0) / roasCamps.length
-          : 0
-
-        // Campanhas classificadas por resultado (leads > ROAS > spend)
-        const ranked = [...withData].sort((a: any, b: any) => {
-          const aScore = (a.metrics.leads ?? 0) > 0 ? a.metrics.leads / a.metrics.spend : (a.metrics.roas ?? 0)
-          const bScore = (b.metrics.leads ?? 0) > 0 ? b.metrics.leads / b.metrics.spend : (b.metrics.roas ?? 0)
-          return bScore - aScore
-        })
-
-        const top3 = ranked.slice(0, 3)
-        const avgCpl = totalLeads > 0 ? totalSpend / totalLeads : 0
+        const roasArr    = withData.filter((c: any) => (c.metrics.roas ?? 0) > 0)
+        const avgRoas    = roasArr.length ? roasArr.reduce((s: number, c: any) => s + c.metrics.roas, 0) / roasArr.length : 0
 
         // ── Cabeçalho ─────────────────────────────────────────────────────────
-        const lines: string[] = [
-          `📊 *${periodLabel}* | ${active.length} ativas`,
-          `💰 Gasto: *${brl(totalSpend)}*`,
-        ]
+        const lines: string[] = [`📊 *${periodLabel}* | ${active.length} ativas | ${brl(totalSpend)}`]
 
-        // KPIs de resultado (dinheiro no bolso)
-        if (totalLeads > 0) {
-          lines.push(`🎯 Leads: *${totalLeads}* | CPL *${brl(totalCpl)}*`)
+        if (totalConv > 0)  lines.push(`💬 Conversas: *${totalConv}* | custo/conv *${brl(totalSpend / totalConv)}*`)
+        if (totalLeads > 0) lines.push(`🎯 Leads: *${totalLeads}* | CPL *${brl(totalSpend / totalLeads)}*`)
+        if (avgRoas > 0)    lines.push(`📈 ROAS médio: *${avgRoas.toFixed(2)}x*`)
+
+        // ── Por campanha (top 3 por gasto) ────────────────────────────────────
+        const top3 = [...withData].sort((a: any, b: any) => b.metrics.spend - a.metrics.spend).slice(0, 3)
+        const allKpis = top3.map(mainKpi)
+        const avgCost = allKpis.filter(k => k.cost).reduce((s, k) => s + k.cost!, 0) / (allKpis.filter(k => k.cost).length || 1)
+
+        lines.push(``, `*Campanhas:*`)
+        for (let i = 0; i < top3.length; i++) {
+          const c = top3[i]
+          const m = c.metrics
+          const kpi = allKpis[i]
+          const obj = objLabel(c.objective)
+
+          let flag = "➡️"
+          if (kpi.cost && avgCost > 0) flag = kpi.cost <= avgCost * 0.85 ? "✅" : kpi.cost >= avgCost * 1.4 ? "⚠️" : "➡️"
+          else if (kpi.type === "roas") flag = m.roas >= 3 ? "✅" : m.roas >= 1.5 ? "➡️" : "⚠️"
+          else if (kpi.type === "traffic") flag = m.ctr >= 1.5 ? "✅" : m.ctr >= 0.8 ? "➡️" : "⚠️"
+
+          let line = `${flag} *${nm(c.name)}* (${obj})`
+          if (kpi.value && kpi.cost) line += `\n   ${kpi.value} ${kpi.label} | ${brl(kpi.cost)}/${kpi.label.replace(/s$/, "")} | ${brl(m.spend)}`
+          else                       line += `\n   ${kpi.label} | ${brl(m.spend)}`
+          lines.push(line)
         }
-        if (avgRoas > 0) {
-          lines.push(`📈 ROAS médio: *${avgRoas.toFixed(2)}x*`)
-        }
 
-        // ── Campanhas — KPI pelo objetivo ────────────────────────────────────
-        const isLeadObj = (obj: string) => ["OUTCOME_LEADS","LEAD_GENERATION"].includes(obj?.toUpperCase() ?? "")
-        const isSalesObj = (obj: string) => ["OUTCOME_SALES","CONVERSIONS","PRODUCT_CATALOG_SALES"].includes(obj?.toUpperCase() ?? "")
+        // ── Análise + alertas ──────────────────────────────────────────────────
+        const alerts: string[] = []
 
-        if (top3.length) {
-          lines.push(``, `*Campanhas:*`)
-          for (const c of top3) {
-            const m = c.metrics
-            const name = nm(c.name)
-            const obj = (c.objective ?? "").replace("OUTCOME_", "")
-
-            if ((m.leads ?? 0) > 0) {
-              const flag = m.cpl <= avgCpl * 0.9 ? "✅" : m.cpl >= avgCpl * 1.3 ? "⚠️" : "➡️"
-              lines.push(`${flag} ${name} (${obj}): ${m.leads}L | CPL ${brl(m.cpl)} | ${brl(m.spend)}`)
-            } else if (isLeadObj(c.objective) && m.spend > 0) {
-              // Objetivo de lead mas sem conversões registradas
-              lines.push(`⚠️ ${name} (${obj}): sem leads | ${brl(m.spend)} gasto — checar pixel/evento`)
-            } else if ((m.roas ?? 0) > 0) {
-              const flag = m.roas >= 3 ? "✅" : m.roas >= 1.5 ? "➡️" : "⚠️"
-              lines.push(`${flag} ${name} (${obj}): ROAS ${m.roas.toFixed(2)}x | ${brl(m.spend)}`)
-            } else if (isSalesObj(c.objective) && m.spend > 0) {
-              lines.push(`⚠️ ${name} (${obj}): sem conversões | ${brl(m.spend)} gasto — checar pixel`)
-            } else {
-              const ctr = m.ctr ?? 0
-              const flag = ctr >= 1.5 ? "✅" : ctr >= 0.8 ? "➡️" : "⚠️"
-              lines.push(`${flag} ${name} (${obj}): CTR ${ctr.toFixed(2)}% | ${brl(m.spend)}`)
-            }
+        // Custo/resultado muito acima da média
+        for (let i = 0; i < top3.length; i++) {
+          const k = allKpis[i]
+          if (k.cost && k.cost > avgCost * 1.4) {
+            const obj = top3[i].objective ?? ""
+            const what = objIs(obj, "MESSAGES") ? "custo/conversa alto" : objIs(obj, "ENGAG") ? "custo/engajamento alto" : "CPL alto"
+            alerts.push(`${nm(top3[i].name)}: ${what} — testar novo criativo ou restringir público`)
           }
         }
 
-        // ── Análise ───────────────────────────────────────────────────────────
-        const analysis: string[] = []
+        // Lead gen sem leads
+        const semConversao = withData.filter((c: any) =>
+          (objIs(c.objective, "LEADS", "MESSAGES") && (c.metrics.leads ?? 0) === 0 && (c.metrics.conversations ?? 0) === 0)
+        )
+        if (semConversao.length)
+          alerts.push(`${semConversao.length} camp. sem conversão registrada — confirmar pixel/evento configurado`)
 
-        if (totalLeads > 0) {
-          const bestCpl = Math.min(...top3.filter((c: any) => c.metrics.leads > 0).map((c: any) => c.metrics.cpl))
-          const worstCpl = Math.max(...top3.filter((c: any) => c.metrics.leads > 0).map((c: any) => c.metrics.cpl))
-          if (worstCpl > bestCpl * 1.5) {
-            const worst = top3.find((c: any) => c.metrics.cpl === worstCpl)
-            analysis.push(`CPL de ${nm(worst.name)} ${((worstCpl / bestCpl - 1) * 100).toFixed(0)}% acima da melhor — revisar criativo ou público.`)
-          }
-        }
+        // Campanha ativa sem gasto
+        const semGasto = active.filter((c: any) => (c.metrics?.spend ?? 0) === 0)
+        if (semGasto.length)
+          alerts.push(`${semGasto.length} camp. ativa sem entrega — checar aprovação de anúncio ou limite de conta`)
 
-        if (avgRoas > 0 && avgRoas < 1.5) {
-          analysis.push(`ROAS médio abaixo de 1.5x — campanhas gastando mais do que retornam. Revisar orçamento.`)
-        }
+        // ROAS abaixo do ponto de equilíbrio
+        if (avgRoas > 0 && avgRoas < 1)
+          alerts.push(`ROAS ${avgRoas.toFixed(2)}x abaixo de 1 — está gastando mais do que retorna. Pausar e revisar`)
 
-        const semEntrega = active.filter((c: any) => (c.metrics?.spend ?? 0) === 0)
-        if (semEntrega.length) {
-          analysis.push(`${semEntrega.length} campanha(s) ativa(s) sem gasto no período — verificar aprovação ou público.`)
-        }
-
-        if (analysis.length) {
-          lines.push(``, `*Atenção:*`)
-          analysis.forEach(a => lines.push(`• ${a}`))
+        if (alerts.length) {
+          lines.push(``, `*⚠️ Atenção:*`)
+          alerts.forEach(a => lines.push(`• ${a}`))
         }
 
         await sendText(from, lines.join("\n"))
