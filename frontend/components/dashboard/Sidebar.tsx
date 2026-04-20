@@ -3,9 +3,11 @@
 import Link from "next/link"
 import Image from "next/image"
 import { usePathname, useRouter } from "next/navigation"
-import { Megaphone, Bot, FileText, Bell, Settings, LogOut, Zap, Link2, Home, Users, Building2 } from "lucide-react"
+import { Megaphone, Bot, FileText, Bell, Settings, LogOut, Zap, Link2, Home, Users, Building2, Shield } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { createClient } from "@/lib/supabase"
+import { useEffect, useState } from "react"
+import { api } from "@/lib/api"
 
 const NAV_MAIN = [
   { href: "/home",       label: "Home",           icon: Home },
@@ -50,6 +52,11 @@ export default function Sidebar() {
   const pathname = usePathname()
   const router = useRouter()
   const supabase = createClient()
+  const [isAdmin, setIsAdmin] = useState(false)
+
+  useEffect(() => {
+    api.get("/auth/me").then(me => { if (me?.is_admin) setIsAdmin(true) }).catch(() => {})
+  }, [])
 
   async function handleLogout() {
     await supabase.auth.signOut()
@@ -72,6 +79,9 @@ export default function Sidebar() {
 
       {/* Bottom nav */}
       <div className="px-2 pb-3 pt-2 border-t border-white/[0.05] space-y-0.5">
+        {isAdmin && (
+          <NavLink href="/admin" label="Admin" icon={Shield} active={pathname.startsWith("/admin")} />
+        )}
         {NAV_BOTTOM.map(({ href, label, icon }) => (
           <NavLink key={href} href={href} label={label} icon={icon} active={pathname.startsWith(href)} />
         ))}
