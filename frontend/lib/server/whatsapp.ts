@@ -24,11 +24,13 @@ function uazHeaders(apiKey: string) {
 export async function sendText(to: string, text: string): Promise<boolean> {
   const { baseUrl, apiKey, instance } = await getUazapiConfig()
   if (!baseUrl || !apiKey || !instance) return false
+  const number = to.includes("@") ? to : `${to}@s.whatsapp.net`
   const res = await fetch(`${baseUrl}/message/sendText/${instance}`, {
     method: "POST",
     headers: uazHeaders(apiKey),
-    body: JSON.stringify({ number: to, text }),
+    body: JSON.stringify({ number, text }),
   })
+  if (!res.ok) console.error("[sendText] error:", await res.text().catch(() => ""))
   return res.ok
 }
 
@@ -39,11 +41,13 @@ export async function sendButtons(
 ): Promise<boolean> {
   const { baseUrl, apiKey, instance } = await getUazapiConfig()
   if (!baseUrl || !apiKey || !instance) return false
+  const number = to.includes("@") ? to : `${to}@s.whatsapp.net`
+
   const res = await fetch(`${baseUrl}/message/sendButtons/${instance}`, {
     method: "POST",
     headers: uazHeaders(apiKey),
     body: JSON.stringify({
-      number: to,
+      number,
       title: "GTPRO",
       description: body,
       footer: "",
@@ -54,7 +58,14 @@ export async function sendButtons(
       })),
     }),
   })
-  return res.ok
+
+  if (res.ok) return true
+
+  // Fallback: envia texto com opções numeradas
+  const errText = await res.text().catch(() => "")
+  console.error("[sendButtons] failed, fallback to text. error:", errText)
+  const lines = buttons.map((b, i) => `${i + 1}. ${b.label}`).join("\n")
+  return sendText(to, `${body}\n\n${lines}`)
 }
 
 export async function sendList(
@@ -65,11 +76,13 @@ export async function sendList(
 ): Promise<boolean> {
   const { baseUrl, apiKey, instance } = await getUazapiConfig()
   if (!baseUrl || !apiKey || !instance) return false
+  const number = to.includes("@") ? to : `${to}@s.whatsapp.net`
+
   const res = await fetch(`${baseUrl}/message/sendList/${instance}`, {
     method: "POST",
     headers: uazHeaders(apiKey),
     body: JSON.stringify({
-      number: to,
+      number,
       title: "GTPRO",
       description: body,
       buttonText,
@@ -80,7 +93,14 @@ export async function sendList(
       }],
     }),
   })
-  return res.ok
+
+  if (res.ok) return true
+
+  // Fallback: texto numerado
+  const errText = await res.text().catch(() => "")
+  console.error("[sendList] failed, fallback to text. error:", errText)
+  const lines = rows.map((r, i) => `${i + 1}. ${r.title}`).join("\n")
+  return sendText(to, `${body}\n\n${lines}`)
 }
 
 // ─── Alert dispatch (provider-agnostic) ──────────────────────────────────────
