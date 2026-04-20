@@ -255,60 +255,101 @@ export async function POST(req: NextRequest) {
     try {
       const campaigns = await getCampaigns(tenantId, datePreset)
       if (!campaigns?.length) {
-        await sendText(from, "⚠️ Nenhuma campanha encontrada para este período.")
+        await sendText(from, "⚠️ Nenhuma campanha encontrada.")
       } else {
-        const active = campaigns.filter((c: any) => c.status === "ACTIVE")
+        const brl  = (n: number) => `R$${n.toFixed(2).replace(".", ",")}`
+        const nm   = (s: string) => s.replace(/\[|\]/g, "").slice(0, 22)
+
+        const active   = campaigns.filter((c: any) => c.status === "ACTIVE")
         const withData = campaigns.filter((c: any) => (c.metrics?.spend ?? 0) > 0)
 
-        // Totais — apenas de campanhas com dados reais
-        const spend       = withData.reduce((s: number, c: any) => s + (c.metrics.spend       ?? 0), 0)
-        const impressions = withData.reduce((s: number, c: any) => s + (c.metrics.impressions ?? 0), 0)
-        const clicks      = withData.reduce((s: number, c: any) => s + (c.metrics.clicks      ?? 0), 0)
-        const leads       = withData.reduce((s: number, c: any) => s + (c.metrics.leads       ?? 0), 0)
-        const ctr         = impressions > 0 ? (clicks / impressions) * 100 : 0
-        const cpl         = leads > 0 ? spend / leads : 0
-        const roasArr     = withData.filter((c: any) => c.metrics?.roas > 0).map((c: any) => c.metrics.roas)
-        const roas        = roasArr.length ? roasArr.reduce((a: number, b: number) => a + b, 0) / roasArr.length : 0
+        // ── Totais reais ──────────────────────────────────────────────────────
+        const totalSpend = withData.reduce((s: number, c: any) => s + c.metrics.spend, 0)
+        const totalLeads = withData.reduce((s: number, c: any) => s + (c.metrics.leads ?? 0), 0)
+        const totalCpl   = totalLeads > 0 ? totalSpend / totalLeads : 0
 
-        const brl = (n: number) => `R$${n.toFixed(2).replace(".", ",")}`
+        const roasCamps  = withData.filter((c: any) => (c.metrics.roas ?? 0) > 0)
+        const avgRoas    = roasCamps.length
+          ? roasCamps.reduce((s: number, c: any) => s + c.metrics.roas, 0) / roasCamps.length
+          : 0
 
+        // Campanhas classificadas por resultado (leads > ROAS > spend)
+        const ranked = [...withData].sort((a: any, b: any) => {
+          const aScore = (a.metrics.leads ?? 0) > 0 ? a.metrics.leads / a.metrics.spend : (a.metrics.roas ?? 0)
+          const bScore = (b.metrics.leads ?? 0) > 0 ? b.metrics.leads / b.metrics.spend : (b.metrics.roas ?? 0)
+          return bScore - aScore
+        })
+
+        const top3 = ranked.slice(0, 3)
+        const avgCpl = totalLeads > 0 ? totalSpend / totalLeads : 0
+
+        // ── Cabeçalho ─────────────────────────────────────────────────────────
         const lines: string[] = [
-          `📊 *${periodLabel}* — ${active.length} ativas / ${campaigns.length} total`,
-          ``,
-          `💰 Gasto: *${brl(spend)}*`,
-          `👁 Impressões: *${impressions.toLocaleString("pt-BR")}*`,
-          `🖱 Cliques: *${clicks.toLocaleString("pt-BR")}* (CTR ${ctr.toFixed(2)}%)`,
+          `📊 *${periodLabel}* | ${active.length} ativas`,
+          `💰 Gasto: *${brl(totalSpend)}*`,
         ]
-        if (leads > 0)  lines.push(`🎯 Leads: *${leads}* | CPL *${brl(cpl)}*`)
-        if (roas  > 0)  lines.push(`⭐ ROAS médio: *${roas.toFixed(2)}x*`)
 
-        // Top 3 por gasto (com dados reais)
-        const top3 = [...withData]
-          .sort((a: any, b: any) => b.metrics.spend - a.metrics.spend)
-          .slice(0, 3)
+        // KPIs de resultado (dinheiro no bolso)
+        if (totalLeads > 0) {
+          lines.push(`🎯 Leads: *${totalLeads}* | CPL *${brl(totalCpl)}*`)
+        }
+        if (avgRoas > 0) {
+          lines.push(`📈 ROAS médio: *${avgRoas.toFixed(2)}x*`)
+        }
 
+        // ── Campanhas — apenas KPIs de resultado ─────────────────────────────
         if (top3.length) {
-          lines.push(``, `🏆 *Top campanhas:*`)
+          lines.push(``, `*Campanhas:*`)
           for (const c of top3) {
             const m = c.metrics
-            let line = `• ${c.name.slice(0, 30)}: ${brl(m.spend)}`
-            if (m.leads > 0)   line += ` | ${m.leads}L | ${brl(m.cpl)}/L`
-            else if (m.roas > 0) line += ` | ROAS ${m.roas.toFixed(2)}x`
-            else                 line += ` | CTR ${m.ctr?.toFixed(2) ?? 0}%`
-            lines.push(line)
+            const name = nm(c.name)
+            if ((m.leads ?? 0) > 0) {
+              // Lead gen — foco em CPL e volume
+              const efficiency = m.cpl <= avgCpl * 0.9 ? "✅" : m.cpl >= avgCpl * 1.3 ? "⚠️" : "➡️"
+              lines.push(`${efficiency} ${name}: ${m.leads}L | CPL ${brl(m.cpl)} | ${brl(m.spend)}`)
+            } else if ((m.roas ?? 0) > 0) {
+              // E-commerce — foco em ROAS
+              const flag = m.roas >= 3 ? "✅" : m.roas >= 1.5 ? "➡️" : "⚠️"
+              lines.push(`${flag} ${name}: ROAS ${m.roas.toFixed(2)}x | ${brl(m.spend)}`)
+            } else {
+              // Tráfego/awareness — CTR é o que importa
+              const ctr = m.ctr ?? 0
+              const flag = ctr >= 1.5 ? "✅" : ctr >= 0.8 ? "➡️" : "⚠️"
+              lines.push(`${flag} ${name}: CTR ${ctr.toFixed(2)}% | ${brl(m.spend)}`)
+            }
           }
         }
 
-        // Alertas de campanha ativa sem entrega
-        const semEntrega = active.filter((c: any) => (c.metrics?.impressions ?? 0) === 0)
+        // ── Análise ───────────────────────────────────────────────────────────
+        const analysis: string[] = []
+
+        if (totalLeads > 0) {
+          const bestCpl = Math.min(...top3.filter((c: any) => c.metrics.leads > 0).map((c: any) => c.metrics.cpl))
+          const worstCpl = Math.max(...top3.filter((c: any) => c.metrics.leads > 0).map((c: any) => c.metrics.cpl))
+          if (worstCpl > bestCpl * 1.5) {
+            const worst = top3.find((c: any) => c.metrics.cpl === worstCpl)
+            analysis.push(`CPL de ${nm(worst.name)} ${((worstCpl / bestCpl - 1) * 100).toFixed(0)}% acima da melhor — revisar criativo ou público.`)
+          }
+        }
+
+        if (avgRoas > 0 && avgRoas < 1.5) {
+          analysis.push(`ROAS médio abaixo de 1.5x — campanhas gastando mais do que retornam. Revisar orçamento.`)
+        }
+
+        const semEntrega = active.filter((c: any) => (c.metrics?.spend ?? 0) === 0)
         if (semEntrega.length) {
-          lines.push(``, `⚠️ Sem entrega: ${semEntrega.map((c: any) => c.name.slice(0, 20)).join(", ")}`)
+          analysis.push(`${semEntrega.length} campanha(s) ativa(s) sem gasto no período — verificar aprovação ou público.`)
+        }
+
+        if (analysis.length) {
+          lines.push(``, `*Atenção:*`)
+          analysis.forEach(a => lines.push(`• ${a}`))
         }
 
         await sendText(from, lines.join("\n"))
       }
     } catch (e: any) {
-      await sendText(from, `❌ Erro: ${e.message}`)
+      await sendText(from, `❌ Erro ao gerar relatório: ${e.message}`)
     }
 
     await saveSession(from, tenantId, "menu")
