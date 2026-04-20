@@ -106,13 +106,17 @@ const MAIN_MENU_BUTTONS = [
 
 export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => null)
+  console.log("[WA webhook] body:", JSON.stringify(body))
   if (!body) return Response.json({ ok: true })
 
   const msg = parseIncoming(body)
+  console.log("[WA webhook] parsed msg:", JSON.stringify(msg))
   if (!msg) return Response.json({ ok: true })
 
   const { from, text, buttonId, listId } = msg
+  console.log("[WA webhook] from:", from, "text:", text)
   const tenant = await getTenantByPhone(from)
+  console.log("[WA webhook] tenant:", JSON.stringify(tenant))
   if (!tenant) return Response.json({ ok: true })
 
   const tenantId = tenant.tenant_id
