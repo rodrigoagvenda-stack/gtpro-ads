@@ -283,7 +283,13 @@ export async function POST(req: NextRequest) {
   console.log("[WA webhook] from:", from, "text:", text)
   const tenant = await getTenantByPhone(from)
   console.log("[WA webhook] tenant:", JSON.stringify(tenant))
-  if (!tenant) return Response.json({ ok: true })
+  if (!tenant) {
+    await sendText(
+      from,
+      `Olá! 👋\n\nVerifiquei aqui e seu número não está vinculado a nenhuma conta GTPRO.\n\nPossíveis motivos:\n• Você enviou de um número diferente do cadastrado\n• Sua conta ainda não está ativa\n\nPara resolver, entre em contato pelo número cadastrado na sua conta ou acesse *gtpro.vendai.pro* para contratar um plano. 🚀`
+    )
+    return Response.json({ ok: true })
+  }
 
   const tenantId = tenant.tenant_id
   const session  = await getSession(from)
