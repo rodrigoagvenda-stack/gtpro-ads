@@ -297,25 +297,32 @@ export async function POST(req: NextRequest) {
           lines.push(`📈 ROAS médio: *${avgRoas.toFixed(2)}x*`)
         }
 
-        // ── Campanhas — apenas KPIs de resultado ─────────────────────────────
+        // ── Campanhas — KPI pelo objetivo ────────────────────────────────────
+        const isLeadObj = (obj: string) => ["OUTCOME_LEADS","LEAD_GENERATION"].includes(obj?.toUpperCase() ?? "")
+        const isSalesObj = (obj: string) => ["OUTCOME_SALES","CONVERSIONS","PRODUCT_CATALOG_SALES"].includes(obj?.toUpperCase() ?? "")
+
         if (top3.length) {
           lines.push(``, `*Campanhas:*`)
           for (const c of top3) {
             const m = c.metrics
             const name = nm(c.name)
+            const obj = (c.objective ?? "").replace("OUTCOME_", "")
+
             if ((m.leads ?? 0) > 0) {
-              // Lead gen — foco em CPL e volume
-              const efficiency = m.cpl <= avgCpl * 0.9 ? "✅" : m.cpl >= avgCpl * 1.3 ? "⚠️" : "➡️"
-              lines.push(`${efficiency} ${name}: ${m.leads}L | CPL ${brl(m.cpl)} | ${brl(m.spend)}`)
+              const flag = m.cpl <= avgCpl * 0.9 ? "✅" : m.cpl >= avgCpl * 1.3 ? "⚠️" : "➡️"
+              lines.push(`${flag} ${name} (${obj}): ${m.leads}L | CPL ${brl(m.cpl)} | ${brl(m.spend)}`)
+            } else if (isLeadObj(c.objective) && m.spend > 0) {
+              // Objetivo de lead mas sem conversões registradas
+              lines.push(`⚠️ ${name} (${obj}): sem leads | ${brl(m.spend)} gasto — checar pixel/evento`)
             } else if ((m.roas ?? 0) > 0) {
-              // E-commerce — foco em ROAS
               const flag = m.roas >= 3 ? "✅" : m.roas >= 1.5 ? "➡️" : "⚠️"
-              lines.push(`${flag} ${name}: ROAS ${m.roas.toFixed(2)}x | ${brl(m.spend)}`)
+              lines.push(`${flag} ${name} (${obj}): ROAS ${m.roas.toFixed(2)}x | ${brl(m.spend)}`)
+            } else if (isSalesObj(c.objective) && m.spend > 0) {
+              lines.push(`⚠️ ${name} (${obj}): sem conversões | ${brl(m.spend)} gasto — checar pixel`)
             } else {
-              // Tráfego/awareness — CTR é o que importa
               const ctr = m.ctr ?? 0
               const flag = ctr >= 1.5 ? "✅" : ctr >= 0.8 ? "➡️" : "⚠️"
-              lines.push(`${flag} ${name}: CTR ${ctr.toFixed(2)}% | ${brl(m.spend)}`)
+              lines.push(`${flag} ${name} (${obj}): CTR ${ctr.toFixed(2)}% | ${brl(m.spend)}`)
             }
           }
         }

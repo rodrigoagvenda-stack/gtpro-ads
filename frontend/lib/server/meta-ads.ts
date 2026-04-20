@@ -83,8 +83,21 @@ export async function getCampaigns(tenantId: string, datePreset = "last_7d") {
     const spend = Number(ins.spend ?? 0)
     const clicks = Number(ins.clicks ?? 0)
     const impressions = Number(ins.impressions ?? 0)
-    const leads = ins.actions?.find((a: any) => a.action_type === "lead")?.value
-    const purchaseRev = ins.action_values?.find((a: any) => a.action_type === "purchase")?.value
+    // Lead: vários action_types possíveis dependendo do tipo de campanha
+    const LEAD_TYPES = [
+      "lead",
+      "onsite_conversion.lead_grouped",
+      "onsite_conversion.messaging_conversation_started_7d",
+      "contact_total",
+      "onsite_conversion.total_messaging_connection",
+      "onsite_conversion.post_save",
+    ]
+    const leadsAction = ins.actions?.find((a: any) => LEAD_TYPES.includes(a.action_type) && Number(a.value) > 0)
+    const leads = leadsAction?.value
+
+    // Purchase/ROAS
+    const PURCHASE_TYPES = ["purchase", "omni_purchase", "offsite_conversion.fb_pixel_purchase"]
+    const purchaseRev = ins.action_values?.find((a: any) => PURCHASE_TYPES.includes(a.action_type))?.value
     const cpl = leads && spend > 0 ? spend / Number(leads) : null
     const roas = purchaseRev && spend > 0 ? Number(purchaseRev) / spend : null
     return {
