@@ -50,7 +50,7 @@ async function analyzeForTenant(
 
   const client = new Anthropic({ apiKey: anthropicKey })
 
-  const systemPrompt = `Você é GTPRO, especialista em Meta Ads. Responda SEMPRE em português brasileiro.
+  const systemPrompt = `Você é GTPRO, especialista em Meta Ads. Responda SEMPRE em português brasileiro com acentuação completa e correta. NUNCA omita acentos (escreva "não" não "nao", "análise" não "analise", "ação" não "acao").
 
 Faça uma análise proativa e objetiva das campanhas. Seu foco são resultados reais: conversas iniciadas, leads, CPL, ROAS. Ignore métricas de vaidade.
 

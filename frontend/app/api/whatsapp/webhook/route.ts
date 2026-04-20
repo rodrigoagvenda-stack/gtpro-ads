@@ -170,7 +170,7 @@ async function runReportAgent(
   const minRoas = agentConfig?.min_roas ?? 2
   const maxCpl  = agentConfig?.max_cpl  ?? 50
 
-  const systemPrompt = `Você é GTPRO, especialista em Meta Ads. Responda em português brasileiro.
+  const systemPrompt = `Você é GTPRO, especialista em Meta Ads. Responda SEMPRE em português brasileiro com acentuação completa e correta. NUNCA omita acentos (escreva "não" não "nao", "análise" não "analise", "ação" não "acao").
 
 METAS DO CLIENTE: CPL máximo R$${maxCpl} | ROAS mínimo ${minRoas}x
 
