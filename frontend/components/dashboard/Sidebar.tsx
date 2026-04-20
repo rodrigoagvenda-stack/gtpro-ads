@@ -55,7 +55,15 @@ export default function Sidebar() {
   const [isAdmin, setIsAdmin] = useState(false)
 
   useEffect(() => {
-    api.get("/auth/me").then(me => { if (me?.is_admin) setIsAdmin(true) }).catch(() => {})
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (!session) return
+      const email = session.user.email
+      if (email === "admin@vendai.pro" || email === process.env.NEXT_PUBLIC_SUPER_ADMIN_EMAIL) {
+        setIsAdmin(true)
+        return
+      }
+      api.get("/auth/me").then(me => { if (me?.is_admin) setIsAdmin(true) }).catch(() => {})
+    })
   }, [])
 
   async function handleLogout() {
