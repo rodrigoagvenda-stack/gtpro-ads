@@ -472,32 +472,35 @@ export { encrypt, getToken }
 // Top 15 active (by spend) + top 5 paused with actual results (so the agent
 // can surface "you paused a high-performing campaign" insights).
 // Anything else (archived, zero-spend active, ancient paused) is excluded.
-export function filterCampaignsForAgent(campaigns: any[]): any[] {
-  // Active with spend in period, top 20 by spend
+// datePreset used to label the paused note — campaigns with spend > 0 in the
+// period were actually running during that period, regardless of current status.
+export function filterCampaignsForAgent(
+  campaigns: any[],
+  includeInactive = false,
+  _datePreset = "last_7d",
+): any[] {
   const active = campaigns
     .filter(c => c.status === "ACTIVE" && (c.metrics?.spend ?? 0) > 0)
     .sort((a, b) => (b.metrics?.spend ?? 0) - (a.metrics?.spend ?? 0))
     .slice(0, 20)
 
-  // Paused with spend in period — ranked by efficiency, not volume
-  // Lower CPL = better lead campaign; higher ROAS = better sales campaign
-  // Campaigns with no CPL/ROAS fallback to cost per conversation, then spend
+  if (!includeInactive) return active
+
   const efficiencyScore = (c: any): number => {
-    const m = c.metrics
+    const m   = c.metrics
     const obj = (c.objective ?? "").toUpperCase()
-    if (obj.includes("SALES") || obj.includes("PURCHASE")) {
-      return (m.roas ?? 0) * 1000 // higher ROAS = better
-    }
-    if (m.cpl && m.cpl > 0)   return 10000 / m.cpl   // lower CPL = higher score
-    if (m.cpc_conv && m.cpc_conv > 0) return 1000 / m.cpc_conv
+    if (obj.includes("SALES") || obj.includes("PURCHASE")) return (m.roas ?? 0) * 1000
+    if (m.cpl      && m.cpl      > 0) return 10000 / m.cpl
+    if (m.cpc_conv && m.cpc_conv > 0) return 1000  / m.cpc_conv
     return m.spend ?? 0
   }
 
+  // Only include paused campaigns that had spend in the selected period
   const paused = campaigns
     .filter(c => c.status === "PAUSED" && (c.metrics?.spend ?? 0) > 0)
     .sort((a, b) => efficiencyScore(b) - efficiencyScore(a))
     .slice(0, 5)
-    .map(c => ({ ...c, _agent_note: "PAUSADA no período — estava ativa e gerando resultado" }))
+    .map(c => ({ ...c, _agent_note: "PAUSADA — rodou e teve resultado neste período" }))
 
   return [...active, ...paused]
 }

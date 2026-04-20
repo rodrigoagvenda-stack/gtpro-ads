@@ -151,44 +151,58 @@ function splitIntoBlocks(text: string, maxLen: number): string[] {
   return result.length ? result : [text.slice(0, maxLen)]
 }
 
-async function runReportAgent(tenantId: string, datePreset: string, periodLabel: string): Promise<string> {
+async function runReportAgent(
+  tenantId: string,
+  datePreset: string,
+  periodLabel: string,
+  includeInactive: boolean,
+): Promise<string> {
   const anthropicKey = await getAnthropicKey()
   if (!anthropicKey) throw new Error("Anthropic API Key não configurada na plataforma")
 
   const supabase = createServiceClient()
   const { data: agentConfig } = await supabase
     .from("agent_configs")
-    .select("min_roas, max_cpl, supervised_mode")
+    .select("min_roas, max_cpl")
     .eq("tenant_id", tenantId)
     .single()
 
   const minRoas = agentConfig?.min_roas ?? 2
   const maxCpl  = agentConfig?.max_cpl  ?? 50
 
-  const systemPrompt = `Você é GTPRO, especialista em Meta Ads (Facebook/Instagram Ads). Responda SEMPRE em português brasileiro.
+  const systemPrompt = `Você é GTPRO, especialista em Meta Ads. Responda em português brasileiro.
 
-Seu foco é resultado real: conversas iniciadas, leads gerados, CPL, ROAS. NÃO cite impressões, alcance ou CTR como métricas principais (são vaidade).
+METAS DO CLIENTE: CPL máximo R$${maxCpl} | ROAS mínimo ${minRoas}x
 
-Para campanhas de MENSAGENS/ENGAJAMENTO: foque em conversas e custo por conversa.
-Para LEADS: foque em leads, CPL vs meta (R$${maxCpl}).
-Para VENDAS/COMPRAS: foque em ROAS vs meta (${minRoas}x).
+REGRAS ABSOLUTAS:
+- NUNCA faça perguntas. NUNCA peça confirmação. Apenas analise e entregue.
+- Foco em resultado: conversas, leads, CPL, ROAS. Ignore impressões/alcance/CTR.
+- Por objetivo: MENSAGENS→conversas+custo/conv | LEADS→leads+CPL | VENDAS→ROAS | ENGAJAMENTO→engajamentos+custo
+- Se campanha tem _agent_note, mencione que estava pausada e avalie se fazia sentido pausar.
 
-Inclua análise por campanha, por conjunto de anúncios se disponível, e alertas de ação clara (o que fazer agora).
+ESTRUTURA OBRIGATÓRIA (exatamente 3 blocos separados por ---):
 
-Divida sua resposta em blocos de no máximo 700 caracteres, separando cada bloco com uma linha contendo apenas ---
-Comece pelo resumo geral, depois detalhes por campanha, depois análise e recomendações.`
+BLOCO 1 — RESUMO GERAL
+Emoji + período + total gasto + campanhas ativas + KPI principal do período (o número mais importante). Máx 300 chars.
+
+BLOCO 2 — CAMPANHAS
+Uma linha por campanha (máx 5). Formato: [emoji status] *Nome* | [KPI] | R$[gasto]
+✅ = dentro da meta | ⚠️ = acima da meta | 🔴 = crítico | 🔵 = pausada
+Máx 500 chars.
+
+BLOCO 3 — ANÁLISE E AÇÃO
+O que está bom, o que está mal, e exatamente o que fazer agora. Direto ao ponto, sem rodeios. Máx 500 chars.`
 
   const reportTools: Anthropic.Tool[] = [
     {
       name: "get_campaigns",
-      description: "Busca todas as campanhas do Meta Ads com métricas do período",
+      description: "Busca campanhas do Meta Ads com métricas do período",
       input_schema: {
         type: "object",
         properties: {
           date_preset: {
             type: "string",
             enum: ["today", "last_7d", "last_30d", "last_14d"],
-            description: "Período das métricas",
           },
         },
         required: ["date_preset"],
@@ -200,14 +214,14 @@ Comece pelo resumo geral, depois detalhes por campanha, depois análise e recome
   const messages: Anthropic.MessageParam[] = [
     {
       role: "user",
-      content: `Gere um relatório completo do período: ${periodLabel}. Use a ferramenta get_campaigns com date_preset "${datePreset}". Analise profundamente os dados e forneça insights acionáveis.`,
+      content: `Gere o relatório do período: ${periodLabel}. Chame get_campaigns com date_preset "${datePreset}". Siga a estrutura de 3 blocos.`,
     },
   ]
 
   for (let i = 0; i < 6; i++) {
     const response = await client.messages.create({
       model: "claude-sonnet-4-6",
-      max_tokens: 4096,
+      max_tokens: 2048,
       system: systemPrompt,
       tools: reportTools,
       messages,
@@ -234,7 +248,9 @@ Comece pelo resumo geral, depois detalhes por campanha, depois análise e recome
           if (block.name === "get_campaigns") {
             const input = block.input as { date_preset?: string }
             const all = await getCampaigns(tenantId, input.date_preset ?? datePreset)
-            result = Array.isArray(all) ? filterCampaignsForAgent(all) : all
+            result = Array.isArray(all)
+              ? filterCampaignsForAgent(all, includeInactive, input.date_preset ?? datePreset)
+              : all
           } else {
             result = { error: "tool not available" }
           }
@@ -242,11 +258,7 @@ Comece pelo resumo geral, depois detalhes por campanha, depois análise e recome
           result = { error: e.message }
         }
 
-        toolResults.push({
-          type: "tool_result",
-          tool_use_id: block.id,
-          content: JSON.stringify(result),
-        })
+        toolResults.push({ type: "tool_result", tool_use_id: block.id, content: JSON.stringify(result) })
       }
 
       messages.push({ role: "user", content: toolResults })
@@ -378,16 +390,33 @@ export async function POST(req: NextRequest) {
     return Response.json({ ok: true })
   }
 
-  // ── Relatório — gerar ────────────────────────────────────────────────────────
+  // ── Relatório — escolher filtro de status ────────────────────────────────────
   if (session.step === "report_period") {
     const PERIODS: Record<string, string> = { today: "Hoje", last_7d: "Últimos 7 dias", last_30d: "Últimos 30 dias" }
     const datePreset  = PERIODS[intent] ? intent : "last_7d"
     const periodLabel = PERIODS[datePreset]
 
-    await sendText(from, "⏳ Consultando o agente GTPRO...")
+    await saveSession(from, tenantId, "report_filter", { datePreset, periodLabel })
+    await sendButtons(
+      from,
+      `Período: *${periodLabel}*\n\nQuer incluir campanhas pausadas no relatório?`,
+      [
+        { id: "filter_active",   label: "✅ Só ativas"      },
+        { id: "filter_all",      label: "📊 Incluir pausadas" },
+      ]
+    )
+    return Response.json({ ok: true })
+  }
+
+  // ── Relatório — gerar ────────────────────────────────────────────────────────
+  if (session.step === "report_filter") {
+    const includeInactive = intent === "filter_all"
+    const { datePreset, periodLabel } = session.context as { datePreset: string; periodLabel: string }
+
+    await sendText(from, "⏳ Agente GTPRO gerando relatório, por favor aguarde...")
 
     try {
-      const reportText = await runReportAgent(tenantId, datePreset, periodLabel)
+      const reportText = await runReportAgent(tenantId, datePreset, periodLabel, includeInactive)
       const blocks = splitIntoBlocks(reportText, 700)
       for (const block of blocks) {
         await sendText(from, block)

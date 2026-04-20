@@ -114,7 +114,7 @@ NÃO comece com "Olá ${userName}" — isso é adicionado automaticamente.`
         try {
           const input = block.input as { date_preset?: string }
           const all = await getCampaigns(tenantId, input.date_preset ?? "last_7d")
-          result = Array.isArray(all) ? filterCampaignsForAgent(all) : all
+          result = Array.isArray(all) ? filterCampaignsForAgent(all, false, input.date_preset ?? "last_7d") : all
         } catch (e: any) {
           result = { error: e.message }
         }
