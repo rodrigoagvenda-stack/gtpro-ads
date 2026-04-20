@@ -16,32 +16,37 @@ function normalizePhone(raw: string): string {
 
 function parseIncoming(body: any): { from: string; text: string; buttonId?: string; listId?: string } | null {
   try {
+    // UazAPI format
+    if (body.message && body.chat) {
+      const m = body.message
+      if (m.fromMe) return null
+
+      const from = normalizePhone(m.chatid ?? body.chat.wa_chatid ?? "")
+      if (!from) return null
+
+      const text     = m.text || m.content || ""
+      const buttonId = m.buttonOrListid || undefined
+
+      return { from, text, buttonId: buttonId || undefined }
+    }
+
+    // Evolution API / generic format fallback
     const data = body.data ?? body
-    const key = data.key ?? {}
+    const key  = data.key ?? {}
     if (key.fromMe) return null
 
     const from = normalizePhone(key.remoteJid ?? "")
     if (!from) return null
 
     const msg = data.message ?? {}
-
-    if (msg.conversation)                    return { from, text: msg.conversation }
-    if (msg.extendedTextMessage?.text)       return { from, text: msg.extendedTextMessage.text }
+    if (msg.conversation)              return { from, text: msg.conversation }
+    if (msg.extendedTextMessage?.text) return { from, text: msg.extendedTextMessage.text }
 
     if (msg.buttonsResponseMessage) {
-      return {
-        from,
-        text: msg.buttonsResponseMessage.selectedDisplayText ?? "",
-        buttonId: msg.buttonsResponseMessage.selectedButtonId,
-      }
+      return { from, text: msg.buttonsResponseMessage.selectedDisplayText ?? "", buttonId: msg.buttonsResponseMessage.selectedButtonId }
     }
-
     if (msg.listResponseMessage) {
-      return {
-        from,
-        text: msg.listResponseMessage.title ?? "",
-        listId: msg.listResponseMessage.singleSelectReply?.selectedRowId,
-      }
+      return { from, text: msg.listResponseMessage.title ?? "", listId: msg.listResponseMessage.singleSelectReply?.selectedRowId }
     }
 
     return null
