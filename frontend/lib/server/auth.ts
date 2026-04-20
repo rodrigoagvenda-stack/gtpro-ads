@@ -17,7 +17,11 @@ export async function getTenant(req: NextRequest): Promise<TenantContext | null>
   try {
     const supabase = createServiceClient()
     const { data: { user } } = await supabase.auth.getUser(token)
-    if (user) return { tenant_id: user.id, auth_type: "jwt" }
+    if (user) {
+      // New users have tenant_id in app_metadata; legacy users have user.id == tenant.id
+      const tenantId = user.app_metadata?.tenant_id ?? user.id
+      return { tenant_id: tenantId, auth_type: "jwt" }
+    }
   } catch {}
 
   // Tenta como API Key (para MAX e agentes externos)

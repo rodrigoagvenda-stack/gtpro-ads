@@ -52,7 +52,7 @@ export default function CadastroPage() {
       return
     }
 
-    router.push("/campanhas")
+    router.push("/onboarding")
   }
 
   const inputCls = "w-full px-3.5 py-2.5 bg-white/[0.04] ring-1 ring-white/[0.08] rounded-lg text-[13px] text-white placeholder-zinc-600 focus:outline-none focus:ring-violet-500/50 transition-all"

@@ -472,6 +472,7 @@ function AlertasTab() {
 
 function WhatsAppTab() {
   const [cfg, setCfg] = useState({ provider: "", uazapi_url: "", uazapi_key: "", uazapi_instance: "", official_token: "", official_phone_id: "", whatsapp_number: "", user_name: "", alerts_whatsapp_enabled: false, daily_analysis_enabled: false, daily_analysis_morning: 9, daily_analysis_afternoon: 15, qr: null as string | null, connected: false, _token_saved: false })
+  const [isAdmin, setIsAdmin] = useState(false)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
@@ -479,8 +480,12 @@ function WhatsAppTab() {
   const pollRef = useRef<ReturnType<typeof setInterval> | undefined>(undefined)
 
   async function load() {
-    const d = await api.get("/settings/whatsapp").catch(() => null)
+    const [d, me] = await Promise.all([
+      api.get("/settings/whatsapp").catch(() => null),
+      api.get("/auth/me").catch(() => null),
+    ])
     if (d) setCfg(prev => ({ ...prev, ...d }))
+    if (me?.is_admin) setIsAdmin(true)
     setLoading(false)
   }
 
@@ -520,8 +525,8 @@ function WhatsAppTab() {
 
   return (
     <div className="space-y-4 max-w-xl">
-      {/* Provider */}
-      <Card>
+      {/* Provider — admin only */}
+      {isAdmin && <Card>
         <h2 className="text-[13px] font-semibold text-zinc-200">Número GTPRO</h2>
         <p className="text-[12px] text-zinc-600 -mt-3">Número de envio único para todos os clientes. Configure uma vez, todos recebem.</p>
 
@@ -585,7 +590,7 @@ function WhatsAppTab() {
         )}
 
         {cfg.provider && <SaveBtn saving={saving} saved={saved} onClick={save} label={cfg.provider === "uazapi" && !cfg.connected ? "Salvar e gerar QR" : "Salvar"} />}
-      </Card>
+      </Card>}
 
       {/* Tenant number */}
       <Card>
