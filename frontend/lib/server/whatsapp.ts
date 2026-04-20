@@ -6,6 +6,85 @@ async function getPlatformSetting(key: string): Promise<string> {
   return data?.value_encrypted ?? ""
 }
 
+async function getUazapiConfig() {
+  const [baseUrl, apiKey, instance] = await Promise.all([
+    getPlatformSetting("whatsapp_uazapi_url"),
+    getPlatformSetting("whatsapp_uazapi_key"),
+    getPlatformSetting("whatsapp_uazapi_instance"),
+  ])
+  return { baseUrl, apiKey, instance }
+}
+
+function uazHeaders(apiKey: string) {
+  return { "Content-Type": "application/json", "Authorization": `Bearer ${apiKey}` }
+}
+
+// ─── Public send helpers (UazAPI only) ───────────────────────────────────────
+
+export async function sendText(to: string, text: string): Promise<boolean> {
+  const { baseUrl, apiKey, instance } = await getUazapiConfig()
+  if (!baseUrl || !apiKey || !instance) return false
+  const res = await fetch(`${baseUrl}/message/sendText/${instance}`, {
+    method: "POST",
+    headers: uazHeaders(apiKey),
+    body: JSON.stringify({ number: to, text }),
+  })
+  return res.ok
+}
+
+export async function sendButtons(
+  to: string,
+  body: string,
+  buttons: { id: string; label: string }[]
+): Promise<boolean> {
+  const { baseUrl, apiKey, instance } = await getUazapiConfig()
+  if (!baseUrl || !apiKey || !instance) return false
+  const res = await fetch(`${baseUrl}/message/sendButtons/${instance}`, {
+    method: "POST",
+    headers: uazHeaders(apiKey),
+    body: JSON.stringify({
+      number: to,
+      title: "GTPRO",
+      description: body,
+      footer: "",
+      buttons: buttons.map(b => ({
+        buttonId: b.id,
+        buttonText: { displayText: b.label },
+        type: 1,
+      })),
+    }),
+  })
+  return res.ok
+}
+
+export async function sendList(
+  to: string,
+  body: string,
+  buttonText: string,
+  rows: { id: string; title: string; subtitle?: string }[]
+): Promise<boolean> {
+  const { baseUrl, apiKey, instance } = await getUazapiConfig()
+  if (!baseUrl || !apiKey || !instance) return false
+  const res = await fetch(`${baseUrl}/message/sendList/${instance}`, {
+    method: "POST",
+    headers: uazHeaders(apiKey),
+    body: JSON.stringify({
+      number: to,
+      title: "GTPRO",
+      description: body,
+      buttonText,
+      footer: "",
+      sections: [{
+        title: "Opções",
+        rows: rows.map(r => ({ rowId: r.id, title: r.title, description: r.subtitle ?? "" })),
+      }],
+    }),
+  })
+  return res.ok
+}
+
+// ─── Alert dispatch (provider-agnostic) ──────────────────────────────────────
+
 export async function sendWhatsApp(to: string, message: string): Promise<boolean> {
   const provider = await getPlatformSetting("whatsapp_provider")
   if (!provider || !to) return false
@@ -13,17 +92,7 @@ export async function sendWhatsApp(to: string, message: string): Promise<boolean
   const phone = to.replace(/\D/g, "")
 
   if (provider === "uazapi") {
-    const baseUrl  = await getPlatformSetting("whatsapp_uazapi_url")
-    const apiKey   = await getPlatformSetting("whatsapp_uazapi_key")
-    const instance = await getPlatformSetting("whatsapp_uazapi_instance")
-    if (!baseUrl || !apiKey || !instance) return false
-
-    const res = await fetch(`${baseUrl}/message/sendText/${instance}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "Authorization": `Bearer ${apiKey}` },
-      body: JSON.stringify({ number: `${phone}@s.whatsapp.net`, text: message }),
-    })
-    return res.ok
+    return sendText(phone, message)
   }
 
   if (provider === "official") {
@@ -42,10 +111,10 @@ export async function sendWhatsApp(to: string, message: string): Promise<boolean
   return false
 }
 
+// ─── QR Code ─────────────────────────────────────────────────────────────────
+
 export async function getUazapiQR(): Promise<{ qr: string | null; status: string }> {
-  const baseUrl  = await getPlatformSetting("whatsapp_uazapi_url")
-  const apiKey   = await getPlatformSetting("whatsapp_uazapi_key")
-  const instance = await getPlatformSetting("whatsapp_uazapi_instance")
+  const { baseUrl, apiKey, instance } = await getUazapiConfig()
   if (!baseUrl || !apiKey || !instance) return { qr: null, status: "not_configured" }
 
   const statusRes = await fetch(`${baseUrl}/instance/connectionState/${instance}`, {

@@ -508,6 +508,21 @@ function WhatsAppTab() {
             <Field label="Token"><input type="password" placeholder="seu-token" value={cfg.uazapi_key} onChange={e => setCfg(c => ({ ...c, uazapi_key: e.target.value }))} className={inputCls} /></Field>
             <Field label="Nome da instância"><input type="text" placeholder="gtpro-alertas" value={cfg.uazapi_instance} onChange={e => setCfg(c => ({ ...c, uazapi_instance: e.target.value }))} className={inputCls} /></Field>
 
+            <Field label="URL do Webhook (cole na UazAPI)">
+              <div className="flex items-center gap-2 bg-white/[0.04] ring-1 ring-white/[0.08] rounded-lg px-3 py-2.5">
+                <span className="flex-1 text-[12px] text-zinc-400 truncate select-all">
+                  {typeof window !== "undefined" ? `${window.location.origin}/api/whatsapp/webhook` : "/api/whatsapp/webhook"}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => navigator.clipboard.writeText(`${window.location.origin}/api/whatsapp/webhook`)}
+                  className="text-[11px] text-violet-400 hover:text-violet-300 shrink-0 transition-colors"
+                >
+                  Copiar
+                </button>
+              </div>
+            </Field>
+
             {cfg.connected ? (
               <div className="flex items-center gap-2.5 px-4 py-3 bg-emerald-500/10 ring-1 ring-emerald-500/20 rounded-xl">
                 <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
