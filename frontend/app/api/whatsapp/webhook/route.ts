@@ -126,16 +126,26 @@ export async function POST(req: NextRequest) {
 
   const tenantId = tenant.tenant_id
   const session  = await getSession(from)
+  console.log("[WA webhook] session:", JSON.stringify(session))
   const intent   = (buttonId ?? listId ?? text).toLowerCase().trim()
+  console.log("[WA webhook] intent:", intent)
 
   // ── Menu trigger ────────────────────────────────────────────────────────────
   const isMenuTrigger =
     session.step === "idle" ||
     ["menu", "oi", "ola", "olá", "inicio", "início", "voltar", "start"].includes(intent)
 
+  console.log("[WA webhook] isMenuTrigger:", isMenuTrigger)
+
   if (isMenuTrigger) {
     await saveSession(from, tenantId, "menu")
-    await sendButtons(from, `${greeting()}! 👋 Sou o assistente GTPRO.\nComo posso te ajudar?`, MAIN_MENU_BUTTONS)
+    console.log("[WA webhook] sending buttons to:", from)
+    try {
+      const result = await sendButtons(from, `${greeting()}! 👋 Sou o assistente GTPRO.\nComo posso te ajudar?`, MAIN_MENU_BUTTONS)
+      console.log("[WA webhook] sendButtons result:", result)
+    } catch (e: any) {
+      console.error("[WA webhook] sendButtons error:", e.message)
+    }
     return Response.json({ ok: true })
   }
 
