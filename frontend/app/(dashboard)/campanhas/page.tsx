@@ -137,6 +137,49 @@ function MetricsPicker({ objective, selected, onChange }: {
   )
 }
 
+// ─── Objective → Meta API objective filter ────────────────────────────────────
+
+const OBJECTIVE_META_MAP: Record<ObjectiveId, string[]> = {
+  geral:       [],
+  ecommerce:   ["OUTCOME_SALES"],
+  leads:       ["OUTCOME_LEADS"],
+  whatsapp:    ["MESSAGES", "OUTCOME_TRAFFIC"],
+  engajamento: ["OUTCOME_ENGAGEMENT", "POST_ENGAGEMENT", "PAGE_ENGAGEMENT", "VIDEO_VIEWS"],
+  trafego:     ["OUTCOME_TRAFFIC", "LINK_CLICKS", "WEBSITE_CONVERSIONS"],
+  seguidores:  ["OUTCOME_AWARENESS", "PAGE_LIKES"],
+}
+
+// Aggregates insights from campaigns filtered by objective.
+// Falls back to account-level insights when no matching campaigns.
+function objectiveInsights(campaigns: Campaign[], obj: ObjectiveId, fallback: Record<string, any>): Record<string, any> {
+  if (obj === "geral") return fallback
+  const wanted  = OBJECTIVE_META_MAP[obj]
+  const subset  = campaigns.filter(c => wanted.some(w => c.objective?.includes(w)))
+  if (subset.length === 0) return fallback
+
+  const sumF = (key: string) => subset.reduce((a, c) => a + (Number((c.metrics as any)[key]) || 0), 0)
+  const fakeAct = (val: number, ...types: string[]) =>
+    val > 0 ? types.map(t => ({ action_type: t, value: String(val) })) : []
+
+  const leads = sumF("leads")
+  const convs = sumF("conversations") || sumF("messaging_conversations")
+  const engs  = sumF("engagements")
+  const likes = sumF("page_likes")
+
+  return {
+    impressions: sumF("impressions"),
+    reach:       sumF("reach"),
+    clicks:      sumF("clicks"),
+    spend:       sumF("spend"),
+    actions: [
+      ...fakeAct(leads, "lead"),
+      ...fakeAct(convs, "onsite_conversion.messaging_conversation_started_7d"),
+      ...fakeAct(engs,  "post_engagement"),
+      ...fakeAct(likes, "like"),
+    ],
+  }
+}
+
 // ─── Dynamic funnel ───────────────────────────────────────────────────────────
 
 function buildFunnel(obj: ObjectiveId, insights: Record<string, any>) {
@@ -338,9 +381,10 @@ export default function CampanhasPage() {
     setCampaigns(prev => prev.map(c => c.id === id ? { ...c, status: next as Campaign["status"] } : c))
   }
 
-  const totalSpend  = campaigns.reduce((a, c) => a + (c.metrics?.spend || 0), 0)
-  const funnelSteps = buildFunnel(objective, insights)
-  const maxVal      = funnelSteps[0]?.value || 1
+  const totalSpend     = campaigns.reduce((a, c) => a + (c.metrics?.spend || 0), 0)
+  const funnelData     = objectiveInsights(campaigns, objective, insights)
+  const funnelSteps    = buildFunnel(objective, funnelData)
+  const maxVal         = funnelSteps[0]?.value || 1
   const metricDefs  = getMetricDefs(selectedMetrics)
 
   return (
