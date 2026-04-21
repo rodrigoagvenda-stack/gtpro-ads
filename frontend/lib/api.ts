@@ -113,6 +113,8 @@ export const api = {
 
   leads: {
     list: (datePreset = "last_30d") => fetchWithAuth(`/leads?date_preset=${datePreset}`),
+    convert: (id: string, value?: number) =>
+      fetchWithAuth(`/leads/${id}/convert`, { method: "POST", body: JSON.stringify({ value }) }),
   },
 
   alertsConfig: {

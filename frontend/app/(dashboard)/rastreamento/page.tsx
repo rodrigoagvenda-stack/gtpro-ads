@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useCallback, useEffect } from "react"
-import { Copy, Check, Link2, ChevronDown, RefreshCw, Users, Key, RotateCcw, ExternalLink } from "lucide-react"
+import { Copy, Check, Link2, ChevronDown, RefreshCw, Users, Key, RotateCcw, ExternalLink, TrendingUp } from "lucide-react"
 import { api } from "@/lib/api"
 
 // ─── shared helpers ────────────────────────────────────────────────────────────
@@ -203,7 +203,8 @@ function UtmTab() {
 type Lead = {
   id: string; name: string | null; email: string | null; phone: string | null
   utm_source: string | null; utm_campaign: string | null; utm_content: string | null; utm_term: string | null
-  created_at: string; source: string
+  created_at: string; source: string; converted_at: string | null; conversion_value: number | null
+  capi_lead_sent: boolean; capi_purchase_sent: boolean
 }
 
 function groupBy<T>(arr: T[], key: (item: T) => string): Record<string, T[]> {
@@ -212,6 +213,83 @@ function groupBy<T>(arr: T[], key: (item: T) => string): Record<string, T[]> {
     acc[k] = [...(acc[k] ?? []), item]
     return acc
   }, {} as Record<string, T[]>)
+}
+
+function LeadsTable({ leads, onConverted }: {
+  leads: Lead[]
+  onConverted: (id: string, converted_at: string, value?: number) => void
+}) {
+  const [converting, setConverting] = useState<string | null>(null)
+
+  async function handleConvert(lead: Lead) {
+    const input = window.prompt(`Valor da venda em R$ (opcional) — ${lead.name ?? lead.email ?? lead.id}`)
+    if (input === null) return
+    const value = input.trim() ? parseFloat(input.replace(",", ".")) : undefined
+    setConverting(lead.id)
+    try {
+      const res = await api.leads.convert(lead.id, value)
+      onConverted(lead.id, res.converted_at, value)
+    } catch {
+      alert("Erro ao marcar como convertido.")
+    } finally {
+      setConverting(null)
+    }
+  }
+
+  return (
+    <div className="bg-white/[0.03] border border-white/[0.07] rounded-xl overflow-hidden">
+      <div className="px-4 py-3 border-b border-white/[0.06] flex items-center justify-between">
+        <span className="text-[12px] font-semibold text-zinc-400 uppercase tracking-wider">Últimos leads</span>
+        <span className="text-[11px] text-zinc-600">{leads.filter(l => l.converted_at).length} convertidos</span>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full text-[12px]">
+          <thead>
+            <tr className="border-b border-white/[0.05]">
+              {["Nome", "Contato", "Campanha", "Conjunto", "Data", "Status", ""].map(h => (
+                <th key={h} className="px-4 py-2.5 text-left text-[11px] text-zinc-600 font-medium">{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {leads.slice(0, 50).map(l => (
+              <tr key={l.id} className={`border-b border-white/[0.03] hover:bg-white/[0.02] transition-colors ${l.converted_at ? "opacity-75" : ""}`}>
+                <td className="px-4 py-2.5 text-zinc-300">{l.name ?? "—"}</td>
+                <td className="px-4 py-2.5 text-zinc-500 max-w-[160px] truncate">{l.email ?? l.phone ?? "—"}</td>
+                <td className="px-4 py-2.5 text-zinc-400 max-w-[130px] truncate" title={l.utm_campaign ?? ""}>{l.utm_campaign ?? "—"}</td>
+                <td className="px-4 py-2.5 text-zinc-400 max-w-[130px] truncate" title={l.utm_content ?? ""}>{l.utm_content ?? "—"}</td>
+                <td className="px-4 py-2.5 text-zinc-600 whitespace-nowrap">{new Date(l.created_at).toLocaleDateString("pt-BR")}</td>
+                <td className="px-4 py-2.5">
+                  {l.converted_at ? (
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 text-[11px] font-medium">
+                      <TrendingUp size={9} />
+                      {l.conversion_value ? `R$ ${l.conversion_value.toFixed(0)}` : "Convertido"}
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-white/[0.06] text-zinc-500 text-[11px]">
+                      Lead
+                    </span>
+                  )}
+                </td>
+                <td className="px-4 py-2.5">
+                  {!l.converted_at && (
+                    <button
+                      onClick={() => handleConvert(l)}
+                      disabled={converting === l.id}
+                      className="flex items-center gap-1 px-2.5 py-1 rounded-md bg-violet-600/20 hover:bg-violet-600/30 border border-violet-500/20 text-violet-300 text-[11px] transition-colors disabled:opacity-50"
+                    >
+                      <TrendingUp size={10} />
+                      {converting === l.id ? "..." : "Converter"}
+                    </button>
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  )
 }
 
 function LeadsTab() {
@@ -349,34 +427,9 @@ function LeadsTab() {
 
       {/* Leads table */}
       {leads.length > 0 && (
-        <div className="bg-white/[0.03] border border-white/[0.07] rounded-xl overflow-hidden">
-          <div className="px-4 py-3 border-b border-white/[0.06]">
-            <span className="text-[12px] font-semibold text-zinc-400 uppercase tracking-wider">Últimos leads</span>
-          </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-[12px]">
-              <thead>
-                <tr className="border-b border-white/[0.05]">
-                  {["Nome", "Email / WhatsApp", "Campanha", "Conjunto", "Criativo", "Data"].map(h => (
-                    <th key={h} className="px-4 py-2.5 text-left text-[11px] text-zinc-600 font-medium">{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {leads.slice(0, 50).map(l => (
-                  <tr key={l.id} className="border-b border-white/[0.03] hover:bg-white/[0.02] transition-colors">
-                    <td className="px-4 py-2.5 text-zinc-300">{l.name ?? "—"}</td>
-                    <td className="px-4 py-2.5 text-zinc-500">{l.email ?? l.phone ?? "—"}</td>
-                    <td className="px-4 py-2.5 text-zinc-400 max-w-[140px] truncate" title={l.utm_campaign ?? ""}>{l.utm_campaign ?? "—"}</td>
-                    <td className="px-4 py-2.5 text-zinc-400 max-w-[140px] truncate" title={l.utm_content ?? ""}>{l.utm_content ?? "—"}</td>
-                    <td className="px-4 py-2.5 text-zinc-400 max-w-[140px] truncate" title={l.utm_term ?? ""}>{l.utm_term ?? "—"}</td>
-                    <td className="px-4 py-2.5 text-zinc-600 whitespace-nowrap">{new Date(l.created_at).toLocaleDateString("pt-BR")}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
+        <LeadsTable leads={leads} onConverted={(id, at, val) => {
+          setLeads(prev => prev.map(l => l.id === id ? { ...l, converted_at: at, conversion_value: val ?? null } : l))
+        }} />
       )}
     </div>
   )
