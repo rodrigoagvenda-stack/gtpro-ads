@@ -79,10 +79,11 @@ export async function getCampaigns(tenantId: string, datePreset = "last_7d", con
       return a ? Number(a.value) : null
     }
 
-    // Leads / conversões
+    // Leads / conversões — somente ações genuínas de lead
     const leads = pick(
-      "lead", "onsite_conversion.lead_grouped",
-      "contact_total", "onsite_conversion.post_save",
+      "lead",
+      "onsite_conversion.lead_grouped",
+      "offsite_conversion.lead_custom",
     )
 
     // Conversas WhatsApp / Messenger

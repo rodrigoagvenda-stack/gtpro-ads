@@ -44,9 +44,11 @@ export async function checkAndNotifyAlerts(tenantId: string): Promise<{ created:
     await upsertAlert("roas_baixo", `ROAS da conta está em ${roas.toFixed(2)}x (mínimo configurado: ${roasMin}x).`)
   }
 
+  const LEAD_OBJECTIVES = ["LEAD_GENERATION", "OUTCOME_LEADS", "LEADS"]
   for (const c of active) {
     const m = c.metrics ?? {}
-    if (m.cpl && m.cpl > cplMax) {
+    // CPL só faz sentido para campanhas com objetivo de lead
+    if (m.cpl && m.cpl > cplMax && LEAD_OBJECTIVES.includes(c.objective?.toUpperCase?.())) {
       await upsertAlert("cpl_alto", `Campanha "${c.name}" com CPL R$ ${m.cpl.toFixed(2)} (limite: R$ ${cplMax}).`, c.id)
     }
     if (c.daily_budget && m.spend && m.spend >= c.daily_budget * 0.95) {
