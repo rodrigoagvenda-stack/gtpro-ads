@@ -107,24 +107,30 @@ function MetricsPicker({ objective, selected, onChange }: {
         Métricas
       </button>
       {open && (
-        <div className="absolute right-0 top-8 z-50 bg-zinc-900 ring-1 ring-white/[0.1] rounded-xl p-3 shadow-xl w-52 space-y-1">
-          <p className="text-[10px] text-zinc-600 uppercase tracking-wider mb-2">Colunas da tabela</p>
-          {ALL_METRIC_DEFS.map(def => (
+        <div className="absolute right-0 top-8 z-50 bg-zinc-900 ring-1 ring-white/[0.1] rounded-xl shadow-xl w-56 flex flex-col">
+          <div className="px-3 pt-3 pb-1">
+            <p className="text-[10px] text-zinc-600 uppercase tracking-wider">Colunas da tabela</p>
+          </div>
+          <div className="overflow-y-auto max-h-72 px-2 space-y-0.5 scrollbar-thin">
+            {ALL_METRIC_DEFS.map(def => (
+              <button
+                key={def.key}
+                onClick={() => toggle(def.key)}
+                className="w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg hover:bg-white/[0.05] transition-colors"
+              >
+                <span className="text-[12px] text-zinc-300">{def.label}</span>
+                {selected.includes(def.key) && <Check size={11} className="text-violet-400" />}
+              </button>
+            ))}
+          </div>
+          <div className="px-2 pb-2 pt-1 border-t border-white/[0.06] mt-1">
             <button
-              key={def.key}
-              onClick={() => toggle(def.key)}
-              className="w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg hover:bg-white/[0.05] transition-colors"
+              onClick={() => { onChange(DEFAULT_METRICS[objective]); saveCustomMetrics(objective, DEFAULT_METRICS[objective]) }}
+              className="w-full text-center text-[11px] text-zinc-600 hover:text-zinc-400 py-1.5 transition-colors"
             >
-              <span className="text-[12px] text-zinc-300">{def.label}</span>
-              {selected.includes(def.key) && <Check size={11} className="text-violet-400" />}
+              Restaurar padrão
             </button>
-          ))}
-          <button
-            onClick={() => { onChange(DEFAULT_METRICS[objective]); saveCustomMetrics(objective, DEFAULT_METRICS[objective]) }}
-            className="w-full text-center text-[11px] text-zinc-600 hover:text-zinc-400 pt-1.5 border-t border-white/[0.06] transition-colors"
-          >
-            Restaurar padrão
-          </button>
+          </div>
         </div>
       )}
     </div>
@@ -175,10 +181,12 @@ function buildFunnel(obj: ObjectiveId, insights: Record<string, any>) {
       break
     }
     case "seguidores": {
-      const likes = act("like")
+      const likes    = act("like")
+      const follows  = act("follow") || act("onsite_conversion.post_follow")
       steps.push({ label: "Impressões", value: impressions })
-      if (reach > 0) steps.push({ label: "Alcance", value: reach })
-      if (likes > 0) steps.push({ label: "Curtidas", value: likes })
+      if (reach > 0)   steps.push({ label: "Alcance",          value: reach })
+      if (likes > 0)   steps.push({ label: "Curtidas/Pág.",    value: likes })
+      if (follows > 0) steps.push({ label: "Novos Seguidores", value: follows })
       break
     }
     case "trafego":
