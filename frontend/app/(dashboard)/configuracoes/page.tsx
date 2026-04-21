@@ -158,47 +158,46 @@ function AgenteTab() {
 
 // ─── Tab: Meta Ads ────────────────────────────────────────────────────────────
 
-interface MetaAccount { id: string; ad_account_id: string; name: string; is_active: boolean; created_at: string }
+interface MetaAccount { id: string; ad_account_id: string; name: string; is_active: boolean; created_at: string; pixel_id: string | null }
 
 function AccountRenameRow({ acc, onRenamed }: { acc: MetaAccount; onRenamed: () => void }) {
-  const [editing, setEditing] = useState(false)
-  const [value, setValue] = useState(acc.name || "")
-  const [saving, setSaving] = useState(false)
+  const [editingName, setEditingName]   = useState(false)
+  const [editingPixel, setEditingPixel] = useState(false)
+  const [name, setName]                 = useState(acc.name || "")
+  const [pixelId, setPixelId]           = useState(acc.pixel_id || "")
+  const [saving, setSaving]             = useState(false)
 
-  async function save() {
-    if (!value.trim()) return
+  async function saveName() {
+    if (!name.trim()) return
+    setSaving(true)
+    try { await api.meta.renameAccount(acc.id, name.trim()); onRenamed(); setEditingName(false) }
+    catch {} finally { setSaving(false) }
+  }
+
+  async function savePixel() {
     setSaving(true)
     try {
-      await api.meta.renameAccount(acc.id, value.trim())
-      onRenamed()
-      setEditing(false)
+      await api.patch(`/meta/accounts/${acc.id}`, { pixel_id: pixelId.trim() || null })
+      onRenamed(); setEditingPixel(false)
     } catch {} finally { setSaving(false) }
   }
 
   return (
-    <div className={cn("flex items-center justify-between px-4 py-3 rounded-lg ring-1 transition-colors",
+    <div className={cn("px-4 py-3 rounded-lg ring-1 transition-colors space-y-2",
       acc.is_active ? "bg-violet-500/10 ring-violet-500/30" : "bg-white/[0.02] ring-white/[0.06]"
     )}>
-      <div className="flex items-center gap-3 flex-1 min-w-0">
+      {/* Name row */}
+      <div className="flex items-center gap-3">
         <div className={cn("w-2 h-2 rounded-full shrink-0", acc.is_active ? "bg-violet-400" : "bg-zinc-600")} />
         <div className="flex-1 min-w-0">
-          {editing ? (
+          {editingName ? (
             <div className="flex items-center gap-2">
-              <input
-                autoFocus
-                value={value}
-                onChange={e => setValue(e.target.value)}
-                onKeyDown={e => { if (e.key === "Enter") save(); if (e.key === "Escape") setEditing(false) }}
-                maxLength={20}
-                placeholder="Até 20 caracteres (ex: Tocli - BM)"
-                className="flex-1 bg-white/[0.06] ring-1 ring-violet-500/50 rounded-md px-2.5 py-1 text-[12px] text-white focus:outline-none"
-              />
-              <button onClick={save} disabled={saving} className="px-2.5 py-1 text-[11px] bg-violet-600 hover:bg-violet-500 disabled:opacity-50 text-white rounded-md transition-colors">
-                {saving ? "..." : "OK"}
-              </button>
-              <button onClick={() => setEditing(false)} className="px-2.5 py-1 text-[11px] text-zinc-500 hover:text-zinc-300 transition-colors">
-                ✕
-              </button>
+              <input autoFocus value={name} onChange={e => setName(e.target.value)}
+                onKeyDown={e => { if (e.key === "Enter") saveName(); if (e.key === "Escape") setEditingName(false) }}
+                maxLength={20} placeholder="Até 20 caracteres"
+                className="flex-1 bg-white/[0.06] ring-1 ring-violet-500/50 rounded-md px-2.5 py-1 text-[12px] text-white focus:outline-none" />
+              <button onClick={saveName} disabled={saving} className="px-2.5 py-1 text-[11px] bg-violet-600 hover:bg-violet-500 disabled:opacity-50 text-white rounded-md">{saving ? "..." : "OK"}</button>
+              <button onClick={() => setEditingName(false)} className="px-2.5 py-1 text-[11px] text-zinc-500 hover:text-zinc-300">✕</button>
             </div>
           ) : (
             <div className="flex items-center gap-2 group">
@@ -206,19 +205,37 @@ function AccountRenameRow({ acc, onRenamed }: { acc: MetaAccount; onRenamed: () 
                 <p className="text-[13px] font-medium text-zinc-200">{acc.name || <span className="text-zinc-600 italic">sem nome</span>}</p>
                 <p className="text-[11px] text-zinc-600 mt-0.5">{acc.ad_account_id} · {new Date(acc.created_at).toLocaleDateString("pt-BR")}</p>
               </div>
-              <button onClick={() => { setValue(acc.name || ""); setEditing(true) }}
+              <button onClick={() => { setName(acc.name || ""); setEditingName(true) }}
                 className="opacity-0 group-hover:opacity-100 transition-opacity p-1 hover:bg-white/[0.06] rounded-md">
                 <Pencil size={11} className="text-zinc-500" />
               </button>
             </div>
           )}
         </div>
+        {acc.is_active && <span className="text-[11px] text-violet-400 font-medium shrink-0">Ativa</span>}
       </div>
-      <div className="shrink-0 ml-3">
-        {acc.is_active
-          ? <span className="text-[11px] text-violet-400 font-medium">Ativa</span>
-          : null
-        }
+
+      {/* Pixel ID row */}
+      <div className="pl-5">
+        {editingPixel ? (
+          <div className="flex items-center gap-2">
+            <input autoFocus value={pixelId} onChange={e => setPixelId(e.target.value)}
+              onKeyDown={e => { if (e.key === "Enter") savePixel(); if (e.key === "Escape") setEditingPixel(false) }}
+              placeholder="Ex: 1234567890123456"
+              className="flex-1 bg-white/[0.06] ring-1 ring-violet-500/50 rounded-md px-2.5 py-1 text-[12px] text-white font-mono focus:outline-none" />
+            <button onClick={savePixel} disabled={saving} className="px-2.5 py-1 text-[11px] bg-violet-600 hover:bg-violet-500 disabled:opacity-50 text-white rounded-md">{saving ? "..." : "OK"}</button>
+            <button onClick={() => setEditingPixel(false)} className="px-2.5 py-1 text-[11px] text-zinc-500 hover:text-zinc-300">✕</button>
+          </div>
+        ) : (
+          <button onClick={() => { setPixelId(acc.pixel_id || ""); setEditingPixel(true) }}
+            className="flex items-center gap-1.5 text-[11px] text-zinc-600 hover:text-zinc-300 transition-colors group">
+            <Key size={10} />
+            {acc.pixel_id
+              ? <span className="font-mono text-zinc-400">{acc.pixel_id}</span>
+              : <span className="italic">Pixel ID não configurado</span>}
+            <Pencil size={9} className="opacity-0 group-hover:opacity-100 transition-opacity" />
+          </button>
+        )}
       </div>
     </div>
   )
