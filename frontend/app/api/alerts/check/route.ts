@@ -26,7 +26,9 @@ export async function POST(req: NextRequest) {
   async function upsertAlert(type: string, message: string, campaignId?: string) {
     const { data: existing } = await supabase.from("alerts")
       .select("id").eq("tenant_id", tid).eq("type", type).eq("status", "active")
-      .eq("campaign_id", campaignId ?? null).maybeSingle()
+      .eq("campaign_id", campaignId ?? null)
+      .not("message", "ilike", "Aguardando aprovação%")
+      .maybeSingle()
     if (existing) return
     await supabase.from("alerts").insert({ tenant_id: tid, type, message, status: "active", campaign_id: campaignId ?? null })
     created.push(type)
