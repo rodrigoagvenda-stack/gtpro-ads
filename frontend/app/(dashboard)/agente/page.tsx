@@ -26,18 +26,30 @@ interface LogEntry {
 }
 
 // ─── Quick-reply extraction ───────────────────────────────────────────────────
+const CHOICE_RE = /\?|deseja|quer\s|escolh|opç[aã]|prefere|selecione|confirma|como\s+posso|o\s+que\s+gostaria/i
+
 function extractQuickReplies(content: string): { label: string; value: string }[] | null {
   const lines    = content.split("\n").map(l => l.trim()).filter(Boolean)
+  const hasQ     = CHOICE_RE.test(content)
+
+  // Numbered list: 1. Opção
   const numbered = lines.filter(l => /^\d+\.\s.+/.test(l))
-  const last3    = lines.slice(-3).join(" ")
-  const hasQ     = last3.endsWith("?") || last3.toLowerCase().includes("qual prefere") || last3.toLowerCase().includes("confirma")
-  if (numbered.length >= 2 && numbered.length <= 6 && hasQ) {
-    return numbered.map(l => {
-      const text  = l.replace(/^\d+\.\s/, "")
-      const label = text.split(" — ")[0].split(" - ")[0].trim()
-      return { label, value: String(numbered.indexOf(l) + 1) }
-    })
+  if (numbered.length >= 2 && numbered.length <= 8 && hasQ) {
+    return numbered.map((l, i) => ({
+      label: l.replace(/^\d+\.\s/, "").split(" — ")[0].split(" - ")[0].trim(),
+      value: String(i + 1),
+    }))
   }
+
+  // Bullet list: - Opção  or • Opção
+  const bullets = lines.filter(l => /^[-•*]\s.+/.test(l))
+  if (bullets.length >= 2 && bullets.length <= 8 && hasQ) {
+    return bullets.map((l, i) => ({
+      label: l.replace(/^[-•*]\s/, "").split(" — ")[0].split(" - ")[0].trim(),
+      value: String(i + 1),
+    }))
+  }
+
   return null
 }
 
@@ -73,7 +85,12 @@ const MODELS = [
   { id: "claude-opus-4-7",           label: "Opus 4.7",   desc: "Mais capaz" },
 ]
 
-const THINKING_STEPS = ["Pensando...", "Buscando dados...", "Analisando..."]
+const LOADING_STEPS = [
+  { label: "Lendo o contexto",      ms: 0    },
+  { label: "Buscando dados",        ms: 1800 },
+  { label: "Analisando resultados", ms: 4500 },
+  { label: "Gerando resposta",      ms: 8000 },
+]
 
 const SUGGESTIONS = [
   "Quais campanhas estão com ROAS abaixo do mínimo?",
@@ -130,7 +147,6 @@ export default function AgentePage() {
   const [input, setInput]               = useState("")
   const [loading, setLoading]           = useState(false)
   const [loadingHistory, setLoadingHistory] = useState(true)
-  const [thinkStep, setThinkStep]       = useState(0)
   const [model, setModel]               = useState("claude-sonnet-4-6")
   const [modelOpen, setModelOpen]       = useState(false)
   const [skills, setSkills]             = useState<{ id: string; name: string; icon: string; color: string; prompt: string }[]>([])
@@ -139,6 +155,7 @@ export default function AgentePage() {
   const [logsOpen, setLogsOpen]         = useState(false)
   const [logsLoading, setLogsLoading]   = useState(false)
   const [uploading, setUploading]       = useState(false)
+  const [visibleSteps, setVisibleSteps] = useState<number[]>([])
 
   const bottomRef   = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
@@ -176,12 +193,12 @@ export default function AgentePage() {
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }) }, [messages, loading])
 
   useEffect(() => {
-    if (loading) {
-      intervalRef.current = setInterval(() => setThinkStep(s => Math.min(s + 1, THINKING_STEPS.length - 1)), 3000)
-    } else {
-      clearInterval(intervalRef.current); setThinkStep(0)
-    }
-    return () => clearInterval(intervalRef.current)
+    if (!loading) { setVisibleSteps([]); return }
+    setVisibleSteps([])
+    const timers = LOADING_STEPS.map((step, i) =>
+      setTimeout(() => setVisibleSteps(prev => prev.includes(i) ? prev : [...prev, i]), step.ms)
+    )
+    return () => timers.forEach(clearTimeout)
   }, [loading])
 
   async function clearHistory() {
@@ -453,17 +470,36 @@ export default function AgentePage() {
             )
           })}
 
-          {/* Thinking */}
+          {/* Loading steps — Claude.ai style */}
           {loading && (
             <div className="flex gap-3 items-start">
               <div className="shrink-0 w-7 h-7 rounded-lg bg-violet-600/20 ring-1 ring-violet-500/20 flex items-center justify-center mt-0.5">
                 <Bot size={13} className="text-violet-400 animate-pulse" />
               </div>
-              <div className="flex items-center gap-2.5 px-4 py-2.5 bg-white/[0.03] ring-1 ring-white/[0.06] rounded-2xl rounded-tl-sm">
-                <span className="text-[12px] text-zinc-500">{THINKING_STEPS[thinkStep]}</span>
-                <span className="flex gap-0.5 ml-0.5">
-                  {[0,150,300].map(d => <span key={d} className="w-1 h-1 rounded-full bg-zinc-600 animate-bounce" style={{ animationDelay: `${d}ms` }} />)}
-                </span>
+              <div className="px-4 py-3 bg-white/[0.03] ring-1 ring-white/[0.06] rounded-2xl rounded-tl-sm space-y-2 min-w-[200px]">
+                {LOADING_STEPS.map((step, i) => {
+                  const visible  = visibleSteps.includes(i)
+                  const done     = visibleSteps.includes(i + 1)
+                  const spinning = visible && !done
+                  if (!visible) return null
+                  return (
+                    <div key={i} className="flex items-center gap-2.5 animate-in fade-in slide-in-from-bottom-1 duration-300">
+                      {done ? (
+                        <CheckCircle2 size={12} className="text-emerald-400 shrink-0" />
+                      ) : spinning ? (
+                        <svg className="w-3 h-3 shrink-0 text-violet-400 animate-spin" viewBox="0 0 24 24" fill="none">
+                          <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" strokeDasharray="32" strokeDashoffset="10" strokeLinecap="round" />
+                        </svg>
+                      ) : (
+                        <div className="w-3 h-3 rounded-full bg-zinc-700 shrink-0" />
+                      )}
+                      <span className={cn("text-[12px] transition-colors", done ? "text-zinc-600" : spinning ? "text-zinc-300" : "text-zinc-600")}>
+                        {step.label}
+                        {spinning && <span className="inline-flex gap-0.5 ml-1.5">{[0,100,200].map(d => <span key={d} className="w-0.5 h-0.5 rounded-full bg-zinc-500 animate-bounce inline-block" style={{ animationDelay: `${d}ms` }} />)}</span>}
+                      </span>
+                    </div>
+                  )
+                })}
               </div>
             </div>
           )}
