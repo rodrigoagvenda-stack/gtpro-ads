@@ -3,6 +3,7 @@ import Anthropic from "@anthropic-ai/sdk"
 import { createServiceClient } from "@/lib/server/supabase"
 import { sendText } from "@/lib/server/whatsapp"
 import { getCampaigns, filterCampaignsForAgent } from "@/lib/server/meta-ads"
+import { checkAndNotifyAlerts } from "@/lib/server/alerts"
 
 // ─── Auth ─────────────────────────────────────────────────────────────────────
 
@@ -182,6 +183,9 @@ export async function GET(req: NextRequest) {
 
       const phone = (t.whatsapp_number as string).replace(/\D/g, "")
       await sendText(phone, message)
+
+      // Check and notify alerts after analysis
+      try { await checkAndNotifyAlerts(t.tenant_id) } catch {}
 
       results.push({ tenant_id: t.tenant_id, status: "sent" })
       console.log(`[cron daily-analysis] sent to tenant ${t.tenant_id} (${phone})`)
