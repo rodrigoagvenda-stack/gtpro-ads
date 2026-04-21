@@ -161,13 +161,13 @@ export async function deleteCampaign(tenantId: string, campaignId: string) {
   return graphDelete(`/${campaignId}`, token)
 }
 
-export async function toggleCampaign(tenantId: string, campaignId: string, status: string) {
-  const token = await getToken(tenantId)
+export async function toggleCampaign(tenantId: string, campaignId: string, status: string, connectionId?: string) {
+  const { token } = await getTokenAndAccount(tenantId, connectionId)
   return graphPost(`/${campaignId}`, token, { status })
 }
 
-export async function updateBudget(tenantId: string, campaignId: string, dailyBudget?: number, lifetimeBudget?: number) {
-  const token = await getToken(tenantId)
+export async function updateBudget(tenantId: string, campaignId: string, dailyBudget?: number, lifetimeBudget?: number, connectionId?: string) {
+  const { token } = await getTokenAndAccount(tenantId, connectionId)
   const body: Record<string, number> = {}
   if (dailyBudget)    body.daily_budget    = Math.round(dailyBudget * 100)
   if (lifetimeBudget) body.lifetime_budget = Math.round(lifetimeBudget * 100)
