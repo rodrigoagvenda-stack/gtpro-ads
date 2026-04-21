@@ -13,6 +13,9 @@ export interface Metrics {
   cpa?: number
   conversions?: number
   leads?: number
+  cpc_conv?: number
+  frequency?: number
+  messaging_conversations?: number
 }
 
 export interface Campaign {

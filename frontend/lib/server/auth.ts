@@ -15,28 +15,41 @@ export async function getTenant(req: NextRequest): Promise<TenantContext | null>
   if (!auth?.startsWith("Bearer ")) return null
   const token = auth.slice(7)
 
+  const supabase = createServiceClient()
+  let ctx: TenantContext | null = null
+
   // Verifica JWT via Supabase
   try {
-    const supabase = createServiceClient()
     const { data: { user } } = await supabase.auth.getUser(token)
     if (user) {
       const tenantId = user.app_metadata?.tenant_id ?? user.id
-      return { tenant_id: tenantId, auth_type: "jwt", user_id: user.id, user_email: user.email }
+      ctx = { tenant_id: tenantId, auth_type: "jwt", user_id: user.id, user_email: user.email }
     }
   } catch {}
 
   // Tenta como API Key
-  const supabase = createServiceClient()
-  const { data } = await supabase
-    .from("api_keys")
-    .select("tenant_id, scope")
-    .eq("key_hash", hashKey(token))
-    .eq("active", true)
+  if (!ctx) {
+    const { data } = await supabase
+      .from("api_keys")
+      .select("tenant_id, scope")
+      .eq("key_hash", hashKey(token))
+      .eq("active", true)
+      .single()
+    if (data) ctx = { tenant_id: data.tenant_id, auth_type: "api_key", scope: data.scope }
+  }
+
+  if (!ctx) return null
+
+  // Verifica se o tenant está ativo
+  const { data: tenant } = await supabase
+    .from("tenants")
+    .select("active")
+    .eq("id", ctx.tenant_id)
     .single()
 
-  if (data) return { tenant_id: data.tenant_id, auth_type: "api_key", scope: data.scope }
+  if (tenant && tenant.active === false) return null
 
-  return null
+  return ctx
 }
 
 export function unauthorized() {

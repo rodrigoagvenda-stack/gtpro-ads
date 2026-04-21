@@ -6,7 +6,7 @@ import { api } from "@/lib/api"
 import {
   Check, Copy, Eye, EyeOff, Plus, Trash2, RefreshCw, Link2, Unlink,
   Loader2, LayoutGrid, Pencil, Bot, Megaphone, Bell, MessageCircle,
-  Zap, Key, Settings, Smartphone, QrCode, RotateCcw,
+  Zap, Key, Settings, Smartphone, RotateCcw,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 
@@ -107,18 +107,36 @@ function Select({ value, onChange, options }: { value: string | number; onChange
 // ─── Tab: Agente ──────────────────────────────────────────────────────────────
 
 function AgenteTab() {
-  const [cfg, setCfg] = useState({ objetivo_principal: "LEADS", roas_minimo: 2, cpl_maximo: 50, budget_mensal: "", modo_supervisionado: true, limite_budget_sem_aprovacao: 100 })
+  const [cfg, setCfg] = useState({
+    objetivo_principal: "LEADS", roas_minimo: 2, cpl_maximo: 50, budget_mensal: "",
+    modo_supervisionado: true, limite_budget_sem_aprovacao: 100,
+    campaign_naming_template: "",
+  })
   const [saving, setSaving] = useState(false)
-  const [saved, setSaved] = useState(false)
+  const [saved, setSaved]   = useState(false)
 
   useEffect(() => {
-    api.tenant.get().then(d => setCfg({ objetivo_principal: d.objetivo_principal ?? "LEADS", roas_minimo: d.roas_minimo ?? 2, cpl_maximo: d.cpl_maximo ?? 50, budget_mensal: d.budget_mensal ?? "", modo_supervisionado: d.modo_supervisionado ?? true, limite_budget_sem_aprovacao: d.limite_budget_sem_aprovacao ?? 100 })).catch(() => {})
+    api.tenant.get().then(d => setCfg({
+      objetivo_principal: d.objetivo_principal ?? "LEADS",
+      roas_minimo: d.roas_minimo ?? 2,
+      cpl_maximo: d.cpl_maximo ?? 50,
+      budget_mensal: d.budget_mensal ?? "",
+      modo_supervisionado: d.modo_supervisionado ?? true,
+      limite_budget_sem_aprovacao: d.limite_budget_sem_aprovacao ?? 100,
+      campaign_naming_template: d.campaign_naming_template ?? "",
+    })).catch(() => {})
   }, [])
 
   async function save() {
     setSaving(true)
     try {
-      await api.tenant.save({ ...cfg, roas_minimo: Number(cfg.roas_minimo), cpl_maximo: Number(cfg.cpl_maximo), budget_mensal: cfg.budget_mensal ? Number(cfg.budget_mensal) : null, limite_budget_sem_aprovacao: Number(cfg.limite_budget_sem_aprovacao) })
+      await api.tenant.save({
+        ...cfg,
+        roas_minimo: Number(cfg.roas_minimo),
+        cpl_maximo: Number(cfg.cpl_maximo),
+        budget_mensal: cfg.budget_mensal ? Number(cfg.budget_mensal) : null,
+        limite_budget_sem_aprovacao: Number(cfg.limite_budget_sem_aprovacao),
+      })
       setSaved(true); setTimeout(() => setSaved(false), 3000)
     } catch (e: any) { alert(e.message) } finally { setSaving(false) }
   }
@@ -137,6 +155,34 @@ function AgenteTab() {
             <Field label="CPL máximo (R$)"><input type="number" step="1" min="0" value={cfg.cpl_maximo} onChange={e => setCfg(c => ({ ...c, cpl_maximo: Number(e.target.value) }))} className={inputCls} /></Field>
             <Field label="Budget mensal (R$)"><input type="number" step="100" min="0" placeholder="Opcional" value={cfg.budget_mensal} onChange={e => setCfg(c => ({ ...c, budget_mensal: e.target.value }))} className={inputCls} /></Field>
             <Field label="Limite sem aprovação (R$)"><input type="number" step="50" min="0" value={cfg.limite_budget_sem_aprovacao} onChange={e => setCfg(c => ({ ...c, limite_budget_sem_aprovacao: Number(e.target.value) }))} className={inputCls} /></Field>
+          </div>
+        </div>
+        <SaveBtn saving={saving} saved={saved} onClick={save} />
+      </Card>
+
+      <Card>
+        <h2 className="text-[13px] font-semibold text-zinc-200">Nomenclatura de campanhas</h2>
+        <p className="text-[12px] text-zinc-600 -mt-3">
+          Padrão que o agente seguirá ao criar campanhas. Use variáveis entre colchetes.
+        </p>
+        <Field label="Template de nome">
+          <input
+            type="text"
+            placeholder="Ex: [Objetivo] | [Público] | [Criativo] | [Data]"
+            value={cfg.campaign_naming_template}
+            onChange={e => setCfg(c => ({ ...c, campaign_naming_template: e.target.value }))}
+            className={inputCls}
+          />
+        </Field>
+        <div className="bg-white/[0.02] rounded-lg px-3 py-2.5 space-y-1">
+          <p className="text-[11px] text-zinc-600 font-medium">Variáveis sugeridas:</p>
+          <div className="flex flex-wrap gap-1.5">
+            {["[Objetivo]","[Público]","[Criativo]","[Formato]","[Data]","[Nicho]","[Funil]"].map(v => (
+              <button key={v} onClick={() => setCfg(c => ({ ...c, campaign_naming_template: c.campaign_naming_template + v }))}
+                className="px-2 py-0.5 bg-violet-500/10 ring-1 ring-violet-500/20 rounded text-[11px] text-violet-300 hover:bg-violet-500/20 transition-colors font-mono">
+                {v}
+              </button>
+            ))}
           </div>
         </div>
         <SaveBtn saving={saving} saved={saved} onClick={save} />
@@ -675,8 +721,6 @@ function WhatsAppTab() {
 }
 
 // ─── Tab: Skills ──────────────────────────────────────────────────────────────
-
-const SKILL_COLOR_OPTIONS = ["violet", "blue", "emerald", "amber", "red"]
 
 function SkillsTab() {
   const [skills, setSkills] = useState<Skill[]>([])

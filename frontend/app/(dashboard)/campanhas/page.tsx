@@ -1,14 +1,14 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useState, useRef } from "react"
 import { useRouter } from "next/navigation"
 import { api } from "@/lib/api"
 import { formatCurrency } from "@/lib/utils"
 import KpiCard from "@/components/dashboard/KpiCard"
-import CampaignRow from "@/components/dashboard/CampaignRow"
+import CampaignRow, { ALL_METRIC_DEFS, type MetricDef, type MetricKey } from "@/components/dashboard/CampaignRow"
 import type { Campaign } from "@/types"
 import { cn } from "@/lib/utils"
-import { AlertTriangle, RefreshCw, Key, Calendar, Link2, ArrowRight } from "lucide-react"
+import { AlertTriangle, RefreshCw, Key, Calendar, Link2, ArrowRight, SlidersHorizontal, Check } from "lucide-react"
 
 function isTokenExpired(msg: string) {
   return msg.includes("190") || msg.includes("463") || msg.includes("Session has expired") || msg.includes("access token")
@@ -18,14 +18,21 @@ function isNotConnected(msg: string) {
 }
 
 const PRESETS = [
-  { value: "today",      label: "Hoje" },
-  { value: "last_7d",    label: "7 dias" },
-  { value: "last_30d",   label: "30 dias" },
-  { value: "this_month", label: "Este mês" },
-  { value: "custom",     label: "Personalizado" },
+  { value: "today",     label: "Hoje" },
+  { value: "yesterday", label: "Ontem" },
+  { value: "last_7d",   label: "7 dias" },
+  { value: "last_30d",  label: "30 dias" },
+  { value: "this_month",label: "Este mês" },
+  { value: "custom",    label: "Personalizado" },
 ]
 
-const KPI_OBJECTIVES = [
+const PAGE_SIZE = 4
+
+// ─── Objective tabs ───────────────────────────────────────────────────────────
+
+type ObjectiveId = "geral" | "ecommerce" | "leads" | "whatsapp" | "engajamento" | "trafego" | "seguidores"
+
+const KPI_OBJECTIVES: { id: ObjectiveId; label: string }[] = [
   { id: "geral",       label: "Geral" },
   { id: "ecommerce",   label: "E-commerce" },
   { id: "leads",       label: "Leads" },
@@ -35,30 +42,278 @@ const KPI_OBJECTIVES = [
   { id: "seguidores",  label: "Seguidores" },
 ]
 
+// Default metrics per objective
+const DEFAULT_METRICS: Record<ObjectiveId, MetricKey[]> = {
+  geral:       ["spend", "roas", "cpl", "ctr"],
+  ecommerce:   ["spend", "roas", "conversions", "ctr"],
+  leads:       ["spend", "leads", "cpl", "ctr"],
+  whatsapp:    ["spend", "cpc_conv", "clicks", "ctr"],
+  engajamento: ["spend", "impressions", "frequency", "ctr"],
+  trafego:     ["spend", "clicks", "cpc", "ctr"],
+  seguidores:  ["spend", "impressions", "frequency", "ctr"],
+}
+
+function getMetricDefs(keys: MetricKey[]): MetricDef[] {
+  return keys.map(k => ALL_METRIC_DEFS.find(d => d.key === k)!).filter(Boolean)
+}
+
+function loadCustomMetrics(obj: ObjectiveId): MetricKey[] | null {
+  try {
+    const raw = localStorage.getItem(`gtpro_metrics_${obj}`)
+    return raw ? JSON.parse(raw) : null
+  } catch { return null }
+}
+
+function saveCustomMetrics(obj: ObjectiveId, keys: MetricKey[]) {
+  localStorage.setItem(`gtpro_metrics_${obj}`, JSON.stringify(keys))
+}
+
+// ─── Metrics customizer ───────────────────────────────────────────────────────
+
+function MetricsPicker({ objective, selected, onChange }: {
+  objective: ObjectiveId
+  selected: MetricKey[]
+  onChange: (keys: MetricKey[]) => void
+}) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    function handler(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
+    }
+    if (open) document.addEventListener("mousedown", handler)
+    return () => document.removeEventListener("mousedown", handler)
+  }, [open])
+
+  function toggle(key: MetricKey) {
+    const next = selected.includes(key)
+      ? selected.filter(k => k !== key)
+      : [...selected, key]
+    if (next.length === 0) return
+    onChange(next)
+    saveCustomMetrics(objective, next)
+  }
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        onClick={() => setOpen(o => !o)}
+        className={cn("flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] ring-1 transition-colors",
+          open ? "bg-violet-600/20 ring-violet-500/40 text-violet-300" : "bg-white/[0.04] ring-white/[0.07] text-zinc-500 hover:text-zinc-300"
+        )}
+      >
+        <SlidersHorizontal size={11} />
+        Métricas
+      </button>
+      {open && (
+        <div className="absolute right-0 top-8 z-50 bg-zinc-900 ring-1 ring-white/[0.1] rounded-xl p-3 shadow-xl w-52 space-y-1">
+          <p className="text-[10px] text-zinc-600 uppercase tracking-wider mb-2">Colunas da tabela</p>
+          {ALL_METRIC_DEFS.map(def => (
+            <button
+              key={def.key}
+              onClick={() => toggle(def.key)}
+              className="w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg hover:bg-white/[0.05] transition-colors"
+            >
+              <span className="text-[12px] text-zinc-300">{def.label}</span>
+              {selected.includes(def.key) && <Check size={11} className="text-violet-400" />}
+            </button>
+          ))}
+          <button
+            onClick={() => { onChange(DEFAULT_METRICS[objective]); saveCustomMetrics(objective, DEFAULT_METRICS[objective]) }}
+            className="w-full text-center text-[11px] text-zinc-600 hover:text-zinc-400 pt-1.5 border-t border-white/[0.06] transition-colors"
+          >
+            Restaurar padrão
+          </button>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ─── Dynamic funnel ───────────────────────────────────────────────────────────
+
+function buildFunnel(obj: ObjectiveId, insights: Record<string, any>) {
+  const impressions = Number(insights.impressions ?? 0)
+  const reach       = Number(insights.reach ?? 0)
+  const clicks      = Number(insights.clicks ?? 0)
+
+  const act = (type: string) => {
+    const found = insights.actions?.find((a: any) => a.action_type === type)
+    return found ? Number(found.value) : 0
+  }
+
+  const steps: { label: string; value: number }[] = []
+
+  switch (obj) {
+    case "ecommerce": {
+      const purchases = act("omni_purchase") || act("offsite_conversion.fb_pixel_purchase")
+      steps.push({ label: "Impressões", value: impressions })
+      if (clicks > 0)    steps.push({ label: "Cliques", value: clicks })
+      if (purchases > 0) steps.push({ label: "Compras", value: purchases })
+      break
+    }
+    case "leads": {
+      const leads = act("lead") || act("onsite_conversion.lead_grouped") || act("offsite_conversion.fb_pixel_lead")
+      steps.push({ label: "Impressões", value: impressions })
+      if (clicks > 0) steps.push({ label: "Cliques", value: clicks })
+      if (leads > 0)  steps.push({ label: "Leads", value: leads })
+      break
+    }
+    case "whatsapp": {
+      const convs = act("onsite_conversion.messaging_conversation_started_7d") || act("onsite_conversion.total_messaging_connection")
+      steps.push({ label: "Impressões", value: impressions })
+      if (clicks > 0) steps.push({ label: "Cliques", value: clicks })
+      if (convs > 0)  steps.push({ label: "Conversas", value: convs })
+      break
+    }
+    case "engajamento": {
+      const eng = act("post_engagement")
+      steps.push({ label: "Impressões", value: impressions })
+      if (reach > 0) steps.push({ label: "Alcance", value: reach })
+      if (eng > 0)   steps.push({ label: "Engajamentos", value: eng })
+      break
+    }
+    case "seguidores": {
+      const likes = act("like")
+      steps.push({ label: "Impressões", value: impressions })
+      if (reach > 0) steps.push({ label: "Alcance", value: reach })
+      if (likes > 0) steps.push({ label: "Curtidas", value: likes })
+      break
+    }
+    case "trafego":
+      steps.push({ label: "Impressões", value: impressions })
+      if (clicks > 0) steps.push({ label: "Cliques", value: clicks })
+      break
+    default: {
+      const leads = act("lead") || act("onsite_conversion.lead_grouped")
+      const purchases = act("omni_purchase") || act("offsite_conversion.fb_pixel_purchase")
+      steps.push({ label: "Impressões", value: impressions })
+      if (reach > 0)     steps.push({ label: "Alcance", value: reach })
+      if (clicks > 0)    steps.push({ label: "Cliques", value: clicks })
+      if (leads > 0)     steps.push({ label: "Leads", value: leads })
+      if (purchases > 0) steps.push({ label: "Compras", value: purchases })
+    }
+  }
+
+  return steps.filter(s => s.value > 0)
+}
+
+// ─── KPI cards per objective ──────────────────────────────────────────────────
+
+function KpiCards({ obj, insights, totalSpend }: { obj: ObjectiveId; insights: Record<string, any>; totalSpend: number }) {
+  const spend   = Number(insights.spend || totalSpend)
+  const clicks  = Number(insights.clicks ?? 0)
+  const reach   = Number(insights.reach ?? 0)
+  const act     = (type: string) => Number(insights.actions?.find((a: any) => a.action_type === type)?.value ?? 0)
+  const actVal  = (type: string) => Number(insights.action_values?.find((a: any) => a.action_type === type)?.value ?? 0)
+
+  if (obj === "ecommerce") {
+    const purchases = act("omni_purchase") || act("offsite_conversion.fb_pixel_purchase")
+    const revenue   = actVal("omni_purchase") || actVal("offsite_conversion.fb_pixel_purchase")
+    const roas      = insights.purchase_roas?.find((x: any) => x.action_type === "omni_purchase" || x.action_type === "offsite_conversion.fb_pixel_purchase")?.value
+    return <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+      <KpiCard label="Gasto total" value={formatCurrency(spend)} highlight />
+      <KpiCard label="ROAS" value={roas ? `${Number(roas).toFixed(2)}x` : "—"} />
+      <KpiCard label="Receita" value={revenue > 0 ? formatCurrency(revenue) : "—"} />
+      <KpiCard label="Compras" value={purchases > 0 ? purchases.toLocaleString("pt-BR") : "—"} />
+    </div>
+  }
+
+  if (obj === "leads") {
+    const leads = act("lead") || act("onsite_conversion.lead_grouped") || act("offsite_conversion.fb_pixel_lead")
+    const cpl   = leads > 0 ? spend / leads : 0
+    return <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+      <KpiCard label="Gasto total" value={formatCurrency(spend)} highlight />
+      <KpiCard label="Leads" value={leads > 0 ? leads.toLocaleString("pt-BR") : "—"} />
+      <KpiCard label="CPL" value={cpl > 0 ? formatCurrency(cpl) : "—"} />
+      <KpiCard label="CTR" value={insights.ctr ? `${Number(insights.ctr).toFixed(2)}%` : "—"} />
+    </div>
+  }
+
+  if (obj === "whatsapp") {
+    const convs = act("onsite_conversion.messaging_conversation_started_7d") || act("onsite_conversion.total_messaging_connection")
+    const cpc   = convs > 0 ? spend / convs : 0
+    return <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+      <KpiCard label="Gasto total" value={formatCurrency(spend)} highlight />
+      <KpiCard label="Conversas" value={convs > 0 ? convs.toLocaleString("pt-BR") : "—"} />
+      <KpiCard label="Custo/conversa" value={cpc > 0 ? formatCurrency(cpc) : "—"} />
+      <KpiCard label="Cliques" value={clicks > 0 ? clicks.toLocaleString("pt-BR") : "—"} />
+    </div>
+  }
+
+  if (obj === "engajamento") {
+    const eng = act("post_engagement")
+    const cpe = eng > 0 ? spend / eng : 0
+    return <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+      <KpiCard label="Gasto total" value={formatCurrency(spend)} highlight />
+      <KpiCard label="Alcance" value={reach > 0 ? `${(reach / 1000).toFixed(1)}k` : "—"} />
+      <KpiCard label="Engajamentos" value={eng > 0 ? eng.toLocaleString("pt-BR") : "—"} />
+      <KpiCard label="Custo/eng." value={cpe > 0 ? formatCurrency(cpe) : "—"} />
+    </div>
+  }
+
+  if (obj === "trafego") {
+    return <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+      <KpiCard label="Gasto total" value={formatCurrency(spend)} highlight />
+      <KpiCard label="Cliques" value={clicks > 0 ? clicks.toLocaleString("pt-BR") : "—"} />
+      <KpiCard label="CPC" value={insights.cpc ? formatCurrency(Number(insights.cpc)) : "—"} />
+      <KpiCard label="CTR" value={insights.ctr ? `${Number(insights.ctr).toFixed(2)}%` : "—"} />
+    </div>
+  }
+
+  if (obj === "seguidores") {
+    const likes = act("like")
+    const cpf   = likes > 0 ? spend / likes : 0
+    return <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+      <KpiCard label="Gasto total" value={formatCurrency(spend)} highlight />
+      <KpiCard label="Alcance" value={reach > 0 ? `${(reach / 1000).toFixed(1)}k` : "—"} />
+      <KpiCard label="Curtidas/Seg." value={likes > 0 ? likes.toLocaleString("pt-BR") : "—"} />
+      <KpiCard label="Custo/seguidor" value={cpf > 0 ? formatCurrency(cpf) : "—"} />
+    </div>
+  }
+
+  // geral
+  const roasEntry = insights.purchase_roas?.find((x: any) => x.action_type === "omni_purchase" || x.action_type === "offsite_conversion.fb_pixel_purchase")
+  const leads = act("lead") || act("onsite_conversion.lead_grouped")
+  const cpl   = leads > 0 ? spend / leads : 0
+  return <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+    <KpiCard label="Gasto total" value={formatCurrency(spend)} highlight />
+    <KpiCard label="ROAS" value={roasEntry ? `${Number(roasEntry.value).toFixed(2)}x` : "—"} />
+    <KpiCard label="CPL" value={cpl > 0 ? formatCurrency(cpl) : "—"} />
+    <KpiCard label="CTR" value={insights.ctr ? `${Number(insights.ctr).toFixed(2)}%` : "—"} />
+  </div>
+}
+
+// ─── Page ─────────────────────────────────────────────────────────────────────
+
 export default function CampanhasPage() {
   const router = useRouter()
   const [campaigns, setCampaigns] = useState<Campaign[]>([])
   const [page, setPage] = useState(1)
-  const PAGE_SIZE = 6
   const [insights, setInsights] = useState<Record<string, any>>({})
   const [preset, setPreset] = useState("last_7d")
   const [since, setSince] = useState("")
   const [until, setUntil] = useState("")
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [kpiPreset, setKpiPreset] = useState("geral")
+  const [objective, setObjective] = useState<ObjectiveId>("geral")
   const [refreshKey, setRefreshKey] = useState(0)
+  const [selectedMetrics, setSelectedMetrics] = useState<MetricKey[]>(DEFAULT_METRICS["geral"])
 
-  const isCustom = preset === "custom"
+  const isCustom   = preset === "custom"
   const customReady = isCustom && since && until && since <= until
+
+  // Load saved metric prefs on objective change
+  useEffect(() => {
+    const saved = loadCustomMetrics(objective)
+    setSelectedMetrics(saved ?? DEFAULT_METRICS[objective])
+  }, [objective])
 
   useEffect(() => {
     if (isCustom && !customReady) return
-    setLoading(true)
-    setError(null)
-    const insightsCall = isCustom
-      ? api.insights.get("last_7d", since, until)
-      : api.insights.get(preset)
+    setLoading(true); setError(null)
+    const insightsCall = isCustom ? api.insights.get("last_7d", since, until) : api.insights.get(preset)
     Promise.all([api.campaigns.list(preset), insightsCall])
       .then(([c, i]) => {
         setCampaigns(Array.isArray(c) ? c : [])
@@ -66,35 +321,19 @@ export default function CampanhasPage() {
         setInsights(i && typeof i === "object" && !Array.isArray(i) ? i : {})
         setLoading(false)
       })
-      .catch((err) => {
-        setError(err.message || "Erro ao carregar dados")
-        setLoading(false)
-      })
+      .catch(err => { setError(err.message || "Erro ao carregar dados"); setLoading(false) })
   }, [preset, customReady ? since : null, customReady ? until : null, refreshKey])
 
   async function toggleCampaign(id: string, status: string) {
     const next = status === "ACTIVE" ? "PAUSED" : "ACTIVE"
     await api.campaigns.toggle(id, next)
-    setCampaigns((prev) => prev.map((c) => c.id === id ? { ...c, status: next as Campaign["status"] } : c))
+    setCampaigns(prev => prev.map(c => c.id === id ? { ...c, status: next as Campaign["status"] } : c))
   }
 
-  const totalSpend = campaigns.reduce((a, c) => a + (c.metrics?.spend || 0), 0)
-
-  const impressions = Number(insights.impressions ?? 0)
-  const reach = Number(insights.reach ?? 0)
-  const clicks = Number(insights.clicks ?? 0)
-  const leads = insights.actions?.find((a: any) => a.action_type === "lead")?.value
-  const purchases = insights.actions?.find((a: any) => a.action_type === "purchase")?.value
-
-  const funnelSteps = [
-    { label: "Impressões", value: impressions },
-    ...(reach > 0 ? [{ label: "Alcance", value: reach }] : []),
-    { label: "Cliques", value: clicks },
-    ...(leads ? [{ label: "Leads", value: Number(leads) }] : []),
-    ...(purchases ? [{ label: "Compras", value: Number(purchases) }] : []),
-  ].filter((s) => s.value > 0)
-
-  const maxVal = funnelSteps[0]?.value || 1
+  const totalSpend  = campaigns.reduce((a, c) => a + (c.metrics?.spend || 0), 0)
+  const funnelSteps = buildFunnel(objective, insights)
+  const maxVal      = funnelSteps[0]?.value || 1
+  const metricDefs  = getMetricDefs(selectedMetrics)
 
   return (
     <div className="space-y-7">
@@ -106,178 +345,64 @@ export default function CampanhasPage() {
         </div>
         <div className="flex items-center gap-2 flex-wrap justify-end">
           <div className="flex items-center bg-white/[0.04] rounded-lg p-0.5 ring-1 ring-white/[0.06]">
-            {PRESETS.map((p) => (
-              <button
-                key={p.value}
-                onClick={() => setPreset(p.value)}
-                className={cn(
-                  "px-3 py-1.5 rounded-md text-[12px] font-medium transition-colors flex items-center gap-1.5",
+            {PRESETS.map(p => (
+              <button key={p.value} onClick={() => setPreset(p.value)}
+                className={cn("px-3 py-1.5 rounded-md text-[12px] font-medium transition-colors flex items-center gap-1.5",
                   preset === p.value ? "bg-white/[0.08] text-white" : "text-zinc-500 hover:text-zinc-300"
-                )}
-              >
+                )}>
                 {p.value === "custom" && <Calendar size={11} />}
                 {p.label}
               </button>
             ))}
           </div>
-
           {isCustom && (
             <div className="flex items-center gap-2">
-              <input
-                type="date"
-                value={since}
-                onChange={e => setSince(e.target.value)}
-                className="bg-white/[0.04] ring-1 ring-white/[0.06] rounded-lg px-3 py-1.5 text-[12px] text-white focus:outline-none focus:ring-violet-500/50 [color-scheme:dark]"
-              />
+              <input type="date" value={since} onChange={e => setSince(e.target.value)}
+                className="bg-white/[0.04] ring-1 ring-white/[0.06] rounded-lg px-3 py-1.5 text-[12px] text-white focus:outline-none focus:ring-violet-500/50 [color-scheme:dark]" />
               <span className="text-zinc-600 text-[12px]">até</span>
-              <input
-                type="date"
-                value={until}
-                onChange={e => setUntil(e.target.value)}
-                min={since}
-                className="bg-white/[0.04] ring-1 ring-white/[0.06] rounded-lg px-3 py-1.5 text-[12px] text-white focus:outline-none focus:ring-violet-500/50 [color-scheme:dark]"
-              />
+              <input type="date" value={until} onChange={e => setUntil(e.target.value)} min={since}
+                className="bg-white/[0.04] ring-1 ring-white/[0.06] rounded-lg px-3 py-1.5 text-[12px] text-white focus:outline-none focus:ring-violet-500/50 [color-scheme:dark]" />
             </div>
           )}
         </div>
       </div>
 
-      {/* KPI Objective filter */}
+      {/* Objective tabs */}
       <div className="flex items-center gap-1.5 flex-wrap">
-        {KPI_OBJECTIVES.map((o) => (
-          <button
-            key={o.id}
-            onClick={() => setKpiPreset(o.id)}
-            className={cn(
-              "px-3 py-1 rounded-full text-[11px] font-medium transition-colors",
-              kpiPreset === o.id
-                ? "bg-violet-600 text-white"
-                : "bg-white/[0.04] text-zinc-500 hover:text-zinc-300 ring-1 ring-white/[0.06]"
-            )}
-          >
+        {KPI_OBJECTIVES.map(o => (
+          <button key={o.id} onClick={() => setObjective(o.id)}
+            className={cn("px-3 py-1 rounded-full text-[11px] font-medium transition-colors",
+              objective === o.id ? "bg-violet-600 text-white" : "bg-white/[0.04] text-zinc-500 hover:text-zinc-300 ring-1 ring-white/[0.06]"
+            )}>
             {o.label}
           </button>
         ))}
       </div>
 
       {/* KPIs */}
-      {kpiPreset === "geral" && (
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-          <KpiCard label="Gasto total" value={formatCurrency(insights.spend || totalSpend)} highlight />
-          <KpiCard label="ROAS" value={insights.roas ? `${Number(insights.roas).toFixed(2)}x` : "—"} />
-          <KpiCard label="CPC" value={insights.cpc ? formatCurrency(Number(insights.cpc)) : "—"} />
-          <KpiCard label="CTR" value={insights.ctr ? `${Number(insights.ctr).toFixed(2)}%` : "—"} />
-        </div>
-      )}
-      {kpiPreset === "ecommerce" && (() => {
-        const purchaseVal = insights.actions?.find((a: any) => a.action_type === "purchase")?.value
-        const purchaseRev = insights.action_values?.find((a: any) => a.action_type === "purchase")?.value
-        const numPurchases = purchaseVal ? Number(purchaseVal) : 0
-        const revenue = purchaseRev ? Number(purchaseRev) : 0
-        const spend = Number(insights.spend || totalSpend)
-        const cpa = numPurchases > 0 ? spend / numPurchases : 0
-        return (
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-            <KpiCard label="Gasto total" value={formatCurrency(spend)} highlight />
-            <KpiCard label="ROAS" value={insights.roas ? `${Number(insights.roas).toFixed(2)}x` : "—"} />
-            <KpiCard label="Receita" value={revenue > 0 ? formatCurrency(revenue) : "—"} />
-            <KpiCard label="CPA" value={cpa > 0 ? formatCurrency(cpa) : "—"} />
-          </div>
-        )
-      })()}
-      {kpiPreset === "leads" && (() => {
-        const leadsVal = insights.actions?.find((a: any) => a.action_type === "lead")?.value
-        const numLeads = leadsVal ? Number(leadsVal) : 0
-        const spend = Number(insights.spend || totalSpend)
-        const cpl = numLeads > 0 ? spend / numLeads : 0
-        return (
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-            <KpiCard label="Gasto total" value={formatCurrency(spend)} highlight />
-            <KpiCard label="Leads" value={numLeads > 0 ? numLeads.toLocaleString("pt-BR") : "—"} />
-            <KpiCard label="CPL" value={cpl > 0 ? formatCurrency(cpl) : "—"} />
-            <KpiCard label="CTR" value={insights.ctr ? `${Number(insights.ctr).toFixed(2)}%` : "—"} />
-          </div>
-        )
-      })()}
-      {kpiPreset === "whatsapp" && (() => {
-        const msgVal = insights.actions?.find((a: any) =>
-          a.action_type === "onsite_conversion.messaging_conversation_started_7d" ||
-          a.action_type === "onsite_conversion.total_messaging_connection"
-        )?.value
-        const numMsg = msgVal ? Number(msgVal) : 0
-        const spend = Number(insights.spend || totalSpend)
-        const cpm = numMsg > 0 ? spend / numMsg : 0
-        return (
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-            <KpiCard label="Gasto total" value={formatCurrency(spend)} highlight />
-            <KpiCard label="Conversas" value={numMsg > 0 ? numMsg.toLocaleString("pt-BR") : "—"} />
-            <KpiCard label="Custo/conversa" value={cpm > 0 ? formatCurrency(cpm) : "—"} />
-            <KpiCard label="Cliques" value={clicks > 0 ? clicks.toLocaleString("pt-BR") : "—"} />
-          </div>
-        )
-      })()}
-      {kpiPreset === "engajamento" && (() => {
-        const engVal = insights.actions?.find((a: any) => a.action_type === "post_engagement")?.value
-        const numEng = engVal ? Number(engVal) : 0
-        const spend = Number(insights.spend || totalSpend)
-        const cpe = numEng > 0 ? spend / numEng : 0
-        return (
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-            <KpiCard label="Gasto total" value={formatCurrency(spend)} highlight />
-            <KpiCard label="Alcance" value={reach > 0 ? `${(reach/1000).toFixed(1)}k` : "—"} />
-            <KpiCard label="Engajamentos" value={numEng > 0 ? numEng.toLocaleString("pt-BR") : "—"} />
-            <KpiCard label="Custo/eng." value={cpe > 0 ? formatCurrency(cpe) : "—"} />
-          </div>
-        )
-      })()}
-      {kpiPreset === "trafego" && (
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-          <KpiCard label="Gasto total" value={formatCurrency(insights.spend || totalSpend)} highlight />
-          <KpiCard label="Cliques" value={clicks > 0 ? clicks.toLocaleString("pt-BR") : "—"} />
-          <KpiCard label="CPC" value={insights.cpc ? formatCurrency(Number(insights.cpc)) : "—"} />
-          <KpiCard label="CTR" value={insights.ctr ? `${Number(insights.ctr).toFixed(2)}%` : "—"} />
-        </div>
-      )}
-      {kpiPreset === "seguidores" && (() => {
-        const followVal = insights.actions?.find((a: any) => a.action_type === "like")?.value
-        const numFollow = followVal ? Number(followVal) : 0
-        const spend = Number(insights.spend || totalSpend)
-        const cpf = numFollow > 0 ? spend / numFollow : 0
-        return (
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-            <KpiCard label="Gasto total" value={formatCurrency(spend)} highlight />
-            <KpiCard label="Alcance" value={reach > 0 ? `${(reach/1000).toFixed(1)}k` : "—"} />
-            <KpiCard label="Seguidores/Curtidas" value={numFollow > 0 ? numFollow.toLocaleString("pt-BR") : "—"} />
-            <KpiCard label="Custo/seguidor" value={cpf > 0 ? formatCurrency(cpf) : "—"} />
-          </div>
-        )
-      })()}
+      <KpiCards obj={objective} insights={insights} totalSpend={totalSpend} />
 
       {/* Funnel */}
-      {funnelSteps.length >= 3 && (
+      {funnelSteps.length >= 2 && (
         <div className="bg-white/[0.02] ring-1 ring-white/[0.06] rounded-xl p-5">
-          <p className="text-[11px] font-medium text-zinc-500 uppercase tracking-widest mb-5">Funil da conta</p>
+          <p className="text-[11px] font-medium text-zinc-500 uppercase tracking-widest mb-5">
+            Funil · {KPI_OBJECTIVES.find(o => o.id === objective)?.label}
+          </p>
           <div className="flex items-end gap-2 h-20">
             {funnelSteps.map((step, i) => {
-              const h = Math.max(8, (step.value / maxVal) * 80)
+              const h    = Math.max(8, (step.value / maxVal) * 80)
               const conv = i > 0 && funnelSteps[i - 1].value > 0
-                ? ((step.value / funnelSteps[i - 1].value) * 100).toFixed(1)
-                : null
+                ? ((step.value / funnelSteps[i - 1].value) * 100).toFixed(1) : null
               return (
                 <div key={step.label} className="flex-1 flex flex-col items-center gap-1">
                   <p className="text-[10px] text-zinc-400 font-medium">
                     {step.value >= 1000 ? `${(step.value / 1000).toFixed(1)}k` : step.value}
                   </p>
                   {conv && (
-                    <p className={cn("text-[10px]", Number(conv) >= 2 ? "text-emerald-500" : "text-zinc-500")}>
-                      {conv}%
-                    </p>
+                    <p className={cn("text-[10px]", Number(conv) >= 2 ? "text-emerald-500" : "text-zinc-500")}>{conv}%</p>
                   )}
                   <div className="w-full flex flex-col justify-end" style={{ height: 56 }}>
-                    <div
-                      className={cn("w-full rounded-sm", i === 0 ? "bg-violet-600/60" : "bg-violet-600/30")}
-                      style={{ height: h }}
-                    />
+                    <div className={cn("w-full rounded-sm", i === 0 ? "bg-violet-600/60" : "bg-violet-600/30")} style={{ height: h }} />
                   </div>
                   <p className="text-[10px] text-zinc-600 text-center leading-tight">{step.label}</p>
                 </div>
@@ -293,11 +418,11 @@ export default function CampanhasPage() {
           <p className="text-[12px] font-medium text-zinc-400">
             {campaigns.length} campanha{campaigns.length !== 1 ? "s" : ""}
           </p>
-          <div className="hidden md:flex gap-5 pr-14 text-[11px] text-zinc-600 uppercase tracking-wider">
-            <span>Gasto</span>
-            <span>ROAS</span>
-            <span>CPL</span>
-            <span>CTR</span>
+          <div className="flex items-center gap-4">
+            <div className="hidden md:flex gap-5 text-[11px] text-zinc-600 uppercase tracking-wider">
+              {metricDefs.map(d => <span key={d.key}>{d.label}</span>)}
+            </div>
+            <MetricsPicker objective={objective} selected={selectedMetrics} onChange={setSelectedMetrics} />
           </div>
         </div>
 
@@ -313,11 +438,11 @@ export default function CampanhasPage() {
                 <div>
                   <p className="text-[14px] font-medium text-white mb-1">Conta Meta Ads não conectada</p>
                   <p className="text-[12px] text-zinc-500 max-w-sm leading-relaxed">
-                    Para visualizar campanhas, você precisa conectar sua conta de anúncios do Meta Ads.<br /><br />
-                    Vá em <strong className="text-zinc-300">Configurações → Meta Ads</strong> e clique em <strong className="text-zinc-300">Conectar via OAuth</strong> ou insira um System User Token permanente.
+                    Vá em <strong className="text-zinc-300">Configurações → Meta Ads</strong> e conecte sua conta.
                   </p>
                 </div>
-                <button onClick={() => router.push("/configuracoes?tab=meta")} className="flex items-center gap-1.5 px-4 py-2 bg-violet-600 hover:bg-violet-500 text-white text-[12px] font-medium rounded-lg transition-colors">
+                <button onClick={() => router.push("/configuracoes?tab=meta")}
+                  className="flex items-center gap-1.5 px-4 py-2 bg-violet-600 hover:bg-violet-500 text-white text-[12px] font-medium rounded-lg transition-colors">
                   <Link2 size={12} /> Conectar Meta Ads <ArrowRight size={12} />
                 </button>
               </>
@@ -326,15 +451,17 @@ export default function CampanhasPage() {
                 <div>
                   <p className="text-[14px] font-medium text-white mb-1">Token Meta Ads expirado</p>
                   <p className="text-[12px] text-zinc-500 max-w-xs">
-                    O token de acesso expirou. Tokens OAuth do Meta duram ~60 dias. Para não ter esse problema novamente, use um <strong className="text-zinc-300">System User Token permanente</strong>.
+                    Token expirado. Use um <strong className="text-zinc-300">System User Token permanente</strong>.
                   </p>
                 </div>
                 <div className="flex items-center gap-2">
-                  <button onClick={() => router.push("/configuracoes?tab=meta")} className="flex items-center gap-1.5 px-4 py-2 bg-violet-600 hover:bg-violet-500 text-white text-[12px] font-medium rounded-lg transition-colors">
-                    <RefreshCw size={12} /> Reconectar via OAuth
+                  <button onClick={() => router.push("/configuracoes?tab=meta")}
+                    className="flex items-center gap-1.5 px-4 py-2 bg-violet-600 hover:bg-violet-500 text-white text-[12px] font-medium rounded-lg transition-colors">
+                    <RefreshCw size={12} /> Reconectar
                   </button>
-                  <button onClick={() => router.push("/configuracoes?tab=meta")} className="flex items-center gap-1.5 px-4 py-2 bg-white/[0.06] hover:bg-white/[0.09] text-zinc-300 text-[12px] font-medium rounded-lg ring-1 ring-white/[0.08] transition-colors">
-                    <Key size={12} /> Usar token permanente
+                  <button onClick={() => router.push("/configuracoes?tab=meta")}
+                    className="flex items-center gap-1.5 px-4 py-2 bg-white/[0.06] hover:bg-white/[0.09] text-zinc-300 text-[12px] font-medium rounded-lg ring-1 ring-white/[0.08] transition-colors">
+                    <Key size={12} /> Token permanente
                   </button>
                 </div>
               </>
@@ -353,8 +480,8 @@ export default function CampanhasPage() {
           return (
             <>
               <div className="divide-y divide-white/[0.04]">
-                {paginated.map((c) => (
-                  <CampaignRow key={c.id} campaign={c} onToggle={() => toggleCampaign(c.id, c.status)} />
+                {paginated.map(c => (
+                  <CampaignRow key={c.id} campaign={c} onToggle={() => toggleCampaign(c.id, c.status)} metricDefs={metricDefs} />
                 ))}
               </div>
               {pageCount > 1 && (
