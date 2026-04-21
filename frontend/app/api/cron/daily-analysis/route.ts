@@ -42,12 +42,12 @@ async function analyzeForTenant(
   const supabase = createServiceClient()
   const { data: agentConfig } = await supabase
     .from("agent_configs")
-    .select("min_roas, max_cpl, objetivo_principal")
+    .select("roas_minimo, cpl_maximo, objetivo_principal")
     .eq("tenant_id", tenantId)
     .single()
 
-  const minRoas = agentConfig?.min_roas ?? 2
-  const maxCpl  = agentConfig?.max_cpl  ?? 50
+  const minRoas = agentConfig?.roas_minimo ?? 2
+  const maxCpl  = agentConfig?.cpl_maximo  ?? 50
 
   const client = new Anthropic({ apiKey: anthropicKey })
 
@@ -74,7 +74,7 @@ NÃO comece com "Olá ${userName}" — isso é adicionado automaticamente.`
       input_schema: {
         type: "object",
         properties: {
-          date_preset: { type: "string", enum: ["today", "last_7d"], description: "Período" },
+          date_preset: { type: "string", enum: ["today", "yesterday", "last_7d", "last_30d"], description: "Período" },
         },
         required: ["date_preset"],
       },

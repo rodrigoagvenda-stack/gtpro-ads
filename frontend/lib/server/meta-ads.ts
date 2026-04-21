@@ -2,7 +2,7 @@ import { createServiceClient } from "./supabase"
 import { decrypt, encrypt } from "./crypto"
 import { getMetaAppId, getMetaAppSecret } from "./platform"
 
-const GRAPH = "https://graph.facebook.com/v20.0"
+const GRAPH = "https://graph.facebook.com/v22.0"
 
 async function getToken(tenantId: string) {
   const { token } = await getTokenAndAccount(tenantId)
@@ -58,7 +58,8 @@ async function graphDelete(path: string, token: string) {
 
 export async function getAccountInfo(tenantId: string) {
   const { token, adAccountId } = await getTokenAndAccount(tenantId)
-  const fields = "id,name,account_status,currency,timezone_name,spend_cap,amount_spent,balance,funding_source_details"
+  // funding_source_details removido — requer permissão extra e pode quebrar a resposta
+  const fields = "id,name,account_status,currency,timezone_name,timezone_offset_hours_utc,spend_cap,amount_spent,balance,business_name"
   return graphGet(`/act_${adAccountId}`, { access_token: token, fields })
 }
 
@@ -66,10 +67,22 @@ export async function getAccountInfo(tenantId: string) {
 
 export async function getCampaigns(tenantId: string, datePreset = "last_7d", connectionId?: string) {
   const { token, adAccountId } = await getTokenAndAccount(tenantId, connectionId)
-  const insightFields = "spend,impressions,clicks,reach,ctr,cpc,cpm,actions,action_values"
+  const insightFields = "spend,impressions,clicks,reach,ctr,cpc,cpm,actions,action_values,purchase_roas"
   const fields = `id,name,status,objective,daily_budget,lifetime_budget,start_time,stop_time,budget_remaining,buying_type,insights.date_preset(${datePreset}){${insightFields}}`
-  const data = await graphGet(`/act_${adAccountId}/campaigns`, { access_token: token, fields, limit: "100" })
-  return (data.data ?? []).map((c: any) => {
+
+  // Paginação completa — contas com mais de 100 campanhas
+  let all: any[] = []
+  let after: string | undefined
+  do {
+    const params: Record<string, string> = { access_token: token, fields, limit: "100" }
+    if (after) params.after = after
+    const page = await graphGet(`/act_${adAccountId}/campaigns`, params)
+    all = [...all, ...(page.data ?? [])]
+    after = page.paging?.cursors?.after
+    if (!page.paging?.next) break
+  } while (after)
+
+  return all.map((c: any) => {
     const ins     = c.insights?.data?.[0] ?? {}
     const actions = ins.actions ?? []
     const spend   = Number(ins.spend ?? 0)
@@ -79,31 +92,37 @@ export async function getCampaigns(tenantId: string, datePreset = "last_7d", con
       return a ? Number(a.value) : null
     }
 
-    // Leads / conversões — somente ações genuínas de lead
+    // Leads — action_types válidos conforme documentação Meta
     const leads = pick(
-      "lead",
-      "onsite_conversion.lead_grouped",
-      "offsite_conversion.lead_custom",
+      "lead",                               // todos os leads (on + off Facebook)
+      "onsite_conversion.lead_grouped",     // leads on-Facebook agrupados
+      "offsite_conversion.fb_pixel_lead",   // leads via Pixel
     )
 
-    // Conversas WhatsApp / Messenger
+    // Conversas WhatsApp / Messenger — action_types válidos
     const conversations = pick(
       "onsite_conversion.messaging_conversation_started_7d",
-      "onsite_conversion.total_messaging_connection",
       "onsite_conversion.messaging_first_reply",
+      "onsite_conversion.messaging_welcome_message_view",
     )
 
     // Engajamento
     const engagements = pick("post_engagement", "page_engagement")
 
-    // Compras / ROAS
-    const PURCHASE_TYPES = ["purchase", "omni_purchase", "offsite_conversion.fb_pixel_purchase"]
-    const purchaseRev = (ins.action_values ?? []).find((a: any) => PURCHASE_TYPES.includes(a.action_type))?.value
+    // Compras: purchase_roas vem como array [{action_type, value}]
+    const purchaseRoasEntry = (ins.purchase_roas ?? []).find(
+      (x: any) => x.action_type === "omni_purchase" || x.action_type === "offsite_conversion.fb_pixel_purchase"
+    )
+    const roas = purchaseRoasEntry ? Number(purchaseRoasEntry.value) : null
 
-    const roas = purchaseRev && spend > 0 ? Number(purchaseRev) / spend : null
-    const cpl  = leads && spend > 0 ? spend / leads : null
+    // Receita para fallback (action_values)
+    const PURCHASE_TYPES = ["omni_purchase", "offsite_conversion.fb_pixel_purchase", "onsite_conversion.purchase"]
+    const purchaseRev = (ins.action_values ?? []).find((a: any) => PURCHASE_TYPES.includes(a.action_type))?.value
+    const roasFallback = purchaseRev && spend > 0 ? Number(purchaseRev) / spend : null
+
+    const cpl      = leads && spend > 0 ? spend / leads : null
     const cpc_conv = conversations && spend > 0 ? spend / conversations : null
-    const cpe  = engagements && spend > 0 ? spend / engagements : null
+    const cpe      = engagements && spend > 0 ? spend / engagements : null
 
     return {
       ...c,
@@ -121,7 +140,7 @@ export async function getCampaigns(tenantId: string, datePreset = "last_7d", con
         cpc_conv,
         engagements,
         cpe,
-        roas,
+        roas: roas ?? roasFallback,
       },
     }
   })
@@ -177,7 +196,7 @@ export async function updateBudget(tenantId: string, campaignId: string, dailyBu
 
 // ─── Ad Sets ─────────────────────────────────────────────────────────────────
 
-export async function getAdSets(tenantId: string, campaignId: string) {
+export async function getAdSets(tenantId: string, campaignId: string, datePreset = "last_7d") {
   const token = await getToken(tenantId)
   const fields = [
     "id,name,status,effective_status",
@@ -185,7 +204,7 @@ export async function getAdSets(tenantId: string, campaignId: string) {
     "optimization_goal,billing_event,bid_amount,bid_strategy",
     "targeting",
     "start_time,end_time,created_time,updated_time",
-    "insights{impressions,reach,clicks,spend,ctr,cpc,cpm,actions,frequency}",
+    `insights.date_preset(${datePreset}){impressions,reach,clicks,spend,ctr,cpc,cpm,actions,frequency}`,
   ].join(",")
   const data = await graphGet(`/${campaignId}/adsets`, { access_token: token, fields, limit: "50" })
   return data.data ?? []
@@ -297,7 +316,8 @@ export async function deleteAd(tenantId: string, adId: string) {
 
 // ─── Insights ────────────────────────────────────────────────────────────────
 
-const INSIGHT_FIELDS = "impressions,clicks,spend,reach,ctr,cpm,cpc,actions,action_values,frequency,cost_per_action_type,video_avg_time_watched_actions,website_ctr"
+// website_ctr removido (não é campo raiz); purchase_roas adicionado para ROAS real
+const INSIGHT_FIELDS = "impressions,clicks,spend,reach,ctr,cpm,cpc,actions,action_values,purchase_roas,frequency,cost_per_action_type,video_avg_time_watched_actions,outbound_clicks"
 
 export async function getInsights(tenantId: string, datePreset = "last_7d", since?: string, until?: string) {
   const { token, adAccountId } = await getTokenAndAccount(tenantId)
@@ -360,9 +380,12 @@ export async function getPixels(tenantId: string) {
 
 export async function getPixelStats(tenantId: string, pixelId: string, datePreset = "last_7d") {
   const token = await getToken(tenantId)
+  const now = Math.floor(Date.now() / 1000)
+  const sevenDaysAgo = now - 7 * 24 * 3600
   const data = await graphGet(`/${pixelId}/stats`, {
     access_token: token,
-    start_time: "0",
+    start_time: String(sevenDaysAgo),
+    end_time: String(now),
     aggregation: "event",
   })
   return data.data ?? []
@@ -394,11 +417,11 @@ export async function createLookalikeAudience(tenantId: string, params: Record<s
     name: params.name,
     subtype: "LOOKALIKE",
     origin_audience_id: params.source_audience_id,
-    lookalike_spec: JSON.stringify({
+    lookalike_spec: {
       type: "similarity",
       ratio: params.ratio ?? 0.01,
       country: params.country,
-    }),
+    },
   })
 }
 
@@ -435,7 +458,7 @@ export async function getLongLivedToken(shortToken: string) {
 export async function getAdAccounts(accessToken: string) {
   const data = await graphGet("/me/adaccounts", {
     access_token: accessToken,
-    fields: "id,name,account_id,account_status,currency",
+    fields: "id,name,account_status,currency,timezone_name,business_name",
   })
   return data.data ?? []
 }
@@ -481,7 +504,8 @@ export function filterCampaignsForAgent(
   const efficiencyScore = (c: any): number => {
     const m   = c.metrics
     const obj = (c.objective ?? "").toUpperCase()
-    if (obj.includes("SALES") || obj.includes("PURCHASE")) return (m.roas ?? 0) * 1000
+    const SALES_OBJ = ["OUTCOME_SALES", "PRODUCT_CATALOG_SALES", "CONVERSIONS"]
+    if (SALES_OBJ.includes(obj)) return (m.roas ?? 0) * 1000
     if (m.cpl      && m.cpl      > 0) return 10000 / m.cpl
     if (m.cpc_conv && m.cpc_conv > 0) return 1000  / m.cpc_conv
     return m.spend ?? 0

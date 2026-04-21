@@ -2,6 +2,11 @@ import { createServiceClient } from "./supabase"
 import { getCampaigns, getInsights } from "./meta-ads"
 import { sendText } from "./whatsapp"
 
+// Objetivos válidos na Meta API por categoria
+const LEAD_OBJECTIVES    = ["LEAD_GENERATION", "OUTCOME_LEADS"]
+const SALES_OBJECTIVES   = ["OUTCOME_SALES", "PRODUCT_CATALOG_SALES", "CONVERSIONS"]
+const MESSAGE_OBJECTIVES = ["OUTCOME_ENGAGEMENT", "MESSAGES", "OUTCOME_AWARENESS"]
+
 export async function checkAndNotifyAlerts(tenantId: string): Promise<{ created: number; errors: string[] }> {
   const supabase = createServiceClient()
   const errors: string[] = []
@@ -38,25 +43,45 @@ export async function checkAndNotifyAlerts(tenantId: string): Promise<{ created:
     }
   }
 
-  // Account-level: ROAS baixo
-  const roas = Number(accountInsights.roas ?? 0)
-  if (roas > 0 && roas < roasMin) {
-    await upsertAlert("roas_baixo", `ROAS da conta está em ${roas.toFixed(2)}x (mínimo configurado: ${roasMin}x).`)
+  // Fix C4: ROAS vem como purchase_roas (array) em insights, não campo direto
+  const purchaseRoasEntry = (accountInsights.purchase_roas ?? []).find(
+    (x: any) => x.action_type === "omni_purchase" || x.action_type === "offsite_conversion.fb_pixel_purchase"
+  )
+  const accountRoas = purchaseRoasEntry ? Number(purchaseRoasEntry.value) : 0
+  if (accountRoas > 0 && accountRoas < roasMin) {
+    await upsertAlert("roas_baixo", `ROAS da conta está em ${accountRoas.toFixed(2)}x (mínimo configurado: ${roasMin}x).`)
   }
 
-  const LEAD_OBJECTIVES = ["LEAD_GENERATION", "OUTCOME_LEADS", "LEADS"]
   for (const c of active) {
-    const m = c.metrics ?? {}
-    // CPL só faz sentido para campanhas com objetivo de lead
-    if (m.cpl && m.cpl > cplMax && LEAD_OBJECTIVES.includes(c.objective?.toUpperCase?.())) {
+    const m   = c.metrics ?? {}
+    const obj = (c.objective ?? "").toUpperCase()
+
+    // Fix A1: CPL só para objetivos de lead válidos (LEADS inválido removido)
+    if (m.cpl && m.cpl > cplMax && LEAD_OBJECTIVES.includes(obj)) {
       await upsertAlert("cpl_alto", `Campanha "${c.name}" com CPL R$ ${m.cpl.toFixed(2)} (limite: R$ ${cplMax}).`, c.id)
     }
-    if (c.daily_budget && m.spend && m.spend >= c.daily_budget * 0.95) {
-      await upsertAlert("budget_esgotado", `Campanha "${c.name}" atingiu 95% do budget diário.`, c.id)
+
+    // Fix M6: custo por conversa alto para campanhas de Mensagens
+    const cpcConvMax = cplMax * 0.5
+    if (m.cpc_conv && m.cpc_conv > cpcConvMax && MESSAGE_OBJECTIVES.includes(obj)) {
+      await upsertAlert("cpl_alto", `Campanha "${c.name}" com custo/conversa R$ ${m.cpc_conv.toFixed(2)} (limite: R$ ${cpcConvMax.toFixed(2)}).`, c.id)
     }
+
+    // ROAS baixo por campanha (vendas)
+    if (m.roas && m.roas < roasMin && m.spend > 0 && SALES_OBJECTIVES.includes(obj)) {
+      await upsertAlert("roas_baixo", `Campanha "${c.name}" com ROAS ${m.roas.toFixed(2)}x (mínimo: ${roasMin}x).`, c.id)
+    }
+
+    // Fix C5: budget em centavos → converter para reais antes de comparar
+    const dailyBudgetBrl = c.daily_budget ? c.daily_budget / 100 : 0
+    if (dailyBudgetBrl > 0 && m.spend >= dailyBudgetBrl * 0.95) {
+      await upsertAlert("budget_esgotado", `Campanha "${c.name}" atingiu 95% do budget diário (R$ ${dailyBudgetBrl.toFixed(2)}).`, c.id)
+    }
+
     if ((m.impressions ?? 0) === 0) {
       await upsertAlert("sem_entrega", `Campanha "${c.name}" está ativa mas sem impressões nos últimos 7 dias.`, c.id)
     }
+
     if (m.ctr !== undefined && m.ctr < 0.5 && m.impressions > 500) {
       await upsertAlert("queda_performance", `Campanha "${c.name}" com CTR baixo: ${m.ctr.toFixed(2)}%.`, c.id)
     }
