@@ -5,11 +5,12 @@ import { sendCAPIEvent } from "@/lib/server/capi"
 
 export async function POST(
   req: NextRequest,
-  { params }: { params: { id: string } },
+  { params }: { params: Promise<{ id: string }> },
 ) {
   const tenant = await getTenant(req)
   if (!tenant) return unauthorized()
 
+  const { id } = await params
   const { value }: { value?: number } = await req.json().catch(() => ({}))
 
   const supabase = createServiceClient()
@@ -17,7 +18,7 @@ export async function POST(
   const { data: lead, error: fetchErr } = await supabase
     .from("leads")
     .select("id, tenant_id, email, phone, name, fbclid, page_url, converted_at")
-    .eq("id", params.id)
+    .eq("id", id)
     .eq("tenant_id", tenant.tenant_id)
     .single()
 
@@ -28,7 +29,7 @@ export async function POST(
   const { error: updateErr } = await supabase
     .from("leads")
     .update({ converted_at: now, conversion_value: value ?? null })
-    .eq("id", params.id)
+    .eq("id", id)
 
   if (updateErr) return Response.json({ error: updateErr.message }, { status: 500 })
 
@@ -36,7 +37,7 @@ export async function POST(
   const firstName = (lead.name as string | null)?.split(" ")[0] ?? null
   sendCAPIEvent(tenant.tenant_id, {
     eventName:      "Purchase",
-    eventId:        `purchase_${params.id}`,
+    eventId:        `purchase_${id}`,
     email:          lead.email,
     phone:          lead.phone,
     firstName,
@@ -46,7 +47,7 @@ export async function POST(
     currency:       "BRL",
   }).then(sent => {
     if (sent) {
-      supabase.from("leads").update({ capi_purchase_sent: true }).eq("id", params.id).then(() => {})
+      supabase.from("leads").update({ capi_purchase_sent: true }).eq("id", id).then(() => {})
     }
   })
 
