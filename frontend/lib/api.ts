@@ -70,7 +70,8 @@ export const api = {
   },
 
   audiences: {
-    list: () => fetchWithAuth("/audiences"),
+    list:   () => fetchWithAuth("/audiences"),
+    create: (body: Record<string, any>) => fetchWithAuth("/audiences", { method: "POST", body: JSON.stringify(body) }),
   },
 
   pixels: {

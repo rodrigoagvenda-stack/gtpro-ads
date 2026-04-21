@@ -314,6 +314,65 @@ export async function deleteAd(tenantId: string, adId: string) {
   return graphDelete(`/${adId}`, token)
 }
 
+// UTM default tags injected on every ad unless overridden
+const DEFAULT_UTM_TAGS = "utm_source={{site_source_name}}&utm_medium=paid_social&utm_campaign={{campaign.name}}&utm_content={{adset.name}}&utm_term={{ad.name}}&fbclid={{fbclid}}"
+
+export async function createAd(tenantId: string, params: Record<string, any>) {
+  const { token, adAccountId } = await getTokenAndAccount(tenantId)
+  const creative: Record<string, any> = {}
+
+  if (params.creative_id) {
+    creative.creative_id = params.creative_id
+  } else {
+    const spec: Record<string, any> = {}
+    if (params.page_id) {
+      const linkData: Record<string, any> = {
+        message: params.body ?? params.message,
+        name:    params.headline,
+        link:    params.link_url ?? params.website_url ?? "https://facebook.com",
+        call_to_action: { type: params.cta ?? "LEARN_MORE" },
+      }
+      if (params.image_hash)  linkData.image_hash = params.image_hash
+      if (params.caption)     linkData.caption    = params.caption
+      if (params.description) linkData.description = params.description
+
+      if (params.video_id) {
+        spec.video_data = {
+          video_id:    params.video_id,
+          title:       params.headline,
+          message:     params.body ?? params.message,
+          call_to_action: { type: params.cta ?? "LEARN_MORE", value: { link: params.link_url ?? params.website_url } },
+        }
+      } else {
+        spec.link_data = linkData
+      }
+      spec.page_id = params.page_id
+      if (params.instagram_actor_id) spec.instagram_actor_id = params.instagram_actor_id
+    }
+    creative.name              = params.creative_name ?? params.name
+    creative.object_story_spec = spec
+  }
+
+  const body: Record<string, any> = {
+    name:      params.name,
+    adset_id:  params.adset_id,
+    creative,
+    status:    params.status ?? "PAUSED",
+    // Inject UTM tags automatically unless caller provides them
+    tracking_specs: params.tracking_specs ?? undefined,
+  }
+
+  // url_tags injects UTM params into all destination URLs in the creative
+  if (!params.url_tags && !params.skip_utm) {
+    body.url_tags = params.utm_tags ?? DEFAULT_UTM_TAGS
+  }
+
+  const { creative: _c, ...adBody } = body
+  const creativeRes = await graphPost(`/act_${adAccountId}/adcreatives`, token, creative)
+  adBody.creative = { creative_id: creativeRes.id }
+  return graphPost(`/act_${adAccountId}/ads`, token, adBody)
+}
+
 // ─── Insights ────────────────────────────────────────────────────────────────
 
 // website_ctr removido (não é campo raiz); purchase_roas adicionado para ROAS real
@@ -409,6 +468,59 @@ export async function getCustomAudiences(tenantId: string) {
     fields: "id,name,subtype,approximate_count_lower_bound,approximate_count_upper_bound,operation_status,time_created",
   })
   return data.data ?? []
+}
+
+export async function createWebsiteAudience(tenantId: string, params: {
+  name: string
+  pixel_id: string
+  retention_days: number
+  event?: string  // "ViewContent" | "Purchase" | "Lead" | "PageView" (default)
+}) {
+  const { token, adAccountId } = await getTokenAndAccount(tenantId)
+  const evt = params.event ?? "PageView"
+  const rule = {
+    inclusions: {
+      operator: "or",
+      rules: [{
+        event_sources: [{ id: params.pixel_id, type: "pixel" }],
+        retention_seconds: params.retention_days * 86400,
+        filter: { operator: "and", filters: [{ field: "event", operator: "eq", value: evt }] },
+      }],
+    },
+  }
+  return graphPost(`/act_${adAccountId}/customaudiences`, token, {
+    name:        params.name,
+    subtype:     "WEBSITE",
+    description: "Criado pelo GTPRO",
+    pixel_id:    params.pixel_id,
+    rule:        JSON.stringify(rule),
+  })
+}
+
+export async function createEngagementAudience(tenantId: string, params: {
+  name: string
+  page_id: string
+  retention_days: number
+  engagement_type?: "PAGE_VISITED" | "PAGE_LIKED" | "PAGE_ENGAGED" | "PAGE_CTA_CLICKED"
+}) {
+  const { token, adAccountId } = await getTokenAndAccount(tenantId)
+  const engType = params.engagement_type ?? "PAGE_ENGAGED"
+  return graphPost(`/act_${adAccountId}/customaudiences`, token, {
+    name:        params.name,
+    subtype:     "ENGAGEMENT",
+    description: "Criado pelo GTPRO",
+    retention_days: params.retention_days,
+    rule: JSON.stringify({
+      inclusions: {
+        operator: "or",
+        rules: [{
+          event_sources: [{ id: params.page_id, type: "page" }],
+          retention_seconds: params.retention_days * 86400,
+          filter: { operator: "and", filters: [{ field: "event", operator: "eq", value: engType }] },
+        }],
+      },
+    }),
+  })
 }
 
 export async function createLookalikeAudience(tenantId: string, params: Record<string, any>) {

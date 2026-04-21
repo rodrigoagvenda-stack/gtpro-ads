@@ -6,9 +6,9 @@ import {
   getCampaigns, getInsights, getCampaignInsights, getAdSetInsights, getAdInsights, getInsightsByBreakdown,
   createCampaign, updateCampaign, duplicateCampaign, deleteCampaign, toggleCampaign,
   getAdSets, getAdSetById, createAdSet, updateAdSet, duplicateAdSet, deleteAdSet,
-  getAds, getAdsByAdSet, updateAd, duplicateAd, deleteAd,
+  getAds, getAdsByAdSet, updateAd, duplicateAd, deleteAd, createAd,
   getPixels, getPixelStats, getCustomConversions,
-  getCustomAudiences, createLookalikeAudience,
+  getCustomAudiences, createLookalikeAudience, createWebsiteAudience, createEngagementAudience,
   getAccountInfo,
 } from "./meta-ads"
 
@@ -158,6 +158,7 @@ const TOOLS: Anthropic.Tool[] = [
   { name: "get_ad_insights",  description: "Métricas detalhadas de um anúncio específico.", input_schema: { ...o, properties: { ad_id: s, date_preset: s }, required: ["ad_id"] } },
 
   // ── Ads — Write
+  { name: "create_ad", description: "Cria um anúncio completo com criativo. UTM é injetado automaticamente via url_tags. Para anúncio de imagem forneça image_hash; para vídeo forneça video_id.", input_schema: { ...o, properties: { adset_id: s, name: s, page_id: s, headline: s, body: s, link_url: s, cta: s, image_hash: s, video_id: s, instagram_actor_id: s, caption: s, utm_tags: s, status: s }, required: ["adset_id", "name", "page_id", "link_url"] } },
   { name: "update_ad",    description: "Atualiza status ou nome de um anúncio.", input_schema: { ...o, properties: { ad_id: s, status: s, name: s }, required: ["ad_id"] } },
   { name: "duplicate_ad", description: "Duplica um anúncio, opcionalmente para outro ad set.", input_schema: { ...o, properties: { ad_id: s, adset_id: s }, required: ["ad_id"] } },
   { name: "delete_ad",    description: "Deleta um anúncio.", input_schema: { ...o, properties: { ad_id: s }, required: ["ad_id"] } },
@@ -168,8 +169,10 @@ const TOOLS: Anthropic.Tool[] = [
   { name: "get_custom_conversions", description: "Lista as conversões customizadas configuradas na conta.", input_schema: { ...o, properties: {} } },
 
   // ── Audiences
-  { name: "get_audiences",             description: "Lista públicos customizados da conta.", input_schema: { ...o, properties: {} } },
-  { name: "create_lookalike_audience", description: "Cria um público lookalike a partir de um público existente.", input_schema: { ...o, properties: { source_audience_id: s, name: s, country: s, ratio: n }, required: ["source_audience_id", "name", "country"] } },
+  { name: "get_audiences",                description: "Lista públicos customizados da conta.", input_schema: { ...o, properties: {} } },
+  { name: "create_lookalike_audience",    description: "Cria um público lookalike a partir de um público existente.", input_schema: { ...o, properties: { source_audience_id: s, name: s, country: s, ratio: n }, required: ["source_audience_id", "name", "country"] } },
+  { name: "create_website_audience",      description: "Cria público de retargeting baseado em visitas ao pixel (website). Precisa do pixel_id.", input_schema: { ...o, properties: { name: s, pixel_id: s, retention_days: n, event: { type: "string", enum: ["PageView","ViewContent","Purchase","Lead","AddToCart"] } }, required: ["name", "pixel_id", "retention_days"] } },
+  { name: "create_engagement_audience",   description: "Cria público de engajamento com a Página do Facebook.", input_schema: { ...o, properties: { name: s, page_id: s, retention_days: n, engagement_type: { type: "string", enum: ["PAGE_VISITED","PAGE_LIKED","PAGE_ENGAGED","PAGE_CTA_CLICKED"] } }, required: ["name", "page_id", "retention_days"] } },
 
   // ── UTM
   { name: "generate_utm", description: "Gera parâmetros UTM com tokens dinâmicos do Meta. Retorna a string para colar em Parâmetros de URL do criativo.", input_schema: { ...o, properties: { source: { type: "string", enum: ["facebook", "instagram", "meta"] }, medium: s, include_ad_name: b, include_placement: b, base_url: s }, required: [] } },
@@ -181,7 +184,7 @@ const TOOLS: Anthropic.Tool[] = [
   { name: "create_alert", description: "Registra um alerta interno no sistema.", input_schema: { ...o, properties: { type: { type: "string", enum: ["roas_baixo", "cpl_alto", "budget_esgotado", "campanha_rejeitada", "queda_performance"] }, message: s, campaign_id: s }, required: ["type", "message"] } },
 ]
 
-const WRITE_TOOLS = new Set(["create_campaign","update_campaign","duplicate_campaign","delete_campaign","toggle_campaign","create_adset","update_adset","duplicate_adset","delete_adset","update_ad","duplicate_ad","delete_ad","create_lookalike_audience"])
+const WRITE_TOOLS = new Set(["create_campaign","update_campaign","duplicate_campaign","delete_campaign","toggle_campaign","create_adset","update_adset","duplicate_adset","delete_adset","create_ad","update_ad","duplicate_ad","delete_ad","create_lookalike_audience","create_website_audience","create_engagement_audience"])
 
 async function executeTool(name: string, input: Record<string, any>, tenantId: string) {
   const supabase = createServiceClient()
@@ -221,8 +224,11 @@ async function executeTool(name: string, input: Record<string, any>, tenantId: s
   if (name === "get_pixels")             return getPixels(tenantId)
   if (name === "get_pixel_stats")        return getPixelStats(tenantId, input.pixel_id, input.date_preset)
   if (name === "get_custom_conversions") return getCustomConversions(tenantId)
-  if (name === "get_audiences")          return getCustomAudiences(tenantId)
-  if (name === "create_lookalike_audience") return createLookalikeAudience(tenantId, input)
+  if (name === "create_ad")               return createAd(tenantId, input)
+  if (name === "get_audiences")           return getCustomAudiences(tenantId)
+  if (name === "create_lookalike_audience")   return createLookalikeAudience(tenantId, input)
+  if (name === "create_website_audience")     return createWebsiteAudience(tenantId, input as any)
+  if (name === "create_engagement_audience")  return createEngagementAudience(tenantId, input as any)
 
   if (name === "check_whatsapp_status") {
     const { data } = await supabase
