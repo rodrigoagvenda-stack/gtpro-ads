@@ -2,6 +2,7 @@ import { NextRequest } from "next/server"
 import { getTenant, unauthorized } from "@/lib/server/auth"
 import { createServiceClient } from "@/lib/server/supabase"
 import { getCampaigns, getInsights } from "@/lib/server/meta-ads"
+import { getAnthropicKey } from "@/lib/server/platform"
 import Anthropic from "@anthropic-ai/sdk"
 
 const SKILL_SECTIONS: Record<string, string> = {
@@ -114,12 +115,7 @@ Máximo 5 ações, ordenadas por impacto. Cada ação deve ser específica: "Pau
 ## PRÓXIMOS 7 DIAS
 O que fazer agora, em ordem.`
 
-    const apiKey = process.env.ANTHROPIC_API_KEY ?? ""
-    let key = apiKey
-    try {
-      const { data: keys } = await supabase.from("platform_config").select("anthropic_api_key").single()
-      if (keys?.anthropic_api_key) key = keys.anthropic_api_key
-    } catch {}
+    const key = await getAnthropicKey()
 
     const client   = new Anthropic({ apiKey: key })
     const response = await client.messages.create({

@@ -356,7 +356,7 @@ export default function RelatoriosPage() {
                   <p className="text-[13px] font-medium text-zinc-200">{report.title}</p>
                   <p className="text-[11px] text-zinc-600 mt-0.5">{report.period}</p>
                 </div>
-                <p className="text-[11px] text-zinc-700 shrink-0">
+                <p className="text-[11px] text-zinc-700 shrink-0" suppressHydrationWarning>
                   {new Date(report.created_at).toLocaleDateString("pt-BR")}
                 </p>
                 {report.summary && (
