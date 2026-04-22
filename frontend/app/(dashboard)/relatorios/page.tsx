@@ -2,8 +2,9 @@
 
 import { useEffect, useState } from "react"
 import { api } from "@/lib/api"
-import { FileText, Download, Loader2, Plus, ChevronDown, ChevronUp, CalendarClock, MessageCircle, Check, RefreshCw } from "lucide-react"
-import { createClient } from "@/lib/supabase"
+import { FileText, Download, Loader2, Plus, ChevronDown, ChevronUp, CalendarClock,
+  MessageCircle, Check, RefreshCw, X, AlertTriangle, TrendingDown,
+  Pencil, Users, DollarSign, Sparkles } from "lucide-react"
 import { cn } from "@/lib/utils"
 
 interface Report {
@@ -20,18 +21,229 @@ const SCHEDULES = [
   { id: "monthly", label: "Mensal" },
 ]
 
+const SKILLS: { id: string; label: string; desc: string; icon: any; color: string }[] = [
+  { id: "gargalos", label: "Gargalos",  desc: "Aponta onde o funil quebra",        icon: AlertTriangle, color: "text-red-400   bg-red-500/10   ring-red-500/20" },
+  { id: "criativo", label: "Criativo",  desc: "CTR, frequência e saturação",        icon: TrendingDown,  color: "text-violet-400 bg-violet-500/10 ring-violet-500/20" },
+  { id: "copy",     label: "Copy",      desc: "Mensagem e taxa de conversão",       icon: Pencil,        color: "text-blue-400  bg-blue-500/10   ring-blue-500/20" },
+  { id: "publico",  label: "Público",   desc: "Qualidade e sobreposição de público", icon: Users,         color: "text-emerald-400 bg-emerald-500/10 ring-emerald-500/20" },
+  { id: "budget",   label: "Budget",    desc: "Redistribuição de orçamento",        icon: DollarSign,    color: "text-amber-400  bg-amber-500/10  ring-amber-500/20" },
+]
+
+// ─── Markdown → HTML for PDF ──────────────────────────────────────────────────
+
+function inlineHtml(text: string): string {
+  return text
+    .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+    .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
+    .replace(/`(.+?)`/g, "<code>$1</code>")
+}
+
+function mdToHtml(md: string): string {
+  const lines  = md.split("\n")
+  const result: string[] = []
+  let inList = false
+
+  for (const line of lines) {
+    const t = line.trim()
+    const isList = t.startsWith("- ") || t.startsWith("• ") || /^\d+\.\s/.test(t)
+    if (!isList && inList) { result.push("</ul>"); inList = false }
+    if (t.startsWith("### "))      { result.push(`<h3>${inlineHtml(t.slice(4))}</h3>`); continue }
+    if (t.startsWith("## "))       { result.push(`<h2>${inlineHtml(t.slice(3))}</h2>`); continue }
+    if (t.startsWith("# "))        { result.push(`<h1>${inlineHtml(t.slice(2))}</h1>`); continue }
+    if (t === "---")               { result.push("<hr />"); continue }
+    if (t === "")                  { if (!inList) result.push("<br />"); continue }
+    if (t.startsWith("- ") || t.startsWith("• ")) {
+      if (!inList) { result.push("<ul>"); inList = true }
+      result.push(`<li>${inlineHtml(t.slice(2))}</li>`); continue
+    }
+    if (/^\d+\.\s/.test(t)) {
+      if (!inList) { result.push("<ul>"); inList = true }
+      result.push(`<li>${inlineHtml(t.replace(/^\d+\.\s/, ""))}</li>`); continue
+    }
+    result.push(`<p>${inlineHtml(t)}</p>`)
+  }
+  if (inList) result.push("</ul>")
+  return result.join("\n")
+}
+
+function printReport(title: string, period: string, content: string) {
+  const html = mdToHtml(content)
+  const win  = window.open("", "_blank")
+  if (!win) return
+  win.document.write(`<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <title>${title}</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Inter', -apple-system, sans-serif; color: #111827; background: #fff; padding: 48px 52px; max-width: 860px; margin: 0 auto; }
+    .header { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 2px solid #7C3AED; padding-bottom: 20px; margin-bottom: 32px; }
+    .badge { background: #7C3AED; color: #fff; font-size: 10px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; padding: 3px 10px; border-radius: 999px; }
+    .header-title { font-size: 22px; font-weight: 700; margin-top: 8px; color: #111827; }
+    .header-meta { font-size: 11px; color: #9CA3AF; margin-top: 4px; }
+    h1 { font-size: 20px; font-weight: 700; margin: 28px 0 10px; }
+    h2 { font-size: 16px; font-weight: 600; color: #1F2937; margin: 24px 0 10px; padding-bottom: 6px; border-bottom: 1px solid #E5E7EB; }
+    h3 { font-size: 13px; font-weight: 600; color: #374151; margin: 16px 0 6px; }
+    p { font-size: 13px; line-height: 1.75; color: #374151; margin-bottom: 6px; }
+    ul { margin: 8px 0 8px 20px; }
+    li { font-size: 13px; line-height: 1.75; color: #374151; margin-bottom: 3px; }
+    strong { font-weight: 600; color: #111827; }
+    code { background: #F3F4F6; padding: 1px 5px; border-radius: 4px; font-size: 11px; font-family: 'Courier New', monospace; color: #6D28D9; }
+    hr { border: none; border-top: 1px solid #E5E7EB; margin: 20px 0; }
+    .footer { margin-top: 48px; padding-top: 16px; border-top: 1px solid #E5E7EB; font-size: 11px; color: #9CA3AF; display: flex; justify-content: space-between; }
+    @media print {
+      body { padding: 0; }
+      @page { margin: 1.8cm 1.5cm; size: A4; }
+      h2 { page-break-after: avoid; }
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div>
+      <div class="badge">GTPRO</div>
+      <div class="header-title">${title}</div>
+      <div class="header-meta">${period} · Gerado em ${new Date().toLocaleString("pt-BR")}</div>
+    </div>
+  </div>
+  ${html}
+  <div class="footer">
+    <span>GTPRO — Gestão de Meta Ads com IA</span>
+    <span>gtpro.vendai.pro</span>
+  </div>
+  <script>setTimeout(() => { window.print(); }, 600);<\/script>
+</body>
+</html>`)
+  win.document.close()
+}
+
+// ─── Markdown renderer (in-page) ──────────────────────────────────────────────
+
+function inlineMd(text: string) {
+  return text.split(/(\*\*[^*]+\*\*|`[^`]+`)/g).map((p, i) => {
+    if (p.startsWith("**") && p.endsWith("**")) return <strong key={i} className="text-white font-semibold">{p.slice(2,-2)}</strong>
+    if (p.startsWith("`")  && p.endsWith("`"))  return <code key={i} className="text-violet-300 bg-violet-500/10 px-1 rounded text-[11px] font-mono">{p.slice(1,-1)}</code>
+    return p
+  })
+}
+
+function RenderMd({ content }: { content: string }) {
+  return (
+    <div className="text-[12px] text-zinc-400 leading-relaxed space-y-1">
+      {content.split("\n").map((line, i) => {
+        if (line.startsWith("### ")) return <p key={i} className="text-[13px] font-semibold text-white mt-4 mb-1">{line.slice(4)}</p>
+        if (line.startsWith("## "))  return <p key={i} className="text-[14px] font-semibold text-zinc-100 mt-5 mb-2 pb-1 border-b border-white/[0.06]">{line.slice(3)}</p>
+        if (line.startsWith("# "))   return <p key={i} className="text-[16px] font-bold text-white mt-6 mb-2">{line.slice(2)}</p>
+        if (line === "---")          return <hr key={i} className="border-white/[0.06] my-3" />
+        if (line.startsWith("- ") || line.startsWith("• ")) return (
+          <div key={i} className="flex gap-2 items-start">
+            <span className="text-violet-500 mt-[4px] shrink-0 text-[8px]">●</span>
+            <span>{inlineMd(line.slice(2))}</span>
+          </div>
+        )
+        if (/^\d+\.\s/.test(line)) return (
+          <div key={i} className="flex gap-2 items-start">
+            <span className="text-zinc-600 text-[11px] mt-px shrink-0 w-4">{line.match(/^(\d+)/)?.[1]}.</span>
+            <span>{inlineMd(line.replace(/^\d+\.\s/, ""))}</span>
+          </div>
+        )
+        if (line === "") return <div key={i} className="h-1.5" />
+        return <p key={i}>{inlineMd(line)}</p>
+      })}
+    </div>
+  )
+}
+
+// ─── Generate modal ───────────────────────────────────────────────────────────
+
+function GenerateModal({ onClose, onGenerate }: {
+  onClose: () => void
+  onGenerate: (skills: string[]) => void
+}) {
+  const [selected, setSelected] = useState<string[]>(["gargalos"])
+
+  function toggle(id: string) {
+    setSelected(prev => prev.includes(id) ? prev.filter(s => s !== id) : [...prev, id])
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+      <div className="bg-[#111113] ring-1 ring-white/[0.10] rounded-2xl w-full max-w-md shadow-2xl">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-white/[0.07]">
+          <div className="flex items-center gap-2.5">
+            <Sparkles size={14} className="text-violet-400" />
+            <h2 className="text-[15px] font-semibold text-white">Gerar Relatório</h2>
+          </div>
+          <button onClick={onClose} className="text-zinc-600 hover:text-zinc-300 transition-colors"><X size={16} /></button>
+        </div>
+
+        <div className="px-6 py-5 space-y-4">
+          <div>
+            <p className="text-[12px] text-zinc-500 mb-3">Escolha as análises a incluir no relatório:</p>
+            <div className="space-y-2">
+              {SKILLS.map(skill => {
+                const Icon = skill.icon
+                const on   = selected.includes(skill.id)
+                return (
+                  <button key={skill.id} type="button" onClick={() => toggle(skill.id)}
+                    className={cn("w-full flex items-center gap-3 px-4 py-3 rounded-xl ring-1 text-left transition-all",
+                      on ? "bg-violet-600/10 ring-violet-500/30" : "bg-white/[0.02] ring-white/[0.06] hover:bg-white/[0.05]"
+                    )}>
+                    <div className={cn("w-7 h-7 rounded-lg flex items-center justify-center shrink-0 ring-1", skill.color)}>
+                      <Icon size={12} />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className={cn("text-[13px] font-medium", on ? "text-white" : "text-zinc-300")}>{skill.label}</p>
+                      <p className="text-[11px] text-zinc-600 mt-0.5">{skill.desc}</p>
+                    </div>
+                    <div className={cn("w-4 h-4 rounded-full border-2 shrink-0 transition-all",
+                      on ? "bg-violet-500 border-violet-500" : "border-zinc-600"
+                    )}>
+                      {on && <Check size={10} className="text-white m-auto translate-y-[1px]" />}
+                    </div>
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+
+          <p className="text-[11px] text-zinc-600">
+            Apenas campanhas <span className="text-emerald-400 font-medium">ativas</span> serão analisadas. Pausadas e arquivadas são ignoradas.
+          </p>
+
+          <div className="flex gap-2 pt-1">
+            <button type="button" onClick={onClose}
+              className="flex-1 py-2 text-[13px] text-zinc-400 bg-white/[0.04] ring-1 ring-white/[0.08] rounded-xl hover:bg-white/[0.07] transition-colors">
+              Cancelar
+            </button>
+            <button type="button" onClick={() => onGenerate(selected)} disabled={selected.length === 0}
+              className="flex-1 py-2 text-[13px] text-white bg-violet-600 hover:bg-violet-500 rounded-xl transition-colors disabled:opacity-40 font-medium flex items-center justify-center gap-2">
+              <Sparkles size={13} /> Gerar relatório
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ─── Page ─────────────────────────────────────────────────────────────────────
+
 export default function RelatoriosPage() {
-  const [reports, setReports] = useState<Report[]>([])
-  const [loading, setLoading] = useState(true)
-  const [generating, setGenerating] = useState(false)
-  const [expanded, setExpanded] = useState<string | null>(null)
-  const [schedule, setSchedule] = useState("none")
+  const [reports, setReports]             = useState<Report[]>([])
+  const [loading, setLoading]             = useState(true)
+  const [generating, setGenerating]       = useState(false)
+  const [expanded, setExpanded]           = useState<string | null>(null)
+  const [schedule, setSchedule]           = useState("none")
   const [scheduleWhatsapp, setScheduleWhatsapp] = useState(false)
-  const [savingSchedule, setSavingSchedule] = useState(false)
-  const [savedSchedule, setSavedSchedule] = useState(false)
+  const [savingSchedule, setSavingSchedule]     = useState(false)
+  const [savedSchedule, setSavedSchedule]       = useState(false)
+  const [showModal, setShowModal]         = useState(false)
 
   useEffect(() => {
-    api.reports.list().then((d) => {
+    api.reports.list().then((d: any) => {
       setReports(Array.isArray(d) ? d : [])
       setLoading(false)
     }).catch(() => setLoading(false))
@@ -49,52 +261,34 @@ export default function RelatoriosPage() {
     } catch (e: any) { alert(e.message) } finally { setSavingSchedule(false) }
   }
 
-  async function generateReport() {
+  async function generateReport(skills: string[]) {
+    setShowModal(false)
     setGenerating(true)
     try {
-      const report = await api.reports.generate()
-      setReports((p) => [report, ...p])
+      const report = await api.reports.generate(skills)
+      setReports(p => [report, ...p])
       setExpanded(report.id)
     } catch (e: any) {
       alert(e.message || "Erro ao gerar relatório")
-    } finally {
-      setGenerating(false)
-    }
-  }
-
-  async function downloadReport(id: string) {
-    const supabase = createClient()
-    const { data: { session } } = await supabase.auth.getSession()
-    const res = await fetch(api.reports.downloadUrl(id), {
-      headers: session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {},
-    })
-    if (!res.ok) return alert("Erro ao baixar")
-    const blob = await res.blob()
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement("a")
-    a.href = url
-    a.download = `relatorio-${id}.csv`
-    a.click()
-    URL.revokeObjectURL(url)
+    } finally { setGenerating(false) }
   }
 
   return (
     <div className="space-y-7">
+      {showModal && <GenerateModal onClose={() => setShowModal(false)} onGenerate={generateReport} />}
+
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-[17px] font-semibold text-white">Relatórios</h1>
           <p className="text-[12px] text-zinc-600 mt-0.5">Gerados automaticamente pelo agente</p>
         </div>
-        <button
-          onClick={generateReport}
-          disabled={generating}
-          className="flex items-center gap-2 px-3.5 py-2 bg-violet-600 hover:bg-violet-500 disabled:opacity-50 text-white text-[13px] font-medium rounded-lg transition-colors"
-        >
+        <button onClick={() => setShowModal(true)} disabled={generating}
+          className="flex items-center gap-2 px-3.5 py-2 bg-violet-600 hover:bg-violet-500 disabled:opacity-50 text-white text-[13px] font-medium rounded-lg transition-colors">
           {generating ? <><Loader2 size={13} className="animate-spin" /> Gerando...</> : <><Plus size={13} /> Gerar relatório</>}
         </button>
       </div>
 
-      {/* Schedule settings */}
+      {/* Schedule */}
       <div className="bg-white/[0.02] ring-1 ring-white/[0.06] rounded-xl p-5 space-y-4">
         <div className="flex items-center gap-2">
           <CalendarClock size={13} className="text-zinc-500" />
@@ -134,7 +328,7 @@ export default function RelatoriosPage() {
       {generating && (
         <div className="bg-violet-600/[0.08] ring-1 ring-violet-500/20 rounded-lg px-4 py-3 flex items-center gap-2.5 text-[13px] text-violet-300">
           <Loader2 size={13} className="animate-spin shrink-0" />
-          O agente está analisando suas campanhas...
+          O agente está analisando suas campanhas ativas...
         </div>
       )}
 
@@ -152,7 +346,7 @@ export default function RelatoriosPage() {
         </div>
       ) : (
         <div className="space-y-2">
-          {reports.map((report) => (
+          {reports.map(report => (
             <div key={report.id} className="bg-white/[0.02] ring-1 ring-white/[0.06] rounded-xl overflow-hidden">
               <div className="flex items-center gap-3 px-5 py-3.5">
                 <div className="w-7 h-7 rounded-lg bg-violet-600/15 flex items-center justify-center shrink-0">
@@ -165,18 +359,29 @@ export default function RelatoriosPage() {
                 <p className="text-[11px] text-zinc-700 shrink-0">
                   {new Date(report.created_at).toLocaleDateString("pt-BR")}
                 </p>
-                <button onClick={() => downloadReport(report.id)} className="w-7 h-7 flex items-center justify-center hover:bg-white/[0.06] rounded-lg transition-colors" title="Baixar CSV">
-                  <Download size={13} className="text-zinc-600 hover:text-zinc-300" />
-                </button>
                 {report.summary && (
-                  <button onClick={() => setExpanded(expanded === report.id ? null : report.id)} className="w-7 h-7 flex items-center justify-center hover:bg-white/[0.06] rounded-lg transition-colors">
-                    {expanded === report.id ? <ChevronUp size={13} className="text-zinc-600" /> : <ChevronDown size={13} className="text-zinc-600" />}
+                  <button onClick={() => printReport(report.title, report.period, report.summary!)}
+                    title="Exportar PDF"
+                    className="w-7 h-7 flex items-center justify-center hover:bg-white/[0.06] rounded-lg transition-colors">
+                    <Download size={13} className="text-zinc-600 hover:text-violet-400" />
+                  </button>
+                )}
+                {report.summary && (
+                  <button onClick={() => setExpanded(expanded === report.id ? null : report.id)}
+                    className="w-7 h-7 flex items-center justify-center hover:bg-white/[0.06] rounded-lg transition-colors">
+                    {expanded === report.id
+                      ? <ChevronUp size={13} className="text-zinc-600" />
+                      : <ChevronDown size={13} className="text-zinc-600" />}
                   </button>
                 )}
               </div>
               {expanded === report.id && report.summary && (
-                <div className="px-5 pb-5 border-t border-white/[0.05] pt-4">
-                  <p className="text-[12px] text-zinc-500 whitespace-pre-wrap leading-relaxed">{report.summary}</p>
+                <div className="px-5 pb-6 border-t border-white/[0.05] pt-5">
+                  <RenderMd content={report.summary} />
+                  <button onClick={() => printReport(report.title, report.period, report.summary!)}
+                    className="mt-5 flex items-center gap-1.5 px-3.5 py-1.5 bg-white/[0.04] hover:bg-white/[0.07] ring-1 ring-white/[0.08] text-zinc-400 hover:text-white text-[12px] rounded-lg transition-colors">
+                    <Download size={11} /> Exportar como PDF
+                  </button>
                 </div>
               )}
             </div>
