@@ -1,100 +1,151 @@
 import { NextRequest } from "next/server"
 import { getTenant, unauthorized } from "@/lib/server/auth"
-import { runAgent } from "@/lib/server/agent"
 import { createServiceClient } from "@/lib/server/supabase"
+import { getCampaigns, getInsights } from "@/lib/server/meta-ads"
+import Anthropic from "@anthropic-ai/sdk"
 
-const SKILL_PROMPTS: Record<string, string> = {
+const SKILL_SECTIONS: Record<string, string> = {
   gargalos: `
-ANÁLISE DE GARGALOS (obrigatória):
-- Identifique em qual etapa do funil há maior queda (Impressões → Cliques → Conversões)
-- Calcule a taxa de conversão entre cada etapa e aponte a pior
-- Indique se o problema é de alcance, CTR baixo, CPL alto ou conversão pós-clique
-- Seja específico: "campanha X tem CTR de 0.3% quando a média é 1.5% — gargalo no criativo"
-- Nunca use achismo: toda afirmação deve ter número que a justifique`,
+## ANÁLISE DE GARGALOS
+Para cada campanha ativa, calcule a taxa de conversão entre cada etapa do funil (Impressões → Cliques → Leads/Conversões). Identifique a etapa com maior queda percentual e nomeie o gargalo de forma específica. Exemplos: "CTR de 0.3% indica criativo fraco", "Alto volume de cliques mas 0 leads indica página de destino ruim". Toda afirmação deve ter o número que a justifica.`,
 
   criativo: `
-ANÁLISE DE CRIATIVO:
-- Verifique CTR e frequência de cada campanha ativa
-- Frequência > 3.0 = criativo saturado, recomende troca
-- CTR < 0.8% = criativo não engaja, recomende novo teste A/B
-- Aponte qual campanha tem melhor CTR e por que (imagem vs vídeo se disponível)
-- Recomende formatos para teste com base nos dados`,
+## ANÁLISE DE CRIATIVO
+Analise CTR e frequência de cada campanha ativa. Frequência > 3 = saturado. CTR < 0.8% = criativo não engaja. Aponte a campanha com melhor CTR e explique por quê com base nos dados. Recomende ação concreta: pausar criativo saturado, criar teste A/B, etc.`,
 
   copy: `
-ANÁLISE DE COPY/MENSAGEM:
-- Analise qual campanha tem melhor taxa de clique-para-lead (CTR alto mas CPL baixo = boa copy)
-- Aponte divergências: CTR bom mas poucos leads = copy atraente mas promessa errada
-- Recomende ângulos de mensagem baseados nos dados de conversão
-- Identifique campanhas onde a copy pode estar gerando leads desqualificados (alto volume, baixa qualidade)`,
+## ANÁLISE DE COPY
+Identifique campanhas com alto CTR mas baixa taxa de conversão (clique→lead) — isso indica copy atraente mas promessa errada. Ao contrário, baixo CTR mas boa conversão = copy específica demais. Recomende ajuste de mensagem com base nesses padrões.`,
 
   publico: `
-ANÁLISE DE PÚBLICO:
-- Verifique CPL e ROAS por campanha — variações grandes indicam públicos diferentes respondendo diferente
-- Identifique qual campanha tem menor CPL (público mais qualificado)
-- Recomende criação de lookalike baseado na campanha de melhor performance
-- Aponte se há sobreposição de público entre campanhas ativas que possa estar inflando CPM`,
+## ANÁLISE DE PÚBLICO
+Compare CPL entre campanhas ativas — variações > 50% indicam públicos muito diferentes respondendo diferente. A campanha com menor CPL tem o público mais qualificado. Recomende criar lookalike desse público. Aponte se CPM alto (> R$30) indica sobreposição de público ou mercado saturado.`,
 
   budget: `
-ANÁLISE DE BUDGET:
-- Calcule o percentual do orçamento que cada campanha ativa consome vs. resultado que entrega
-- Identifique campanhas "sorvedouras": gastam muito, entregam pouco
-- Recomende redistribuição de budget com valores específicos (ex: "mover R$50/dia de X para Y")
-- Projete impacto: "se redistribuir, estimativa de redução de CPL de X para Y"`,
+## ANÁLISE DE BUDGET
+Calcule o % do gasto total que cada campanha consome vs. resultado que entrega (leads, conversões). Identifique "sorvedouras": consomem > 30% do budget mas entregam < 10% dos resultados. Recomende redistribuição com valores específicos em reais.`,
 }
 
 export async function POST(req: NextRequest) {
   const tenant = await getTenant(req)
   if (!tenant) return unauthorized()
 
-  const body = await req.json().catch(() => ({}))
-  const skills: string[] = Array.isArray(body.skills) && body.skills.length > 0
-    ? body.skills
-    : ["gargalos"]
+  try {
+    const body   = await req.json().catch(() => ({}))
+    const skills: string[] = Array.isArray(body.skills) && body.skills.length > 0
+      ? body.skills : ["gargalos"]
 
-  const supabase = createServiceClient()
-  const { data: config } = await supabase
-    .from("agent_configs")
-    .select("*")
-    .eq("tenant_id", tenant.tenant_id)
-    .single()
+    const supabase = createServiceClient()
+    const [configResult, campaigns, accountInsights] = await Promise.all([
+      supabase.from("agent_configs").select("*").eq("tenant_id", tenant.tenant_id).single(),
+      getCampaigns(tenant.tenant_id, "last_30d"),
+      getInsights(tenant.tenant_id, "last_30d").catch(() => ({})),
+    ])
 
-  const now    = new Date()
-  const period = now.toLocaleDateString("pt-BR", { month: "long", year: "numeric" })
+    // Filter only active campaigns
+    const active = campaigns.filter((c: any) => c.status === "ACTIVE")
 
-  const skillInstructions = skills.map(s => SKILL_PROMPTS[s] ?? "").filter(Boolean).join("\n")
+    const now    = new Date()
+    const period = now.toLocaleDateString("pt-BR", { month: "long", year: "numeric" })
 
-  const message = `Gere um relatório detalhado de performance dos últimos 30 dias.
+    if (active.length === 0) {
+      const { data: report } = await supabase.from("reports").insert({
+        tenant_id: tenant.tenant_id,
+        title: `Relatório — ${period}`,
+        period,
+        summary: "## Sem campanhas ativas\n\nNenhuma campanha com status ACTIVE foi encontrada no período. Ative pelo menos uma campanha para gerar análise.",
+        generated_by: "agent",
+      }).select().single()
+      return Response.json(report)
+    }
 
-REGRAS OBRIGATÓRIAS:
-1. Use get_campaigns para listar as campanhas
-2. IGNORE completamente campanhas com status PAUSED, ARCHIVED ou DELETED — analise SOMENTE status ACTIVE
-3. Para cada campanha ativa, busque insights com get_campaign_insights
-4. Toda afirmação deve ter número que a justifique — zero achismo
-5. Seja direto e objetivo, use listas e números
+    // Build compact data snapshot for Claude
+    const campaignRows = active.map((c: any) => {
+      const m = c.metrics ?? {}
+      return [
+        `**${c.name}** (${c.objective?.replace("OUTCOME_", "") ?? "?"})`,
+        `Gasto: R$${Number(m.spend ?? 0).toFixed(2)}`,
+        `Impressões: ${Number(m.impressions ?? 0).toLocaleString("pt-BR")}`,
+        `Alcance: ${Number(m.reach ?? 0).toLocaleString("pt-BR")}`,
+        `Cliques: ${Number(m.clicks ?? 0).toLocaleString("pt-BR")}`,
+        `CTR: ${Number(m.ctr ?? 0).toFixed(2)}%`,
+        `CPM: R$${Number(m.cpm ?? 0).toFixed(2)}`,
+        `CPC: R$${Number(m.cpc ?? 0).toFixed(2)}`,
+        m.leads     != null ? `Leads: ${m.leads}` : null,
+        m.cpl       != null ? `CPL: R$${Number(m.cpl).toFixed(2)}` : null,
+        m.roas      != null ? `ROAS: ${Number(m.roas).toFixed(2)}x` : null,
+        m.frequency != null ? `Frequência: ${Number(m.frequency).toFixed(1)}` : null,
+        m.conversations != null ? `Conversas WA: ${m.conversations}` : null,
+        m.engagements   != null ? `Engajamentos: ${m.engagements}` : null,
+      ].filter(Boolean).join(" | ")
+    }).join("\n")
 
-ESTRUTURA DO RELATÓRIO:
-1. RESUMO EXECUTIVO (3-5 linhas: investimento total, resultado principal, problema crítico)
-2. CAMPANHAS ATIVAS — tabela com: Nome | Gasto | Leads/Conversões | CPL/CPA | ROAS | CTR
-3. RANKING DE PERFORMANCE (melhor para pior, justificando com métricas)
-${skillInstructions}
-4. RECOMENDAÇÕES PRIORITÁRIAS (máximo 5, ordenadas por impacto estimado, com ação específica)
-5. PRÓXIMOS 7 DIAS (o que fazer agora)
+    const acc: any = accountInsights
+    const accountSummary = `Conta (30 dias): Gasto R$${Number(acc.spend ?? 0).toFixed(2)} | Impressões ${Number(acc.impressions ?? 0).toLocaleString("pt-BR")} | Alcance ${Number(acc.reach ?? 0).toLocaleString("pt-BR")} | Cliques ${Number(acc.clicks ?? 0).toLocaleString("pt-BR")} | CTR ${Number(acc.ctr ?? 0).toFixed(2)}%`
 
-Importante: se não houver campanhas ativas, informe claramente e pare.`
+    const config   = configResult.data ?? {}
+    const configStr = `Objetivo: ${config.objetivo_principal ?? "não definido"} | ROAS mín: ${config.roas_minimo ?? "—"} | CPL máx: R$${config.cpl_maximo ?? "—"} | Budget mensal: R$${config.budget_mensal ?? "—"}`
 
-  const result = await runAgent(tenant.tenant_id, message, config ?? {})
+    const skillSections = skills.map(s => SKILL_SECTIONS[s] ?? "").filter(Boolean).join("\n")
 
-  const { data: report } = await supabase
-    .from("reports")
-    .insert({
+    const prompt = `Você é um especialista em Meta Ads. Analise os dados abaixo e gere um relatório executivo completo em português. Use markdown com ## para seções. Seja direto, objetivo e baseie TODA afirmação em números dos dados fornecidos — zero achismo.
+
+CONFIGURAÇÕES DO CLIENTE:
+${configStr}
+
+RESUMO DA CONTA (últimos 30 dias):
+${accountSummary}
+
+CAMPANHAS ATIVAS (${active.length} de ${campaigns.length} total — pausadas ignoradas):
+${campaignRows}
+
+ESTRUTURA OBRIGATÓRIA DO RELATÓRIO:
+
+## RESUMO EXECUTIVO
+3-5 linhas: total investido, principal resultado, problema crítico identificado.
+
+## RANKING DE CAMPANHAS ATIVAS
+Ordene da melhor para a pior performance. Para cada uma: nome, métrica principal, status (otimizar/escalar/pausar) e justificativa com número.
+${skillSections}
+
+## RECOMENDAÇÕES PRIORITÁRIAS
+Máximo 5 ações, ordenadas por impacto. Cada ação deve ser específica: "Pausar campanha X pois CPL R$63 é 4x o teto", não "otimize suas campanhas".
+
+## PRÓXIMOS 7 DIAS
+O que fazer agora, em ordem.`
+
+    const apiKey = process.env.ANTHROPIC_API_KEY ?? ""
+    const { data: keys } = await supabase.from("platform_config").select("anthropic_api_key").single().catch(() => ({ data: null }))
+    const key = keys?.anthropic_api_key ?? apiKey
+
+    const client   = new Anthropic({ apiKey: key })
+    const response = await client.messages.create({
+      model:      "claude-sonnet-4-6",
+      max_tokens: 4096,
+      messages:   [{ role: "user", content: prompt }],
+    })
+
+    // Track usage
+    supabase.rpc("increment_api_usage", {
+      p_tenant_id:     tenant.tenant_id,
+      p_period:        now.toISOString().slice(0, 7),
+      p_input_tokens:  response.usage.input_tokens,
+      p_output_tokens: response.usage.output_tokens,
+    }).then(() => {})
+
+    const summary = (response.content.find(b => b.type === "text") as any)?.text ?? ""
+
+    const { data: report } = await supabase.from("reports").insert({
       tenant_id:    tenant.tenant_id,
       title:        `Relatório — ${period}`,
       period,
-      summary:      result.message,
+      summary,
       generated_by: "agent",
-    })
-    .select()
-    .single()
+    }).select().single()
 
-  return Response.json(report)
+    return Response.json(report)
+  } catch (e: any) {
+    console.error("[reports/generate]", e)
+    return Response.json({ error: e.message ?? "Erro interno ao gerar relatório" }, { status: 500 })
+  }
 }
