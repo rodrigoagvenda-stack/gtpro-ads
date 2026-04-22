@@ -91,24 +91,27 @@ const KPI_PRINCIPAL: Record<string, string> = {
 
 const SKILL_SECTIONS: Record<string, string> = {
   gargalos: `
-## ANÁLISE DE GARGALOS
-Calcule a taxa de conversão entre cada etapa do funil: Impressões → Alcance → Cliques → {{RESULT_LABEL}}. Para cada campanha, identifique a etapa com maior queda percentual e nomeie o gargalo de forma específica com o número exato que o justifica. Exemplos: "CTR de 0.3% na campanha X indica criativo fraco", "4.200 cliques mas 0 {{RESULT_LABEL_LOWER}} na campanha Y indica problema na landing page (taxa: 0%)".`,
+## GARGALOS
+Tabela: Campanha | Etapa | Taxa | Perda absoluta | Diagnóstico
+Calcule Impressões→Alcance→Cliques→{{RESULT_LABEL}}. Uma linha por campanha, mostre só a etapa com maior queda. Diagnóstico em 5 palavras.`,
 
   criativo: `
-## ANÁLISE DE CRIATIVO
-Para cada campanha, analise CTR e Frequência. Frequência > 3 = potencial saturação de audiência. CTR < 0.8% = criativo não engaja o público. Aponte a campanha com melhor CTR e explique por que com base nos dados. Recomende ação concreta: pausar criativo saturado, criar variação, teste A/B com nova abordagem visual ou de formato.`,
+## CRIATIVO
+Tabela: Campanha | CTR | Frequência | Diagnóstico | Ação
+Frequência > 3 = saturado. CTR < 0.8% = não engaja. Ação = pausar / A/B / novo formato.`,
 
   copy: `
-## ANÁLISE DE COPY
-Identifique campanhas com CTR alto mas baixo volume de {{RESULT_LABEL_LOWER}} — copy atraente mas promessa desalinhada com a landing page ou com o público. O oposto (CTR baixo, boa taxa de conversão) = copy muito específica, alcançando só quem já conhece a marca. Recomende ajuste de mensagem com base nesses padrões, com texto de exemplo quando possível.`,
+## COPY
+CTR alto + baixo {{RESULT_LABEL_LOWER}} = promessa errada. CTR baixo + boa conversão = copy específica demais. Uma linha por campanha com diagnóstico e ajuste recomendado.`,
 
   publico: `
-## ANÁLISE DE PÚBLICO
-Compare o {{KPI_PRINCIPAL}} entre as campanhas ativas — variações > 50% indicam que públicos diferentes estão respondendo de formas muito distintas. A campanha com melhor KPI tem o público mais qualificado: recomende criar Lookalike baseado nessa audiência. CPM alto (> R$30) indica sobreposição de público ou mercado saturado — aponte qual campanha está com CPM mais alto e o motivo provável.`,
+## PÚBLICO
+Compare {{KPI_PRINCIPAL}} entre campanhas. Variação > 50% = públicos diferentes. Menor KPI = público mais qualificado → recomendar Lookalike. CPM > R$30 = sobreposição ou mercado saturado.`,
 
   budget: `
-## ANÁLISE DE BUDGET
-Calcule para cada campanha: % do gasto total consumido vs % de {{RESULT_LABEL_LOWER}} entregue. Monte uma tabela comparativa. Identifique "sorvedouras de budget": campanhas que consomem > 30% do investimento mas entregam < 10% dos resultados. Recomende redistribuição com valores específicos em reais — quanto tirar de qual campanha e quanto alocar para qual.`,
+## BUDGET
+Tabela: Campanha | Gasto | % do Total | {{RESULT_LABEL}} | % do Total | Diagnóstico
+Sorvedoura = > 30% do gasto, < 10% dos resultados. Feche com redistribuição em R$.`,
 }
 
 // ─── Build campaign row with objective-specific metrics ───────────────────────
@@ -308,38 +311,38 @@ export async function POST(req: NextRequest) {
       all:                "Campanha | Objetivo | Gasto | KPI Principal | Valor KPI | Status | Justificativa",
     }[objective] ?? "Campanha | Gasto | KPI Principal | Status | Justificativa"
 
-    const prompt = `Você é um especialista em Meta Ads. Analise os dados abaixo e gere um relatório executivo completo em português. Use markdown com ## para seções. Use tabelas markdown para comparar campanhas. Seja direto, objetivo e baseie TODA afirmação em números dos dados fornecidos — zero achismo.
+    const prompt = `Especialista em Meta Ads. Relatório em português, markdown, tabelas para comparar campanhas.
+
+REGRAS DE ESTILO — OBRIGATÓRIAS:
+- Sem introduções, sem "neste relatório veremos", sem explicar o que você vai fazer
+- Cada bullet ou parágrafo = 1 fato + 1 número + 1 ação (quando aplicável)
+- Proibido repetir o mesmo dado em seções diferentes
+- Proibido explicar conceitos básicos (o leitor sabe o que é CTR, CPL, ROAS)
+- Frases curtas. Se puder cortar uma palavra, corte.
 
 CONFIGURAÇÕES DO CLIENTE:
 ${configStr}
 
-FOCO DESTA ANÁLISE: ${objLabel}
-- KPI principal: ${objConfig.primaryKpi}
-- Critério de ranking: ${objConfig.rankingMetric}
-- Alerta crítico a verificar: ${objConfig.alertCondition}
-- Referências de performance: ${objConfig.goodRange}
+FOCO: ${objLabel} | KPI: ${kpiPrincipal} | Alerta: ${objConfig.alertCondition}
 
-RESUMO DA CONTA (últimos 30 dias):
-${accountSummary}
+CONTA (30 dias): ${accountSummary}
 
-CAMPANHAS ANALISADAS (${campaignCount} — pausadas e arquivadas ignoradas):
+CAMPANHAS (${campaignCount}):
 ${campaignRows}
 
-ESTRUTURA OBRIGATÓRIA DO RELATÓRIO:
-
 ## RESUMO EXECUTIVO
-3-5 linhas: total investido, principal resultado obtido em ${resultLabel.toLowerCase()}, e o problema crítico mais urgente identificado nos dados.
+2-3 linhas. Números, problema crítico, nada mais.
 
-## RANKING DE CAMPANHAS
-Use uma tabela markdown com as colunas: ${rankingColumns}
-Status: 🟢 Escalar | 🟡 Otimizar | 🔴 Pausar — baseado no ${kpiPrincipal}.
+## RANKING
+Tabela: ${rankingColumns}
+Status: 🟢 Escalar | 🟡 Otimizar | 🔴 Pausar
 ${skillSections}
 
-## RECOMENDAÇÕES PRIORITÁRIAS
-Máximo 5 ações ordenadas por impacto esperado. Cada ação deve ser específica com números: "Pausar campanha X — CPL R$63 é 4× o teto de R$15", não "otimize suas campanhas".
+## RECOMENDAÇÕES
+5 ações máximo, ordem de impacto. Formato: "Ação — motivo com número."
 
 ## PRÓXIMOS 7 DIAS
-Lista numerada e ordenada: o que fazer primeiro, segundo, terceiro.`
+Lista numerada. Curta.`
 
     const key      = await getAnthropicKey()
     const client   = new Anthropic({ apiKey: key })
