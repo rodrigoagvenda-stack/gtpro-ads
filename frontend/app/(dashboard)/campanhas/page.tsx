@@ -161,16 +161,19 @@ function objectiveInsights(campaigns: Campaign[], obj: ObjectiveId, fallback: Re
   const fakeAct = (val: number, ...types: string[]) =>
     val > 0 ? types.map(t => ({ action_type: t, value: String(val) })) : []
 
+  const subImpressions = sumF("impressions")
+  // If the objective's campaigns have no data this period, use account-level base metrics
+  const base = subImpressions > 0
+    ? { impressions: subImpressions, reach: sumF("reach"), clicks: sumF("clicks"), spend: sumF("spend") }
+    : { impressions: Number(fallback.impressions ?? 0), reach: Number(fallback.reach ?? 0), clicks: Number(fallback.clicks ?? 0), spend: Number(fallback.spend ?? 0) }
+
   const leads = sumF("leads")
   const convs = sumF("conversations") || sumF("messaging_conversations")
   const engs  = sumF("engagements")
   const likes = sumF("page_likes")
 
   return {
-    impressions: sumF("impressions"),
-    reach:       sumF("reach"),
-    clicks:      sumF("clicks"),
-    spend:       sumF("spend"),
+    ...base,
     actions: [
       ...fakeAct(leads, "lead"),
       ...fakeAct(convs, "onsite_conversion.messaging_conversation_started_7d"),
@@ -198,21 +201,24 @@ function buildFunnel(obj: ObjectiveId, insights: Record<string, any>) {
     case "ecommerce": {
       const purchases = act("omni_purchase") || act("offsite_conversion.fb_pixel_purchase")
       steps.push({ label: "Impressões", value: impressions })
-      if (clicks > 0)    steps.push({ label: "Cliques", value: clicks })
-      if (purchases > 0) steps.push({ label: "Compras", value: purchases })
+      if (reach > 0)     steps.push({ label: "Alcance",  value: reach })
+      if (clicks > 0)    steps.push({ label: "Cliques",  value: clicks })
+      if (purchases > 0) steps.push({ label: "Compras",  value: purchases })
       break
     }
     case "leads": {
       const leads = act("lead") || act("onsite_conversion.lead_grouped") || act("offsite_conversion.fb_pixel_lead")
       steps.push({ label: "Impressões", value: impressions })
+      if (reach > 0)  steps.push({ label: "Alcance", value: reach })
       if (clicks > 0) steps.push({ label: "Cliques", value: clicks })
-      if (leads > 0)  steps.push({ label: "Leads", value: leads })
+      if (leads > 0)  steps.push({ label: "Leads",   value: leads })
       break
     }
     case "whatsapp": {
       const convs = act("onsite_conversion.messaging_conversation_started_7d") || act("onsite_conversion.total_messaging_connection")
       steps.push({ label: "Impressões", value: impressions })
-      if (clicks > 0) steps.push({ label: "Cliques", value: clicks })
+      if (reach > 0)  steps.push({ label: "Alcance",   value: reach })
+      if (clicks > 0) steps.push({ label: "Cliques",   value: clicks })
       if (convs > 0)  steps.push({ label: "Conversas", value: convs })
       break
     }
@@ -234,6 +240,7 @@ function buildFunnel(obj: ObjectiveId, insights: Record<string, any>) {
     }
     case "trafego":
       steps.push({ label: "Impressões", value: impressions })
+      if (reach > 0)  steps.push({ label: "Alcance", value: reach })
       if (clicks > 0) steps.push({ label: "Cliques", value: clicks })
       break
     default: {
