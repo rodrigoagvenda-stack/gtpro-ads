@@ -115,8 +115,11 @@ Máximo 5 ações, ordenadas por impacto. Cada ação deve ser específica: "Pau
 O que fazer agora, em ordem.`
 
     const apiKey = process.env.ANTHROPIC_API_KEY ?? ""
-    const { data: keys } = await supabase.from("platform_config").select("anthropic_api_key").single().catch(() => ({ data: null }))
-    const key = keys?.anthropic_api_key ?? apiKey
+    let key = apiKey
+    try {
+      const { data: keys } = await supabase.from("platform_config").select("anthropic_api_key").single()
+      if (keys?.anthropic_api_key) key = keys.anthropic_api_key
+    } catch {}
 
     const client   = new Anthropic({ apiKey: key })
     const response = await client.messages.create({
