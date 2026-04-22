@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import React, { useEffect, useState } from "react"
 import { api } from "@/lib/api"
 import { FileText, Download, Loader2, Plus, ChevronDown, ChevronUp, CalendarClock,
   MessageCircle, Check, RefreshCw, X, AlertTriangle, TrendingDown,
@@ -38,31 +38,66 @@ function inlineHtml(text: string): string {
     .replace(/`(.+?)`/g, "<code>$1</code>")
 }
 
-function mdToHtml(md: string): string {
-  const lines  = md.split("\n")
-  const result: string[] = []
-  let inList = false
+function isTableLine(line: string) { const t = line.trim(); return t.startsWith("|") && t.endsWith("|") }
+function isSepLine(line: string)   { return /^\|[\s\-:|]+\|$/.test(line.trim()) }
+function splitRow(line: string)    { return line.trim().split("|").slice(1, -1).map(c => c.trim()) }
 
-  for (const line of lines) {
-    const t = line.trim()
-    const isList = t.startsWith("- ") || t.startsWith("• ") || /^\d+\.\s/.test(t)
-    if (!isList && inList) { result.push("</ul>"); inList = false }
-    if (t.startsWith("### "))      { result.push(`<h3>${inlineHtml(t.slice(4))}</h3>`); continue }
-    if (t.startsWith("## "))       { result.push(`<h2>${inlineHtml(t.slice(3))}</h2>`); continue }
-    if (t.startsWith("# "))        { result.push(`<h1>${inlineHtml(t.slice(2))}</h1>`); continue }
-    if (t === "---")               { result.push("<hr />"); continue }
-    if (t === "")                  { if (!inList) result.push("<br />"); continue }
-    if (t.startsWith("- ") || t.startsWith("• ")) {
-      if (!inList) { result.push("<ul>"); inList = true }
-      result.push(`<li>${inlineHtml(t.slice(2))}</li>`); continue
+type Seg = { type: "lines"; lines: string[] } | { type: "table"; rows: string[][] }
+
+function segmentMd(md: string): Seg[] {
+  const lines = md.split("\n")
+  const segs: Seg[] = []
+  let i = 0
+  while (i < lines.length) {
+    if (isTableLine(lines[i])) {
+      const rows: string[][] = []
+      while (i < lines.length && isTableLine(lines[i])) {
+        if (!isSepLine(lines[i])) rows.push(splitRow(lines[i]))
+        i++
+      }
+      if (rows.length > 0) segs.push({ type: "table", rows })
+    } else {
+      const last = segs[segs.length - 1]
+      if (last?.type === "lines") last.lines.push(lines[i])
+      else segs.push({ type: "lines", lines: [lines[i]] })
+      i++
     }
-    if (/^\d+\.\s/.test(t)) {
-      if (!inList) { result.push("<ul>"); inList = true }
-      result.push(`<li>${inlineHtml(t.replace(/^\d+\.\s/, ""))}</li>`); continue
-    }
-    result.push(`<p>${inlineHtml(t)}</p>`)
   }
-  if (inList) result.push("</ul>")
+  return segs
+}
+
+function mdToHtml(md: string): string {
+  const segs = segmentMd(md)
+  const result: string[] = []
+
+  for (const seg of segs) {
+    if (seg.type === "table") {
+      const [head, ...body] = seg.rows
+      result.push(`<table><thead><tr>${head.map(c => `<th>${inlineHtml(c)}</th>`).join("")}</tr></thead><tbody>${body.map(r => `<tr>${r.map(c => `<td>${inlineHtml(c)}</td>`).join("")}</tr>`).join("")}</tbody></table>`)
+      continue
+    }
+    let inList = false
+    for (const line of seg.lines) {
+      const t = line.trim()
+      const isList = t.startsWith("- ") || t.startsWith("• ") || /^\d+\.\s/.test(t)
+      if (!isList && inList) { result.push("</ul>"); inList = false }
+      if (t.startsWith("### "))     { result.push(`<h3>${inlineHtml(t.slice(4))}</h3>`); continue }
+      if (t.startsWith("## "))      { result.push(`<h2>${inlineHtml(t.slice(3))}</h2>`); continue }
+      if (t.startsWith("# "))       { result.push(`<h1>${inlineHtml(t.slice(2))}</h1>`); continue }
+      if (t === "---")              { result.push("<hr />"); continue }
+      if (t === "")                 { if (!inList) result.push("<br />"); continue }
+      if (t.startsWith("- ") || t.startsWith("• ")) {
+        if (!inList) { result.push("<ul>"); inList = true }
+        result.push(`<li>${inlineHtml(t.slice(2))}</li>`); continue
+      }
+      if (/^\d+\.\s/.test(t)) {
+        if (!inList) { result.push("<ul>"); inList = true }
+        result.push(`<li>${inlineHtml(t.replace(/^\d+\.\s/, ""))}</li>`); continue
+      }
+      result.push(`<p>${inlineHtml(t)}</p>`)
+    }
+    if (inList) result.push("</ul>")
+  }
   return result.join("\n")
 }
 
@@ -92,6 +127,10 @@ function printReport(title: string, period: string, content: string) {
     strong { font-weight: 600; color: #111827; }
     code { background: #F3F4F6; padding: 1px 5px; border-radius: 4px; font-size: 11px; font-family: 'Courier New', monospace; color: #6D28D9; }
     hr { border: none; border-top: 1px solid #E5E7EB; margin: 20px 0; }
+    table { width: 100%; border-collapse: collapse; margin: 16px 0; font-size: 12px; }
+    th { background: #F3F4F6; text-align: left; padding: 8px 10px; font-weight: 600; color: #374151; border-bottom: 2px solid #E5E7EB; }
+    td { padding: 7px 10px; color: #374151; border-bottom: 1px solid #F3F4F6; }
+    tr:last-child td { border-bottom: none; }
     .footer { margin-top: 48px; padding-top: 16px; border-top: 1px solid #E5E7EB; font-size: 11px; color: #9CA3AF; display: flex; justify-content: space-between; }
     @media print {
       body { padding: 0; }
@@ -130,39 +169,78 @@ function inlineMd(text: string) {
 }
 
 function RenderMd({ content }: { content: string }) {
-  return (
-    <div className="text-[12px] text-zinc-400 leading-relaxed space-y-1">
-      {content.split("\n").map((line, i) => {
-        if (line.startsWith("### ")) return <p key={i} className="text-[13px] font-semibold text-white mt-4 mb-1">{line.slice(4)}</p>
-        if (line.startsWith("## "))  return <p key={i} className="text-[14px] font-semibold text-zinc-100 mt-5 mb-2 pb-1 border-b border-white/[0.06]">{line.slice(3)}</p>
-        if (line.startsWith("# "))   return <p key={i} className="text-[16px] font-bold text-white mt-6 mb-2">{line.slice(2)}</p>
-        if (line === "---")          return <hr key={i} className="border-white/[0.06] my-3" />
-        if (line.startsWith("- ") || line.startsWith("• ")) return (
-          <div key={i} className="flex gap-2 items-start">
-            <span className="text-violet-500 mt-[4px] shrink-0 text-[8px]">●</span>
-            <span>{inlineMd(line.slice(2))}</span>
-          </div>
-        )
-        if (/^\d+\.\s/.test(line)) return (
-          <div key={i} className="flex gap-2 items-start">
-            <span className="text-zinc-600 text-[11px] mt-px shrink-0 w-4">{line.match(/^(\d+)/)?.[1]}.</span>
-            <span>{inlineMd(line.replace(/^\d+\.\s/, ""))}</span>
-          </div>
-        )
-        if (line === "") return <div key={i} className="h-1.5" />
-        return <p key={i}>{inlineMd(line)}</p>
-      })}
-    </div>
-  )
+  const segs = segmentMd(content)
+  const nodes: React.ReactNode[] = []
+  let key = 0
+
+  for (const seg of segs) {
+    if (seg.type === "table") {
+      const [head, ...body] = seg.rows
+      nodes.push(
+        <div key={key++} className="overflow-x-auto my-3">
+          <table className="w-full text-[11px] border-collapse">
+            <thead>
+              <tr>
+                {head.map((c, ci) => (
+                  <th key={ci} className="text-left px-3 py-2 text-zinc-300 font-semibold bg-white/[0.04] border-b border-white/[0.08]">
+                    {inlineMd(c)}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {body.map((row, ri) => (
+                <tr key={ri} className="border-b border-white/[0.04] hover:bg-white/[0.02]">
+                  {row.map((c, ci) => (
+                    <td key={ci} className="px-3 py-2 text-zinc-400 align-top">{inlineMd(c)}</td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )
+      continue
+    }
+    for (const line of seg.lines) {
+      if (line.startsWith("### ")) { nodes.push(<p key={key++} className="text-[13px] font-semibold text-white mt-4 mb-1">{line.slice(4)}</p>); continue }
+      if (line.startsWith("## "))  { nodes.push(<p key={key++} className="text-[14px] font-semibold text-zinc-100 mt-5 mb-2 pb-1 border-b border-white/[0.06]">{line.slice(3)}</p>); continue }
+      if (line.startsWith("# "))   { nodes.push(<p key={key++} className="text-[16px] font-bold text-white mt-6 mb-2">{line.slice(2)}</p>); continue }
+      if (line === "---")          { nodes.push(<hr key={key++} className="border-white/[0.06] my-3" />); continue }
+      if (line.startsWith("- ") || line.startsWith("• ")) {
+        nodes.push(<div key={key++} className="flex gap-2 items-start"><span className="text-violet-500 mt-[4px] shrink-0 text-[8px]">●</span><span>{inlineMd(line.slice(2))}</span></div>)
+        continue
+      }
+      if (/^\d+\.\s/.test(line)) {
+        nodes.push(<div key={key++} className="flex gap-2 items-start"><span className="text-zinc-600 text-[11px] mt-px shrink-0 w-4">{line.match(/^(\d+)/)?.[1]}.</span><span>{inlineMd(line.replace(/^\d+\.\s/, ""))}</span></div>)
+        continue
+      }
+      if (line === "") { nodes.push(<div key={key++} className="h-1.5" />); continue }
+      nodes.push(<p key={key++}>{inlineMd(line)}</p>)
+    }
+  }
+
+  return <div className="text-[12px] text-zinc-400 leading-relaxed space-y-1">{nodes}</div>
 }
 
 // ─── Generate modal ───────────────────────────────────────────────────────────
 
+const OBJECTIVES = [
+  { id: "all",                label: "Todas as campanhas",   desc: "Analisa todos os objetivos" },
+  { id: "OUTCOME_LEADS",      label: "Geração de Leads",     desc: "CPL, leads, taxa clique→lead" },
+  { id: "OUTCOME_TRAFFIC",    label: "Tráfego",              desc: "CPC, CTR, cliques outbound" },
+  { id: "OUTCOME_ENGAGEMENT", label: "Engajamento",          desc: "CPE, engajamentos, seguidores" },
+  { id: "OUTCOME_AWARENESS",  label: "Reconhecimento",       desc: "Alcance, CPM, frequência" },
+  { id: "OUTCOME_SALES",      label: "Vendas",               desc: "ROAS, compras, CPP" },
+  { id: "OUTCOME_MESSAGES",   label: "WhatsApp",             desc: "Conversas, custo por conversa" },
+]
+
 function GenerateModal({ onClose, onGenerate }: {
   onClose: () => void
-  onGenerate: (skills: string[]) => void
+  onGenerate: (skills: string[], objective: string) => void
 }) {
-  const [selected, setSelected] = useState<string[]>(["gargalos"])
+  const [selected,  setSelected]  = useState<string[]>(["gargalos"])
+  const [objective, setObjective] = useState("all")
 
   function toggle(id: string) {
     setSelected(prev => prev.includes(id) ? prev.filter(s => s !== id) : [...prev, id])
@@ -170,7 +248,7 @@ function GenerateModal({ onClose, onGenerate }: {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-      <div className="bg-[#111113] ring-1 ring-white/[0.10] rounded-2xl w-full max-w-md shadow-2xl">
+      <div className="bg-[#111113] ring-1 ring-white/[0.10] rounded-2xl w-full max-w-md shadow-2xl max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between px-6 py-4 border-b border-white/[0.07]">
           <div className="flex items-center gap-2.5">
             <Sparkles size={14} className="text-violet-400" />
@@ -179,9 +257,32 @@ function GenerateModal({ onClose, onGenerate }: {
           <button onClick={onClose} className="text-zinc-600 hover:text-zinc-300 transition-colors"><X size={16} /></button>
         </div>
 
-        <div className="px-6 py-5 space-y-4">
+        <div className="px-6 py-5 space-y-5">
+          {/* Objective selector */}
           <div>
-            <p className="text-[12px] text-zinc-500 mb-3">Escolha as análises a incluir no relatório:</p>
+            <p className="text-[12px] text-zinc-500 mb-2.5">Objetivo das campanhas a analisar:</p>
+            <div className="grid grid-cols-2 gap-1.5">
+              {OBJECTIVES.map(obj => (
+                <button key={obj.id} type="button" onClick={() => setObjective(obj.id)}
+                  className={cn("flex flex-col items-start px-3 py-2.5 rounded-xl ring-1 text-left transition-all",
+                    objective === obj.id
+                      ? "bg-violet-600/15 ring-violet-500/40"
+                      : "bg-white/[0.02] ring-white/[0.06] hover:bg-white/[0.05]"
+                  )}>
+                  <p className={cn("text-[12px] font-medium leading-tight", objective === obj.id ? "text-violet-300" : "text-zinc-300")}>
+                    {obj.label}
+                  </p>
+                  <p className="text-[10px] text-zinc-600 mt-0.5">{obj.desc}</p>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="border-t border-white/[0.06]" />
+
+          {/* Skills */}
+          <div>
+            <p className="text-[12px] text-zinc-500 mb-2.5">Análises a incluir:</p>
             <div className="space-y-2">
               {SKILLS.map(skill => {
                 const Icon = skill.icon
@@ -218,7 +319,7 @@ function GenerateModal({ onClose, onGenerate }: {
               className="flex-1 py-2 text-[13px] text-zinc-400 bg-white/[0.04] ring-1 ring-white/[0.08] rounded-xl hover:bg-white/[0.07] transition-colors">
               Cancelar
             </button>
-            <button type="button" onClick={() => onGenerate(selected)} disabled={selected.length === 0}
+            <button type="button" onClick={() => onGenerate(selected, objective)} disabled={selected.length === 0}
               className="flex-1 py-2 text-[13px] text-white bg-violet-600 hover:bg-violet-500 rounded-xl transition-colors disabled:opacity-40 font-medium flex items-center justify-center gap-2">
               <Sparkles size={13} /> Gerar relatório
             </button>
@@ -261,11 +362,11 @@ export default function RelatoriosPage() {
     } catch (e: any) { alert(e.message) } finally { setSavingSchedule(false) }
   }
 
-  async function generateReport(skills: string[]) {
+  async function generateReport(skills: string[], objective: string) {
     setShowModal(false)
     setGenerating(true)
     try {
-      const report = await api.reports.generate(skills)
+      const report = await api.reports.generate(skills, objective)
       setReports(p => [report, ...p])
       setExpanded(report.id)
     } catch (e: any) {

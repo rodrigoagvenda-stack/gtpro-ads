@@ -102,7 +102,7 @@ export const api = {
 
   reports: {
     list: () => fetchWithAuth("/reports"),
-    generate: (skills: string[]) => fetchWithAuth("/reports/generate", { method: "POST", body: JSON.stringify({ skills }) }),
+    generate: (skills: string[], objective?: string) => fetchWithAuth("/reports/generate", { method: "POST", body: JSON.stringify({ skills, objective }) }),
     downloadUrl: (id: string) => `/api/reports/${id}/download`,
     getSchedule: () => fetchWithAuth("/reports/schedule"),
     saveSchedule: (schedule: string, whatsapp: boolean) => fetchWithAuth("/reports/schedule", { method: "POST", body: JSON.stringify({ schedule, whatsapp }) }),
