@@ -59,6 +59,9 @@ export async function POST(req: NextRequest) {
     if (msg.toLowerCase().includes("overloaded") || msg.toLowerCase().includes("529"))
       return Response.json({ error: "Serviço de IA temporariamente sobrecarregado. Tente em instantes." }, { status: 503 })
 
+    if (msg.toLowerCase().includes("credit balance") || msg.toLowerCase().includes("too low"))
+      return Response.json({ error: "Créditos da IA esgotados. Entre em contato com o suporte." }, { status: 402 })
+
     console.error("[agent/query]", msg)
     return Response.json({ error: "Erro interno. Tente novamente." }, { status: 500 })
   }
