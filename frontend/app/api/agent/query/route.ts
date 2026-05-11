@@ -26,7 +26,33 @@ export async function POST(req: NextRequest) {
     ad_account_id: adAccountId,
   })
 
-  const result = await runAgent(tenant.tenant_id, message, configRes.data ?? {}, model, history, adAccountId)
+  let result: Awaited<ReturnType<typeof runAgent>>
+  try {
+    result = await runAgent(tenant.tenant_id, message, configRes.data ?? {}, model, history, adAccountId)
+  } catch (e: any) {
+    const msg: string = e?.message ?? String(e)
+    let status = 500
+    let userMessage = "Erro interno. Tente novamente."
+
+    if (msg.includes("Conta Meta não conectada")) {
+      status = 400
+      userMessage = "Conta Meta não conectada. Configure em Configurações → Meta Ads."
+    } else if (msg.includes("Token Meta expirado") || msg.includes("Token Meta inválido")) {
+      status = 401
+      userMessage = msg
+    } else if (msg.includes("Permissão negada")) {
+      status = 403
+      userMessage = msg
+    } else if (msg.includes("Limite de requisições")) {
+      status = 429
+      userMessage = msg
+    } else if (msg.toLowerCase().includes("anthropic") || msg.toLowerCase().includes("overloaded")) {
+      status = 503
+      userMessage = "Serviço de IA temporariamente indisponível. Tente novamente em instantes."
+    }
+
+    return Response.json({ error: userMessage }, { status })
+  }
 
   // Save assistant reply
   await supabase.from("chat_messages").insert({

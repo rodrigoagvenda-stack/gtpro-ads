@@ -26,11 +26,31 @@ async function getTokenAndAccount(tenantId: string, connectionId?: string) {
   return { token: decrypt(data.access_token_encrypted), adAccountId: data.ad_account_id }
 }
 
+function parseMetaError(raw: string): string {
+  try {
+    const json = JSON.parse(raw)
+    const err = json?.error
+    if (!err) return raw
+    const code = err.code
+    const sub  = err.error_subcode
+    if (code === 190 || err.type === "OAuthException") {
+      if (sub === 463 || sub === 467) return "Token Meta expirado. Reconecte sua conta em Configurações → Meta Ads."
+      return "Token Meta inválido. Reconecte sua conta em Configurações → Meta Ads."
+    }
+    if (code === 200 || code === 273) return `Permissão negada pela Meta: ${err.message}`
+    if (code === 100)                 return `Parâmetro inválido: ${err.message}`
+    if (code === 4 || code === 17 || code === 32 || code === 613) return "Limite de requisições da Meta atingido. Aguarde alguns minutos."
+    return err.message ?? raw
+  } catch {
+    return raw
+  }
+}
+
 async function graphGet(path: string, params: Record<string, string>) {
   const url = new URL(`${GRAPH}${path}`)
   Object.entries(params).forEach(([k, v]) => url.searchParams.set(k, v))
   const res = await fetch(url.toString())
-  if (!res.ok) throw new Error(await res.text())
+  if (!res.ok) throw new Error(parseMetaError(await res.text()))
   return res.json()
 }
 
@@ -42,7 +62,7 @@ async function graphPost(path: string, token: string, body: Record<string, unkno
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   })
-  if (!res.ok) throw new Error(await res.text())
+  if (!res.ok) throw new Error(parseMetaError(await res.text()))
   return res.json()
 }
 
@@ -50,7 +70,7 @@ async function graphDelete(path: string, token: string) {
   const url = new URL(`${GRAPH}${path}`)
   url.searchParams.set("access_token", token)
   const res = await fetch(url.toString(), { method: "DELETE" })
-  if (!res.ok) throw new Error(await res.text())
+  if (!res.ok) throw new Error(parseMetaError(await res.text()))
   return res.json()
 }
 
