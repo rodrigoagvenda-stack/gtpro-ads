@@ -77,6 +77,54 @@ TOOLS = [
             "required": ["type", "message"],
         },
     },
+    {
+        "name": "upload_image",
+        "description": "Faz upload de uma imagem a partir de uma URL para a biblioteca de mídia da Meta.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "image_url": {"type": "string", "description": "URL pública da imagem a ser enviada"},
+            },
+            "required": ["image_url"],
+        },
+    },
+    {
+        "name": "create_ad_creative",
+        "description": "Cria um criativo de anúncio usando um image_hash já enviado.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "name": {"type": "string", "description": "Nome do criativo"},
+                "page_id": {"type": "string", "description": "ID da página do Facebook"},
+                "image_hash": {"type": "string", "description": "Hash da imagem retornado pelo upload_image"},
+                "primary_text": {"type": "string", "description": "Texto principal do anúncio"},
+                "headline": {"type": "string", "description": "Título do anúncio"},
+                "link": {"type": "string", "description": "URL de destino do anúncio"},
+                "description": {"type": "string", "description": "Descrição (opcional)"},
+                "cta": {
+                    "type": "string",
+                    "description": "Call to action",
+                    "enum": ["LEARN_MORE", "SIGN_UP", "SHOP_NOW", "BOOK_NOW", "CONTACT_US", "SUBSCRIBE", "DOWNLOAD"],
+                    "default": "LEARN_MORE",
+                },
+            },
+            "required": ["name", "page_id", "image_hash", "primary_text", "headline", "link"],
+        },
+    },
+    {
+        "name": "create_ad",
+        "description": "Cria um anúncio vinculando um criativo a um conjunto de anúncios.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "name": {"type": "string", "description": "Nome do anúncio"},
+                "adset_id": {"type": "string", "description": "ID do conjunto de anúncios"},
+                "creative_id": {"type": "string", "description": "ID do criativo retornado pelo create_ad_creative"},
+                "status": {"type": "string", "enum": ["PAUSED", "ACTIVE"], "default": "PAUSED"},
+            },
+            "required": ["name", "adset_id", "creative_id"],
+        },
+    },
 ]
 
 
@@ -113,5 +161,30 @@ async def execute_tool(name: str, inputs: dict, tenant_id: str) -> Any:
             .execute()
         )
         return result.data
+
+    elif name == "upload_image":
+        return await meta_ads.upload_image_from_url(tenant_id, inputs["image_url"])
+
+    elif name == "create_ad_creative":
+        return await meta_ads.create_ad_creative(
+            tenant_id,
+            name=inputs["name"],
+            page_id=inputs["page_id"],
+            image_hash=inputs["image_hash"],
+            primary_text=inputs["primary_text"],
+            headline=inputs["headline"],
+            link=inputs["link"],
+            description=inputs.get("description", ""),
+            cta=inputs.get("cta", "LEARN_MORE"),
+        )
+
+    elif name == "create_ad":
+        return await meta_ads.create_ad(
+            tenant_id,
+            name=inputs["name"],
+            adset_id=inputs["adset_id"],
+            creative_id=inputs["creative_id"],
+            status=inputs.get("status", "PAUSED"),
+        )
 
     raise ValueError(f"Tool desconhecida: {name}")

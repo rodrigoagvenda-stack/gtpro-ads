@@ -1,11 +1,12 @@
 from fastapi import APIRouter, Depends, HTTPException
 from app.schemas.auth import MetaOAuthCallback, MetaConnectionStatus, APIKeyCreate, APIKeyResponse
 from app.middleware.auth import get_current_tenant
-from app.services.meta_ads import exchange_code_for_token, get_long_lived_token
+from app.services.meta_ads import exchange_code_for_token, get_long_lived_token, check_token_expiry
 from app.services.crypto import encrypt_token
 from app.database import supabase
 from app.config import settings
-import hashlib, secrets
+from pydantic import BaseModel
+import hashlib, secrets, httpx
 from datetime import datetime, timedelta
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -82,6 +83,37 @@ async def meta_oauth_callback(code: str, state: str):
     return {"success": True, "message": "Conta Meta conectada com sucesso"}
 
 
+class DevConnectBody(BaseModel):
+    access_token: str
+    ad_account_id: str
+
+
+@router.post("/meta/dev-connect")
+async def meta_dev_connect(body: DevConnectBody, tenant: dict = Depends(get_current_tenant)):
+    """Connect via System User token — dev/internal use while Meta app review is pending."""
+    if settings.environment == "production":
+        raise HTTPException(status_code=403, detail="Dev connect não disponível em produção")
+
+    # Validate token against Meta before saving
+    async with httpx.AsyncClient() as client:
+        resp = await client.get(
+            "https://graph.facebook.com/v20.0/me",
+            params={"access_token": body.access_token, "fields": "id,name"},
+        )
+        if resp.status_code != 200:
+            raise HTTPException(status_code=400, detail=f"Token inválido: {resp.json().get('error', {}).get('message', 'erro desconhecido')}")
+
+    supabase.table("meta_connections").upsert({
+        "tenant_id": tenant["tenant_id"],
+        "access_token_encrypted": encrypt_token(body.access_token),
+        "ad_account_id": body.ad_account_id,
+        "expires_at": None,
+        "active": True,
+    }, on_conflict="tenant_id").execute()
+
+    return {"success": True, "message": "Conta Meta conectada via token de desenvolvimento"}
+
+
 @router.get("/meta/status", response_model=MetaConnectionStatus)
 async def meta_connection_status(tenant: dict = Depends(get_current_tenant)):
     result = (
@@ -93,6 +125,9 @@ async def meta_connection_status(tenant: dict = Depends(get_current_tenant)):
     )
     if not result.data:
         return MetaConnectionStatus(connected=False)
+
+    await check_token_expiry(tenant["tenant_id"])
+
     return MetaConnectionStatus(
         connected=result.data["active"],
         ad_account_id=result.data.get("ad_account_id"),
