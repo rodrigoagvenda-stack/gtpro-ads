@@ -6,7 +6,8 @@ import { api } from "@/lib/api"
 import {
   Check, Copy, Eye, EyeOff, Plus, Trash2, RefreshCw, Link2, Unlink,
   Loader2, LayoutGrid, Pencil, Bot, Megaphone, Bell, MessageCircle,
-  Zap, Key, Settings, Smartphone, RotateCcw,
+  Zap, Key, Settings, Smartphone, RotateCcw, Users, Shield, UserMinus,
+  Mail, X, ExternalLink,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 
@@ -15,6 +16,8 @@ import { cn } from "@/lib/utils"
 interface ApiKey { id: string; name: string; scope: string; active: boolean; created_at: string }
 interface Skill  { id: string; name: string; icon: string; color: string; prompt: string; is_default: boolean; tenant_id: string | null }
 interface AlertCfg { type: string; label: string; description: string; enabled: boolean; channels: string[] }
+interface Member { id: string; email: string; name: string; role: string; created_at: string }
+interface PendingInvite { id: string; email: string; role: string; expires_at: string; created_at: string }
 
 const OBJETIVOS = [
   { value: "LEADS",       label: "Geração de Leads" },
@@ -30,7 +33,19 @@ const TABS = [
   { id: "alertas",    label: "Alertas",    icon: Bell },
   { id: "whatsapp",   label: "WhatsApp",   icon: MessageCircle },
   { id: "skills",     label: "Skills",     icon: Zap },
+  { id: "equipe",     label: "Equipe",     icon: Users },
   { id: "plataforma", label: "Plataforma", icon: Settings },
+]
+
+const ROLE_LABEL: Record<string, string> = {
+  owner: "Owner",
+  admin: "Admin",
+  member: "Membro",
+}
+
+const ROLE_OPTIONS = [
+  { value: "admin",  label: "Admin" },
+  { value: "member", label: "Membro" },
 ]
 
 // ─── Shared components ────────────────────────────────────────────────────────
@@ -906,9 +921,262 @@ function PlataformaTab() {
   )
 }
 
+// ─── Equipe ───────────────────────────────────────────────────────────────────
+
+function EquipeTab() {
+  const [members, setMembers] = useState<Member[]>([])
+  const [pending, setPending] = useState<PendingInvite[]>([])
+  const [myId, setMyId] = useState<string | null>(null)
+  const [myRole, setMyRole] = useState<string>("member")
+  const [loading, setLoading] = useState(true)
+
+  const [showInvite, setShowInvite] = useState(false)
+  const [inviteEmail, setInviteEmail] = useState("")
+  const [inviteRole, setInviteRole] = useState("member")
+  const [inviting, setInviting] = useState(false)
+  const [inviteLink, setInviteLink] = useState("")
+  const [inviteError, setInviteError] = useState("")
+  const [copied, setCopied] = useState(false)
+
+  const [removing, setRemoving] = useState<string | null>(null)
+
+  async function load() {
+    setLoading(true)
+    try {
+      const [teamData, meData] = await Promise.all([
+        api.team.members(),
+        api.get("/auth/me"),
+      ])
+      setMembers(teamData.members ?? [])
+      setPending(teamData.pending_invites ?? [])
+      if (meData?.user_id) {
+        setMyId(meData.user_id)
+        const me = teamData.members?.find((m: Member) => m.id === meData.user_id)
+        if (me) setMyRole(me.role)
+      }
+    } catch {}
+    setLoading(false)
+  }
+
+  useEffect(() => { load() }, [])
+
+  async function handleInvite(e: React.FormEvent) {
+    e.preventDefault()
+    setInviting(true)
+    setInviteError("")
+    setInviteLink("")
+    try {
+      const data = await api.team.invite(inviteEmail, inviteRole)
+      setInviteLink(data.invite_url)
+      setInviteEmail("")
+      load()
+    } catch (err: any) {
+      setInviteError(err.message ?? "Erro ao criar convite.")
+    }
+    setInviting(false)
+  }
+
+  function copyLink() {
+    navigator.clipboard.writeText(inviteLink)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
+  }
+
+  async function removeMember(userId: string) {
+    setRemoving(userId)
+    try {
+      await api.team.removeMember(userId)
+      await load()
+    } catch {}
+    setRemoving(null)
+  }
+
+  async function changeRole(userId: string, role: string) {
+    try {
+      await api.team.updateRole(userId, role)
+      await load()
+    } catch {}
+  }
+
+  const canManage = ["owner", "admin"].includes(myRole)
+
+  return (
+    <div className="space-y-4">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-[14px] font-semibold text-white">Membros da equipe</h2>
+          <p className="text-[12px] text-zinc-500 mt-0.5">{members.length} {members.length === 1 ? "membro" : "membros"} ativos</p>
+        </div>
+        {canManage && (
+          <button
+            onClick={() => { setShowInvite(true); setInviteLink(""); setInviteError("") }}
+            className="flex items-center gap-1.5 px-3 py-2 bg-violet-600 hover:bg-violet-500 text-white text-[12px] font-medium rounded-lg transition-colors"
+          >
+            <Plus size={13} />
+            Convidar
+          </button>
+        )}
+      </div>
+
+      {/* Invite modal */}
+      {showInvite && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+          <div className="w-full max-w-sm mx-4 bg-[#111113] ring-1 ring-white/[0.08] rounded-2xl p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-[14px] font-semibold text-white">Convidar membro</h3>
+              <button onClick={() => setShowInvite(false)} className="text-zinc-500 hover:text-zinc-300 transition-colors">
+                <X size={16} />
+              </button>
+            </div>
+
+            {inviteLink ? (
+              <div className="space-y-4">
+                <p className="text-[12px] text-zinc-400">Compartilhe este link com o convidado. Ele expira em 7 dias.</p>
+                <div className="flex items-center gap-2 bg-white/[0.04] ring-1 ring-white/[0.08] rounded-lg px-3 py-2.5">
+                  <span className="flex-1 text-[11px] text-zinc-300 truncate">{inviteLink}</span>
+                  <button onClick={copyLink} className="shrink-0 text-zinc-500 hover:text-zinc-200 transition-colors">
+                    {copied ? <Check size={14} className="text-emerald-400" /> : <Copy size={14} />}
+                  </button>
+                </div>
+                <button
+                  onClick={() => { setInviteLink(""); setShowInvite(false) }}
+                  className="w-full py-2.5 bg-white/[0.06] hover:bg-white/[0.09] text-white text-[13px] font-medium rounded-lg ring-1 ring-white/[0.08] transition-colors"
+                >
+                  Fechar
+                </button>
+              </div>
+            ) : (
+              <form onSubmit={handleInvite} className="space-y-3">
+                <div>
+                  <label className="text-[11px] font-medium text-zinc-500 uppercase tracking-widest mb-1.5 block">E-mail</label>
+                  <input
+                    type="email"
+                    placeholder="email@empresa.com"
+                    value={inviteEmail}
+                    onChange={e => { setInviteEmail(e.target.value); setInviteError("") }}
+                    required
+                    className={inputCls}
+                  />
+                </div>
+                <div>
+                  <label className="text-[11px] font-medium text-zinc-500 uppercase tracking-widest mb-1.5 block">Permissão</label>
+                  <Select value={inviteRole} onChange={setInviteRole} options={ROLE_OPTIONS} />
+                </div>
+                {inviteError && <p className="text-[12px] text-red-400">{inviteError}</p>}
+                <div className="flex gap-2 pt-1">
+                  <button
+                    type="button"
+                    onClick={() => setShowInvite(false)}
+                    className="flex-1 py-2.5 bg-white/[0.04] hover:bg-white/[0.07] text-zinc-300 text-[13px] rounded-lg ring-1 ring-white/[0.08] transition-colors"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={inviting}
+                    className="flex-1 py-2.5 bg-violet-600 hover:bg-violet-500 disabled:opacity-50 text-white text-[13px] font-medium rounded-lg transition-colors"
+                  >
+                    {inviting ? "Gerando..." : "Gerar link"}
+                  </button>
+                </div>
+              </form>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Members list */}
+      <Card>
+        {loading ? (
+          <div className="flex items-center justify-center py-8">
+            <Loader2 size={18} className="animate-spin text-zinc-600" />
+          </div>
+        ) : (
+          <div className="divide-y divide-white/[0.04]">
+            {members.map(m => (
+              <div key={m.id} className="flex items-center gap-3 py-3 first:pt-0 last:pb-0">
+                <div className="w-8 h-8 rounded-full bg-violet-500/20 flex items-center justify-center shrink-0">
+                  <span className="text-[12px] font-semibold text-violet-300">
+                    {(m.name || m.email)[0].toUpperCase()}
+                  </span>
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-[13px] text-white font-medium truncate">{m.name || m.email}</p>
+                  {m.name && <p className="text-[11px] text-zinc-500 truncate">{m.email}</p>}
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  {/* Role badge / selector */}
+                  {m.role === "owner" || !canManage || m.id === myId ? (
+                    <span className={cn(
+                      "px-2 py-0.5 rounded-md text-[11px] font-medium",
+                      m.role === "owner" ? "bg-amber-500/15 text-amber-400" :
+                      m.role === "admin" ? "bg-violet-500/15 text-violet-400" :
+                      "bg-zinc-700/50 text-zinc-400"
+                    )}>
+                      {ROLE_LABEL[m.role] ?? m.role}
+                    </span>
+                  ) : (
+                    <select
+                      value={m.role}
+                      onChange={e => changeRole(m.id, e.target.value)}
+                      className="text-[11px] bg-white/[0.04] ring-1 ring-white/[0.08] rounded-md px-2 py-0.5 text-zinc-300 focus:outline-none focus:ring-violet-500/50"
+                    >
+                      {ROLE_OPTIONS.map(o => (
+                        <option key={o.value} value={o.value}>{o.label}</option>
+                      ))}
+                    </select>
+                  )}
+                  {/* Remove button */}
+                  {canManage && m.id !== myId && m.role !== "owner" && (
+                    <button
+                      onClick={() => removeMember(m.id)}
+                      disabled={removing === m.id}
+                      className="text-zinc-600 hover:text-red-400 transition-colors disabled:opacity-50"
+                    >
+                      {removing === m.id ? <Loader2 size={14} className="animate-spin" /> : <UserMinus size={14} />}
+                    </button>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </Card>
+
+      {/* Pending invites */}
+      {pending.length > 0 && (
+        <div>
+          <h3 className="text-[12px] font-medium text-zinc-500 uppercase tracking-widest mb-3">Convites pendentes</h3>
+          <Card>
+            <div className="divide-y divide-white/[0.04]">
+              {pending.map(inv => (
+                <div key={inv.id} className="flex items-center gap-3 py-3 first:pt-0 last:pb-0">
+                  <div className="w-8 h-8 rounded-full bg-zinc-800 flex items-center justify-center shrink-0">
+                    <Mail size={13} className="text-zinc-500" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-[13px] text-zinc-300 truncate">{inv.email}</p>
+                    <p className="text-[11px] text-zinc-600">
+                      Expira em {new Date(inv.expires_at).toLocaleDateString("pt-BR")}
+                    </p>
+                  </div>
+                  <span className="text-[11px] px-2 py-0.5 rounded-md bg-zinc-700/50 text-zinc-400">
+                    {ROLE_LABEL[inv.role] ?? inv.role} · pendente
+                  </span>
+                </div>
+              ))}
+            </div>
+          </Card>
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
-type TabId = "agente" | "meta" | "alertas" | "whatsapp" | "skills" | "plataforma"
+type TabId = "agente" | "meta" | "alertas" | "whatsapp" | "skills" | "equipe" | "plataforma"
 
 function ConfiguracoesContent() {
   const [tab, setTab] = useState<TabId>("agente")
@@ -948,6 +1216,7 @@ function ConfiguracoesContent() {
       {tab === "alertas"    && <AlertasTab />}
       {tab === "whatsapp"   && <WhatsAppTab />}
       {tab === "skills"     && <SkillsTab />}
+      {tab === "equipe"     && <EquipeTab />}
       {tab === "plataforma" && isAdmin && <PlataformaTab />}
     </div>
   )
