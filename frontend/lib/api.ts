@@ -134,4 +134,13 @@ export const api = {
     update: (id: string, body: Record<string, unknown>) => fetchWithAuth(`/skills/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
     delete: (id: string) => fetchWithAuth(`/skills/${id}`, { method: "DELETE" }),
   },
+
+  team: {
+    members: () => fetchWithAuth("/team/members"),
+    invite: (email: string, role: string) =>
+      fetchWithAuth("/team/invite", { method: "POST", body: JSON.stringify({ email, role }) }),
+    removeMember: (userId: string) => fetchWithAuth(`/team/members/${userId}`, { method: "DELETE" }),
+    updateRole: (userId: string, role: string) =>
+      fetchWithAuth(`/team/members/${userId}`, { method: "PATCH", body: JSON.stringify({ role }) }),
+  },
 }
