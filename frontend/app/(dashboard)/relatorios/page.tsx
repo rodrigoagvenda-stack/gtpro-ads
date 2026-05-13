@@ -239,6 +239,7 @@ function GenerateModal({ onClose, onGenerate }: {
   onClose: () => void
   onGenerate: (skills: string[], objective: string) => void
 }) {
+  const [step,      setStep]      = useState<1 | 2>(1)
   const [selected,  setSelected]  = useState<string[]>(["gargalos"])
   const [objective, setObjective] = useState("all")
 
@@ -246,9 +247,13 @@ function GenerateModal({ onClose, onGenerate }: {
     setSelected(prev => prev.includes(id) ? prev.filter(s => s !== id) : [...prev, id])
   }
 
+  const objLabel = OBJECTIVES.find(o => o.id === objective)?.label ?? ""
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-      <div className="bg-[#111113] ring-1 ring-white/[0.10] rounded-2xl w-full max-w-md shadow-2xl max-h-[90vh] overflow-y-auto">
+      <div className="bg-[#111113] ring-1 ring-white/[0.10] rounded-2xl w-full max-w-md shadow-2xl">
+
+        {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-white/[0.07]">
           <div className="flex items-center gap-2.5">
             <Sparkles size={14} className="text-violet-400" />
@@ -257,73 +262,103 @@ function GenerateModal({ onClose, onGenerate }: {
           <button onClick={onClose} className="text-zinc-600 hover:text-zinc-300 transition-colors"><X size={16} /></button>
         </div>
 
-        <div className="px-6 py-5 space-y-5">
-          {/* Objective selector */}
-          <div>
-            <p className="text-[12px] text-zinc-500 mb-2.5">Objetivo das campanhas a analisar:</p>
-            <div className="grid grid-cols-2 gap-1.5">
-              {OBJECTIVES.map(obj => (
-                <button key={obj.id} type="button" onClick={() => setObjective(obj.id)}
-                  className={cn("flex flex-col items-start px-3 py-2.5 rounded-xl ring-1 text-left transition-all",
-                    objective === obj.id
-                      ? "bg-violet-600/15 ring-violet-500/40"
-                      : "bg-white/[0.02] ring-white/[0.06] hover:bg-white/[0.05]"
-                  )}>
-                  <p className={cn("text-[12px] font-medium leading-tight", objective === obj.id ? "text-violet-300" : "text-zinc-300")}>
-                    {obj.label}
-                  </p>
-                  <p className="text-[10px] text-zinc-600 mt-0.5">{obj.desc}</p>
-                </button>
-              ))}
+        {/* Progress */}
+        <div className="flex items-center gap-3 px-6 pt-4 pb-1">
+          {[1, 2].map(n => (
+            <div key={n} className="flex items-center gap-2 flex-1">
+              <div className={cn("w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0 transition-colors",
+                step === n ? "bg-violet-600 text-white" : step > n ? "bg-emerald-500/20 text-emerald-400" : "bg-white/[0.06] text-zinc-600"
+              )}>
+                {step > n ? <Check size={10} /> : n}
+              </div>
+              <span className={cn("text-[11px] font-medium transition-colors",
+                step === n ? "text-zinc-300" : "text-zinc-600"
+              )}>
+                {n === 1 ? "Objetivo" : "Análises"}
+              </span>
+              {n < 2 && <div className={cn("flex-1 h-px transition-colors", step > 1 ? "bg-emerald-500/30" : "bg-white/[0.06]")} />}
             </div>
-          </div>
+          ))}
+        </div>
 
-          <div className="border-t border-white/[0.06]" />
-
-          {/* Skills */}
-          <div>
-            <p className="text-[12px] text-zinc-500 mb-2.5">Análises a incluir:</p>
-            <div className="space-y-2">
-              {SKILLS.map(skill => {
-                const Icon = skill.icon
-                const on   = selected.includes(skill.id)
-                return (
-                  <button key={skill.id} type="button" onClick={() => toggle(skill.id)}
-                    className={cn("w-full flex items-center gap-3 px-4 py-3 rounded-xl ring-1 text-left transition-all",
-                      on ? "bg-violet-600/10 ring-violet-500/30" : "bg-white/[0.02] ring-white/[0.06] hover:bg-white/[0.05]"
+        <div className="px-6 py-5 space-y-4">
+          {step === 1 && (
+            <>
+              <p className="text-[12px] text-zinc-500">Qual é o objetivo das campanhas que deseja analisar?</p>
+              <div className="grid grid-cols-2 gap-1.5">
+                {OBJECTIVES.map(obj => (
+                  <button key={obj.id} type="button" onClick={() => setObjective(obj.id)}
+                    className={cn("flex flex-col items-start px-3 py-2.5 rounded-xl ring-1 text-left transition-all",
+                      objective === obj.id
+                        ? "bg-violet-600/15 ring-violet-500/40"
+                        : "bg-white/[0.02] ring-white/[0.06] hover:bg-white/[0.05]"
                     )}>
-                    <div className={cn("w-7 h-7 rounded-lg flex items-center justify-center shrink-0 ring-1", skill.color)}>
-                      <Icon size={12} />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className={cn("text-[13px] font-medium", on ? "text-white" : "text-zinc-300")}>{skill.label}</p>
-                      <p className="text-[11px] text-zinc-600 mt-0.5">{skill.desc}</p>
-                    </div>
-                    <div className={cn("w-4 h-4 rounded-full border-2 shrink-0 transition-all",
-                      on ? "bg-violet-500 border-violet-500" : "border-zinc-600"
-                    )}>
-                      {on && <Check size={10} className="text-white m-auto translate-y-[1px]" />}
-                    </div>
+                    <p className={cn("text-[12px] font-medium leading-tight", objective === obj.id ? "text-violet-300" : "text-zinc-300")}>
+                      {obj.label}
+                    </p>
+                    <p className="text-[10px] text-zinc-600 mt-0.5">{obj.desc}</p>
                   </button>
-                )
-              })}
-            </div>
-          </div>
+                ))}
+              </div>
+              <div className="flex gap-2 pt-1">
+                <button type="button" onClick={onClose}
+                  className="flex-1 py-2 text-[13px] text-zinc-400 bg-white/[0.04] ring-1 ring-white/[0.08] rounded-xl hover:bg-white/[0.07] transition-colors">
+                  Cancelar
+                </button>
+                <button type="button" onClick={() => setStep(2)}
+                  className="flex-1 py-2 text-[13px] text-white bg-violet-600 hover:bg-violet-500 rounded-xl transition-colors font-medium">
+                  Próximo →
+                </button>
+              </div>
+            </>
+          )}
 
-          <p className="text-[11px] text-zinc-600">
-            Apenas campanhas <span className="text-emerald-400 font-medium">ativas</span> serão analisadas. Pausadas e arquivadas são ignoradas.
-          </p>
-
-          <div className="flex gap-2 pt-1">
-            <button type="button" onClick={onClose}
-              className="flex-1 py-2 text-[13px] text-zinc-400 bg-white/[0.04] ring-1 ring-white/[0.08] rounded-xl hover:bg-white/[0.07] transition-colors">
-              Cancelar
-            </button>
-            <button type="button" onClick={() => onGenerate(selected, objective)} disabled={selected.length === 0}
-              className="flex-1 py-2 text-[13px] text-white bg-violet-600 hover:bg-violet-500 rounded-xl transition-colors disabled:opacity-40 font-medium flex items-center justify-center gap-2">
-              <Sparkles size={13} /> Gerar relatório
-            </button>
-          </div>
+          {step === 2 && (
+            <>
+              <div className="flex items-center gap-2">
+                <p className="text-[12px] text-zinc-500 flex-1">Quais análises incluir no relatório?</p>
+                <span className="text-[10px] px-2 py-0.5 rounded-md bg-violet-500/15 text-violet-400 font-medium">{objLabel}</span>
+              </div>
+              <div className="space-y-2">
+                {SKILLS.map(skill => {
+                  const Icon = skill.icon
+                  const on   = selected.includes(skill.id)
+                  return (
+                    <button key={skill.id} type="button" onClick={() => toggle(skill.id)}
+                      className={cn("w-full flex items-center gap-3 px-4 py-3 rounded-xl ring-1 text-left transition-all",
+                        on ? "bg-violet-600/10 ring-violet-500/30" : "bg-white/[0.02] ring-white/[0.06] hover:bg-white/[0.05]"
+                      )}>
+                      <div className={cn("w-7 h-7 rounded-lg flex items-center justify-center shrink-0 ring-1", skill.color)}>
+                        <Icon size={12} />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className={cn("text-[13px] font-medium", on ? "text-white" : "text-zinc-300")}>{skill.label}</p>
+                        <p className="text-[11px] text-zinc-600 mt-0.5">{skill.desc}</p>
+                      </div>
+                      <div className={cn("w-4 h-4 rounded-full border-2 shrink-0 transition-all",
+                        on ? "bg-violet-500 border-violet-500" : "border-zinc-600"
+                      )}>
+                        {on && <Check size={10} className="text-white m-auto translate-y-[1px]" />}
+                      </div>
+                    </button>
+                  )
+                })}
+              </div>
+              <p className="text-[11px] text-zinc-600">
+                Apenas campanhas <span className="text-emerald-400 font-medium">ativas</span> serão analisadas.
+              </p>
+              <div className="flex gap-2 pt-1">
+                <button type="button" onClick={() => setStep(1)}
+                  className="flex-1 py-2 text-[13px] text-zinc-400 bg-white/[0.04] ring-1 ring-white/[0.08] rounded-xl hover:bg-white/[0.07] transition-colors">
+                  ← Voltar
+                </button>
+                <button type="button" onClick={() => onGenerate(selected, objective)} disabled={selected.length === 0}
+                  className="flex-1 py-2 text-[13px] text-white bg-violet-600 hover:bg-violet-500 rounded-xl transition-colors disabled:opacity-40 font-medium flex items-center justify-center gap-2">
+                  <Sparkles size={13} /> Gerar relatório
+                </button>
+              </div>
+            </>
+          )}
         </div>
       </div>
     </div>

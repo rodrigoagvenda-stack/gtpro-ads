@@ -29,7 +29,8 @@ export async function GET(req: NextRequest) {
   }
 
   const metaName = authUserRes.data?.user?.user_metadata?.name as string | undefined
-  const name = configRes.data?.user_name || metaName || ""
+  // Prioriza nome do usuário logado (user_metadata) sobre o nome da conta no agent_configs
+  const name = metaName || configRes.data?.user_name || ""
 
   return Response.json({
     tenant_id: ctx.tenant_id,
