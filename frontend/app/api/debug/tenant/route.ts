@@ -18,7 +18,9 @@ export async function GET(req: NextRequest) {
       try {
         // Supabase às vezes codifica em base64
         let raw = c.value
-        if (!raw.startsWith("{") && !raw.startsWith("eyJ")) {
+        if (raw.startsWith("base64-")) {
+          raw = Buffer.from(raw.slice(7), "base64").toString("utf8")
+        } else if (!raw.startsWith("{") && !raw.startsWith("eyJ")) {
           raw = Buffer.from(raw, "base64").toString("utf8")
         }
         const parsed = JSON.parse(raw)
