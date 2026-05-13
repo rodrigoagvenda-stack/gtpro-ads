@@ -2,6 +2,8 @@ import { NextRequest } from "next/server"
 import { createServiceClient } from "@/lib/server/supabase"
 import { getTenant, unauthorized } from "@/lib/server/auth"
 
+const MANAGER_ROLES = ["owner", "admin", "super_admin"]
+
 // POST /api/team/invite — owner ou admin cria convite
 export async function POST(req: NextRequest) {
   const ctx = await getTenant(req)
@@ -9,16 +11,28 @@ export async function POST(req: NextRequest) {
 
   const supabase = createServiceClient()
 
-  // Verifica role do solicitante
-  const { data: me } = await supabase
+  // Verifica role do solicitante diretamente pelo user_id
+  const { data: me, error: meError } = await supabase
     .from("tenant_members")
-    .select("role")
-    .eq("id", ctx.user_id)
+    .select("role, tenant_id")
+    .eq("id", ctx.user_id!)
     .single()
 
-  if (!me || !["owner", "admin"].includes(me.role)) {
-    return Response.json({ error: "Apenas owners e admins podem convidar membros." }, { status: 403 })
+  if (meError || !me) {
+    return Response.json(
+      { error: `Usuário não encontrado na equipe (user_id: ${ctx.user_id}).` },
+      { status: 403 },
+    )
   }
+
+  if (!MANAGER_ROLES.includes(me.role)) {
+    return Response.json(
+      { error: `Sem permissão. Seu role atual é "${me.role}".` },
+      { status: 403 },
+    )
+  }
+
+  const tenantId = me.tenant_id
 
   const { email, role = "member" } = await req.json()
 
@@ -29,17 +43,20 @@ export async function POST(req: NextRequest) {
     return Response.json({ error: "Role inválido." }, { status: 400 })
   }
 
-  // Verifica se e-mail já é membro
+  // Verifica se e-mail já é membro no tenant
   const { data: existingUser } = await supabase.auth.admin.listUsers()
-  const userWithEmail = existingUser?.users?.find(u => u.email === email.trim().toLowerCase())
+  const userWithEmail = existingUser?.users?.find(
+    u => u.email === email.trim().toLowerCase(),
+  )
   if (userWithEmail) {
     const { data: member } = await supabase
       .from("tenant_members")
       .select("id")
       .eq("id", userWithEmail.id)
+      .eq("tenant_id", tenantId)
       .single()
     if (member) {
-      return Response.json({ error: "Este e-mail já possui uma conta no GTPRO." }, { status: 409 })
+      return Response.json({ error: "Este e-mail já é membro desta empresa." }, { status: 409 })
     }
   }
 
@@ -47,7 +64,7 @@ export async function POST(req: NextRequest) {
   await supabase
     .from("invites")
     .update({ accepted_at: new Date().toISOString() })
-    .eq("tenant_id", ctx.tenant_id)
+    .eq("tenant_id", tenantId)
     .eq("email", email.trim().toLowerCase())
     .is("accepted_at", null)
 
@@ -55,7 +72,7 @@ export async function POST(req: NextRequest) {
   const { data: invite, error } = await supabase
     .from("invites")
     .insert({
-      tenant_id: ctx.tenant_id,
+      tenant_id: tenantId,
       email: email.trim().toLowerCase(),
       role,
       created_by: ctx.user_id,
@@ -65,7 +82,7 @@ export async function POST(req: NextRequest) {
 
   if (error || !invite) {
     console.error("[invite] insert error:", error?.message)
-    return Response.json({ error: "Erro ao criar convite." }, { status: 500 })
+    return Response.json({ error: `Erro ao criar convite: ${error?.message}` }, { status: 500 })
   }
 
   const baseUrl = req.headers.get("origin") ?? process.env.NEXT_PUBLIC_APP_URL ?? ""
