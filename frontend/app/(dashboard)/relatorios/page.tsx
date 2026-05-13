@@ -4,7 +4,7 @@ import React, { useEffect, useState } from "react"
 import { api } from "@/lib/api"
 import { FileText, Download, Loader2, Plus, ChevronDown, ChevronUp, CalendarClock,
   MessageCircle, Check, RefreshCw, X, AlertTriangle, TrendingDown,
-  Pencil, Users, DollarSign, Sparkles } from "lucide-react"
+  Pencil, Users, DollarSign, Sparkles, ChevronRight } from "lucide-react"
 import { cn } from "@/lib/utils"
 
 interface Report {
@@ -235,26 +235,70 @@ const OBJECTIVES = [
   { id: "OUTCOME_MESSAGES",   label: "WhatsApp",             desc: "Conversas, custo por conversa" },
 ]
 
+const DATE_PRESETS = [
+  { id: "last_7d",     label: "Últimos 7 dias" },
+  { id: "last_14d",    label: "Últimos 14 dias" },
+  { id: "last_30d",    label: "Últimos 30 dias" },
+  { id: "last_90d",    label: "Últimos 90 dias" },
+  { id: "this_month",  label: "Este mês" },
+  { id: "last_month",  label: "Mês passado" },
+]
+
+const STEPS = ["Objetivo", "Filtros", "Análises"]
+
 function GenerateModal({ onClose, onGenerate }: {
   onClose: () => void
-  onGenerate: (skills: string[], objective: string) => void
+  onGenerate: (skills: string[], objective: string, datePreset: string, connectionId: string, campaignIds: string[]) => void
 }) {
-  const [step,      setStep]      = useState<1 | 2>(1)
-  const [selected,  setSelected]  = useState<string[]>(["gargalos"])
-  const [objective, setObjective] = useState("all")
+  const [step,         setStep]         = useState<1 | 2 | 3>(1)
+  const [objective,    setObjective]    = useState("all")
+  const [datePreset,   setDatePreset]   = useState("last_30d")
+  const [connectionId, setConnectionId] = useState("")
+  const [accounts,     setAccounts]     = useState<any[]>([])
+  const [campaigns,    setCampaigns]    = useState<any[]>([])
+  const [campaignIds,  setCampaignIds]  = useState<string[]>([]) // vazio = todas
+  const [loadingData,  setLoadingData]  = useState(false)
+  const [selected,     setSelected]     = useState<string[]>(["gargalos"])
+
+  // Carrega contas ao abrir passo 2
+  useEffect(() => {
+    if (step !== 2) return
+    setLoadingData(true)
+    api.meta.accounts().then((acc: any[]) => {
+      setAccounts(acc ?? [])
+      const active = acc?.find((a: any) => a.is_active) ?? acc?.[0]
+      if (active && !connectionId) setConnectionId(active.id)
+    }).catch(() => {}).finally(() => setLoadingData(false))
+  }, [step])
+
+  // Carrega campanhas ao mudar conta
+  useEffect(() => {
+    if (step !== 2 || !connectionId) return
+    setCampaigns([])
+    setCampaignIds([])
+    api.campaigns.list(datePreset).then((cps: any[]) => {
+      setCampaigns(cps?.filter((c: any) => c.status === "ACTIVE") ?? [])
+    }).catch(() => {})
+  }, [connectionId, datePreset, step])
+
+  function toggleCampaign(id: string) {
+    setCampaignIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id])
+  }
 
   function toggle(id: string) {
     setSelected(prev => prev.includes(id) ? prev.filter(s => s !== id) : [...prev, id])
   }
 
-  const objLabel = OBJECTIVES.find(o => o.id === objective)?.label ?? ""
+  const objLabel  = OBJECTIVES.find(o => o.id === objective)?.label ?? ""
+  const dateLabel = DATE_PRESETS.find(d => d.id === datePreset)?.label ?? ""
+  const accLabel  = accounts.find(a => a.id === connectionId)?.ad_account_id ?? ""
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-      <div className="bg-[#111113] ring-1 ring-white/[0.10] rounded-2xl w-full max-w-md shadow-2xl">
+      <div className="bg-[#111113] ring-1 ring-white/[0.10] rounded-2xl w-full max-w-md shadow-2xl max-h-[90vh] flex flex-col">
 
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-white/[0.07]">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-white/[0.07] shrink-0">
           <div className="flex items-center gap-2.5">
             <Sparkles size={14} className="text-violet-400" />
             <h2 className="text-[15px] font-semibold text-white">Gerar Relatório</h2>
@@ -263,62 +307,136 @@ function GenerateModal({ onClose, onGenerate }: {
         </div>
 
         {/* Progress */}
-        <div className="flex items-center gap-3 px-6 pt-4 pb-1">
-          {[1, 2].map(n => (
-            <div key={n} className="flex items-center gap-2 flex-1">
-              <div className={cn("w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0 transition-colors",
-                step === n ? "bg-violet-600 text-white" : step > n ? "bg-emerald-500/20 text-emerald-400" : "bg-white/[0.06] text-zinc-600"
-              )}>
-                {step > n ? <Check size={10} /> : n}
-              </div>
-              <span className={cn("text-[11px] font-medium transition-colors",
-                step === n ? "text-zinc-300" : "text-zinc-600"
-              )}>
-                {n === 1 ? "Objetivo" : "Análises"}
-              </span>
-              {n < 2 && <div className={cn("flex-1 h-px transition-colors", step > 1 ? "bg-emerald-500/30" : "bg-white/[0.06]")} />}
-            </div>
-          ))}
+        <div className="flex items-center px-6 pt-4 pb-2 gap-1 shrink-0">
+          {STEPS.map((label, i) => {
+            const n = i + 1
+            return (
+              <React.Fragment key={n}>
+                <div className="flex items-center gap-1.5">
+                  <div className={cn("w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0 transition-colors",
+                    step === n ? "bg-violet-600 text-white" : step > n ? "bg-emerald-500/20 text-emerald-400" : "bg-white/[0.06] text-zinc-600"
+                  )}>
+                    {step > n ? <Check size={9} /> : n}
+                  </div>
+                  <span className={cn("text-[11px] font-medium transition-colors whitespace-nowrap",
+                    step === n ? "text-zinc-200" : "text-zinc-600"
+                  )}>{label}</span>
+                </div>
+                {n < STEPS.length && <ChevronRight size={11} className="text-zinc-700 mx-1 shrink-0" />}
+              </React.Fragment>
+            )
+          })}
         </div>
 
-        <div className="px-6 py-5 space-y-4">
+        {/* Content */}
+        <div className="px-6 py-4 space-y-4 overflow-y-auto flex-1">
+
+          {/* Step 1: Objetivo */}
           {step === 1 && (
             <>
-              <p className="text-[12px] text-zinc-500">Qual é o objetivo das campanhas que deseja analisar?</p>
+              <p className="text-[12px] text-zinc-500">Qual é o objetivo das campanhas a analisar?</p>
               <div className="grid grid-cols-2 gap-1.5">
                 {OBJECTIVES.map(obj => (
                   <button key={obj.id} type="button" onClick={() => setObjective(obj.id)}
                     className={cn("flex flex-col items-start px-3 py-2.5 rounded-xl ring-1 text-left transition-all",
-                      objective === obj.id
-                        ? "bg-violet-600/15 ring-violet-500/40"
-                        : "bg-white/[0.02] ring-white/[0.06] hover:bg-white/[0.05]"
+                      objective === obj.id ? "bg-violet-600/15 ring-violet-500/40" : "bg-white/[0.02] ring-white/[0.06] hover:bg-white/[0.05]"
                     )}>
-                    <p className={cn("text-[12px] font-medium leading-tight", objective === obj.id ? "text-violet-300" : "text-zinc-300")}>
-                      {obj.label}
-                    </p>
+                    <p className={cn("text-[12px] font-medium leading-tight", objective === obj.id ? "text-violet-300" : "text-zinc-300")}>{obj.label}</p>
                     <p className="text-[10px] text-zinc-600 mt-0.5">{obj.desc}</p>
                   </button>
                 ))}
               </div>
-              <div className="flex gap-2 pt-1">
-                <button type="button" onClick={onClose}
-                  className="flex-1 py-2 text-[13px] text-zinc-400 bg-white/[0.04] ring-1 ring-white/[0.08] rounded-xl hover:bg-white/[0.07] transition-colors">
-                  Cancelar
-                </button>
-                <button type="button" onClick={() => setStep(2)}
-                  className="flex-1 py-2 text-[13px] text-white bg-violet-600 hover:bg-violet-500 rounded-xl transition-colors font-medium">
-                  Próximo →
-                </button>
-              </div>
             </>
           )}
 
+          {/* Step 2: Filtros */}
           {step === 2 && (
             <>
-              <div className="flex items-center gap-2">
-                <p className="text-[12px] text-zinc-500 flex-1">Quais análises incluir no relatório?</p>
-                <span className="text-[10px] px-2 py-0.5 rounded-md bg-violet-500/15 text-violet-400 font-medium">{objLabel}</span>
+              {/* Período */}
+              <div>
+                <p className="text-[12px] text-zinc-500 mb-2">Período</p>
+                <div className="grid grid-cols-3 gap-1.5">
+                  {DATE_PRESETS.map(d => (
+                    <button key={d.id} type="button" onClick={() => setDatePreset(d.id)}
+                      className={cn("px-3 py-2 rounded-lg ring-1 text-left transition-all",
+                        datePreset === d.id ? "bg-violet-600/15 ring-violet-500/40" : "bg-white/[0.02] ring-white/[0.06] hover:bg-white/[0.05]"
+                      )}>
+                      <p className={cn("text-[11px] font-medium", datePreset === d.id ? "text-violet-300" : "text-zinc-400")}>{d.label}</p>
+                    </button>
+                  ))}
+                </div>
               </div>
+
+              {/* Conta de anúncio */}
+              {loadingData ? (
+                <div className="flex items-center gap-2 text-zinc-600 text-[12px]"><Loader2 size={12} className="animate-spin" /> Carregando contas...</div>
+              ) : accounts.length > 1 && (
+                <div>
+                  <p className="text-[12px] text-zinc-500 mb-2">Conta de anúncio</p>
+                  <div className="space-y-1.5">
+                    {accounts.map(acc => (
+                      <button key={acc.id} type="button" onClick={() => setConnectionId(acc.id)}
+                        className={cn("w-full flex items-center gap-3 px-3 py-2.5 rounded-xl ring-1 text-left transition-all",
+                          connectionId === acc.id ? "bg-violet-600/15 ring-violet-500/40" : "bg-white/[0.02] ring-white/[0.06] hover:bg-white/[0.05]"
+                        )}>
+                        <div className={cn("w-2 h-2 rounded-full shrink-0", acc.is_active ? "bg-emerald-400" : "bg-zinc-600")} />
+                        <div className="flex-1 min-w-0">
+                          <p className={cn("text-[12px] font-medium truncate", connectionId === acc.id ? "text-violet-300" : "text-zinc-300")}>
+                            {acc.name || `Conta ${acc.ad_account_id}`}
+                          </p>
+                          <p className="text-[10px] text-zinc-600">act_{acc.ad_account_id}</p>
+                        </div>
+                        {connectionId === acc.id && <Check size={12} className="text-violet-400 shrink-0" />}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Campanhas */}
+              {campaigns.length > 0 && (
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <p className="text-[12px] text-zinc-500">Campanhas ativas</p>
+                    <button type="button" onClick={() => setCampaignIds([])}
+                      className="text-[10px] text-zinc-600 hover:text-violet-400 transition-colors">
+                      {campaignIds.length === 0 ? "Todas selecionadas" : `${campaignIds.length} selecionada(s)`}
+                    </button>
+                  </div>
+                  <div className="space-y-1 max-h-40 overflow-y-auto pr-1">
+                    {campaigns.map((c: any) => {
+                      const on = campaignIds.length === 0 || campaignIds.includes(c.id)
+                      return (
+                        <button key={c.id} type="button" onClick={() => toggleCampaign(c.id)}
+                          className={cn("w-full flex items-center gap-2.5 px-3 py-2 rounded-lg ring-1 text-left transition-all",
+                            on ? "bg-white/[0.03] ring-white/[0.08]" : "bg-transparent ring-transparent opacity-40"
+                          )}>
+                          <div className={cn("w-3.5 h-3.5 rounded border shrink-0 flex items-center justify-center transition-colors",
+                            on ? "bg-violet-500 border-violet-500" : "border-zinc-600"
+                          )}>
+                            {on && <Check size={9} className="text-white" />}
+                          </div>
+                          <p className="text-[11px] text-zinc-300 truncate flex-1">{c.name}</p>
+                          <p className="text-[10px] text-zinc-600 shrink-0">R${Number(c.metrics?.spend ?? 0).toFixed(0)}</p>
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+              )}
+            </>
+          )}
+
+          {/* Step 3: Análises */}
+          {step === 3 && (
+            <>
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-[10px] px-2 py-0.5 rounded-md bg-zinc-800 text-zinc-400">{objLabel}</span>
+                <span className="text-[10px] px-2 py-0.5 rounded-md bg-zinc-800 text-zinc-400">{dateLabel}</span>
+                {accLabel && <span className="text-[10px] px-2 py-0.5 rounded-md bg-zinc-800 text-zinc-400">act_{accLabel}</span>}
+                {campaignIds.length > 0 && <span className="text-[10px] px-2 py-0.5 rounded-md bg-zinc-800 text-zinc-400">{campaignIds.length} campanhas</span>}
+              </div>
+              <p className="text-[12px] text-zinc-500">Quais análises incluir?</p>
               <div className="space-y-2">
                 {SKILLS.map(skill => {
                   const Icon = skill.icon
@@ -347,17 +465,27 @@ function GenerateModal({ onClose, onGenerate }: {
               <p className="text-[11px] text-zinc-600">
                 Apenas campanhas <span className="text-emerald-400 font-medium">ativas</span> serão analisadas.
               </p>
-              <div className="flex gap-2 pt-1">
-                <button type="button" onClick={() => setStep(1)}
-                  className="flex-1 py-2 text-[13px] text-zinc-400 bg-white/[0.04] ring-1 ring-white/[0.08] rounded-xl hover:bg-white/[0.07] transition-colors">
-                  ← Voltar
-                </button>
-                <button type="button" onClick={() => onGenerate(selected, objective)} disabled={selected.length === 0}
-                  className="flex-1 py-2 text-[13px] text-white bg-violet-600 hover:bg-violet-500 rounded-xl transition-colors disabled:opacity-40 font-medium flex items-center justify-center gap-2">
-                  <Sparkles size={13} /> Gerar relatório
-                </button>
-              </div>
             </>
+          )}
+        </div>
+
+        {/* Footer */}
+        <div className="flex gap-2 px-6 py-4 border-t border-white/[0.06] shrink-0">
+          <button type="button" onClick={step === 1 ? onClose : () => setStep((step - 1) as any)}
+            className="flex-1 py-2 text-[13px] text-zinc-400 bg-white/[0.04] ring-1 ring-white/[0.08] rounded-xl hover:bg-white/[0.07] transition-colors">
+            {step === 1 ? "Cancelar" : "← Voltar"}
+          </button>
+          {step < 3 ? (
+            <button type="button" onClick={() => setStep((step + 1) as any)}
+              className="flex-1 py-2 text-[13px] text-white bg-violet-600 hover:bg-violet-500 rounded-xl transition-colors font-medium">
+              Próximo →
+            </button>
+          ) : (
+            <button type="button" onClick={() => onGenerate(selected, objective, datePreset, connectionId, campaignIds)}
+              disabled={selected.length === 0}
+              className="flex-1 py-2 text-[13px] text-white bg-violet-600 hover:bg-violet-500 rounded-xl transition-colors disabled:opacity-40 font-medium flex items-center justify-center gap-2">
+              <Sparkles size={13} /> Gerar relatório
+            </button>
           )}
         </div>
       </div>
@@ -397,11 +525,11 @@ export default function RelatoriosPage() {
     } catch (e: any) { alert(e.message) } finally { setSavingSchedule(false) }
   }
 
-  async function generateReport(skills: string[], objective: string) {
+  async function generateReport(skills: string[], objective: string, datePreset: string, connectionId: string, campaignIds: string[]) {
     setShowModal(false)
     setGenerating(true)
     try {
-      const report = await api.reports.generate(skills, objective)
+      const report = await api.reports.generate(skills, objective, datePreset, connectionId || undefined, campaignIds)
       setReports(p => [report, ...p])
       setExpanded(report.id)
     } catch (e: any) {

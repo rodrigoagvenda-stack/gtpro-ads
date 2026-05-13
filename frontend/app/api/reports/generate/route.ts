@@ -244,23 +244,32 @@ export async function POST(req: NextRequest) {
 
   try {
     const body = await req.json().catch(() => ({}))
-    const skills: string[]  = Array.isArray(body.skills) && body.skills.length > 0 ? body.skills : ["gargalos"]
-    const objective: string = typeof body.objective === "string" && body.objective ? body.objective : "all"
+    const skills: string[]      = Array.isArray(body.skills) && body.skills.length > 0 ? body.skills : ["gargalos"]
+    const objective: string     = typeof body.objective === "string" && body.objective ? body.objective : "all"
+    const datePreset: string    = typeof body.datePreset === "string" && body.datePreset ? body.datePreset : "last_30d"
+    const connectionId: string | undefined = typeof body.connectionId === "string" && body.connectionId ? body.connectionId : undefined
+    const campaignIds: string[] = Array.isArray(body.campaignIds) ? body.campaignIds : []
+
+    const DATE_LABELS: Record<string, string> = {
+      last_7d: "últimos 7 dias", last_14d: "últimos 14 dias", last_30d: "últimos 30 dias",
+      last_90d: "últimos 90 dias", this_month: "este mês", last_month: "mês passado",
+    }
 
     const supabase = createServiceClient()
     const [configResult, campaigns, accountInsights] = await Promise.all([
       supabase.from("agent_configs").select("*").eq("tenant_id", tenant.tenant_id).single(),
-      getCampaigns(tenant.tenant_id, "last_30d"),
-      getInsights(tenant.tenant_id, "last_30d").catch(() => ({})),
+      getCampaigns(tenant.tenant_id, datePreset, connectionId),
+      getInsights(tenant.tenant_id, datePreset).catch(() => ({})),
     ])
 
-    const allActive = campaigns.filter((c: any) => c.status === "ACTIVE")
-    const active    = objective === "all"
+    let allActive = campaigns.filter((c: any) => c.status === "ACTIVE")
+    if (campaignIds.length > 0) allActive = allActive.filter((c: any) => campaignIds.includes(c.id))
+    const active = objective === "all"
       ? allActive
       : allActive.filter((c: any) => c.objective === objective)
 
-    const now       = new Date()
-    const period    = now.toLocaleDateString("pt-BR", { month: "long", year: "numeric" })
+    const now    = new Date()
+    const period = `${DATE_LABELS[datePreset] ?? datePreset} — ${now.toLocaleDateString("pt-BR", { month: "long", year: "numeric" })}`
     const objConfig = OBJECTIVE_CONFIG[objective] ?? OBJECTIVE_CONFIG.all
     const objLabel  = objConfig.label
 
