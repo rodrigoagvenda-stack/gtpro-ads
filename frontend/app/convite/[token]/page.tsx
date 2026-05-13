@@ -74,6 +74,9 @@ export default function ConvitePage() {
       return
     }
 
+    // Garante que o JWT tem o tenant_id atualizado antes de redirecionar
+    await supabase.auth.refreshSession()
+
     router.push("/campanhas")
   }
 

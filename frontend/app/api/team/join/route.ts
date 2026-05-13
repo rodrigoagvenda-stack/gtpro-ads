@@ -72,5 +72,6 @@ export async function POST(req: NextRequest) {
     .update({ accepted_at: new Date().toISOString() })
     .eq("id", invite.id)
 
-  return Response.json({ ok: true, email: invite.email })
+  // Retorna o tenant_id para o cliente usar no refresh
+  return Response.json({ ok: true, email: invite.email, tenant_id: invite.tenant_id })
 }
