@@ -4,6 +4,29 @@ import { getTenant, unauthorized } from "@/lib/server/auth"
 
 const MANAGER_ROLES = ["owner", "admin", "super_admin"]
 
+async function resolveCallerRole(
+  supabase: ReturnType<typeof createServiceClient>,
+  userId: string,
+  tenantId: string,
+): Promise<{ role: string; tenant_id: string }> {
+  const { data } = await supabase
+    .from("tenant_members")
+    .select("role, tenant_id")
+    .eq("id", userId)
+    .single()
+
+  if (data) return data
+
+  // Usuário tem JWT válido mas não está em tenant_members — auto-inserir como owner
+  await supabase.from("tenant_members").insert({
+    id: userId,
+    tenant_id: tenantId,
+    role: "owner",
+  })
+
+  return { role: "owner", tenant_id: tenantId }
+}
+
 // POST /api/team/invite — owner ou admin cria convite
 export async function POST(req: NextRequest) {
   const ctx = await getTenant(req)
@@ -11,28 +34,16 @@ export async function POST(req: NextRequest) {
 
   const supabase = createServiceClient()
 
-  // Verifica role do solicitante diretamente pelo user_id
-  const { data: me, error: meError } = await supabase
-    .from("tenant_members")
-    .select("role, tenant_id")
-    .eq("id", ctx.user_id!)
-    .single()
+  const caller = await resolveCallerRole(supabase, ctx.user_id!, ctx.tenant_id)
 
-  if (meError || !me) {
+  if (!MANAGER_ROLES.includes(caller.role)) {
     return Response.json(
-      { error: `Usuário não encontrado na equipe (user_id: ${ctx.user_id}).` },
+      { error: `Sem permissão. Seu role atual é "${caller.role}".` },
       { status: 403 },
     )
   }
 
-  if (!MANAGER_ROLES.includes(me.role)) {
-    return Response.json(
-      { error: `Sem permissão. Seu role atual é "${me.role}".` },
-      { status: 403 },
-    )
-  }
-
-  const tenantId = me.tenant_id
+  const tenantId = caller.tenant_id
 
   const { email, role = "member" } = await req.json()
 

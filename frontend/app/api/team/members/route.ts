@@ -2,6 +2,29 @@ import { NextRequest } from "next/server"
 import { createServiceClient } from "@/lib/server/supabase"
 import { getTenant, unauthorized } from "@/lib/server/auth"
 
+async function resolveCallerRole(
+  supabase: ReturnType<typeof createServiceClient>,
+  userId: string,
+  tenantId: string,
+): Promise<{ role: string; tenant_id: string }> {
+  const { data } = await supabase
+    .from("tenant_members")
+    .select("role, tenant_id")
+    .eq("id", userId)
+    .single()
+
+  if (data) return data
+
+  // Usuário tem JWT válido mas não está em tenant_members — auto-inserir como owner
+  await supabase.from("tenant_members").insert({
+    id: userId,
+    tenant_id: tenantId,
+    role: "owner",
+  })
+
+  return { role: "owner", tenant_id: tenantId }
+}
+
 // GET /api/team/members — lista membros do tenant
 export async function GET(req: NextRequest) {
   const ctx = await getTenant(req)
@@ -9,16 +32,9 @@ export async function GET(req: NextRequest) {
 
   const supabase = createServiceClient()
 
-  // Busca role do caller diretamente pelo user_id (não depende de tenant_id)
-  const { data: callerRow } = await supabase
-    .from("tenant_members")
-    .select("role, tenant_id")
-    .eq("id", ctx.user_id!)
-    .single()
-
-  // Se o caller não tem registro em tenant_members, usa tenant_id do JWT
-  const tenantId = callerRow?.tenant_id ?? ctx.tenant_id
-  const my_role = callerRow?.role ?? "owner"
+  const caller = await resolveCallerRole(supabase, ctx.user_id!, ctx.tenant_id)
+  const tenantId = caller.tenant_id
+  const my_role = caller.role
 
   const { data: members, error } = await supabase
     .from("tenant_members")
@@ -30,7 +46,7 @@ export async function GET(req: NextRequest) {
     return Response.json({ error: `Erro ao buscar membros: ${error.message}` }, { status: 500 })
   }
 
-  // Busca emails dos usuários (cada membro individualmente para evitar problemas com listUsers)
+  // Busca email/nome de cada membro individualmente
   const enriched = await Promise.all(
     members.map(async m => {
       const { data } = await supabase.auth.admin.getUserById(m.id)
@@ -62,6 +78,5 @@ export async function GET(req: NextRequest) {
     pending_invites: pendingInvites,
     my_id: ctx.user_id,
     my_role,
-    debug_tenant_id: tenantId,
   })
 }
