@@ -11,13 +11,19 @@ export async function GET(req: NextRequest) {
 
   // Supabase guarda o token em sb-<ref>-auth-token como JSON
   let token: string | null = null
+  const cookieDebug: Record<string, string> = {}
   for (const c of allCookies) {
+    cookieDebug[c.name] = c.value.slice(0, 80)
     if (c.name.includes("auth-token")) {
       try {
-        const parsed = JSON.parse(c.value)
+        // Supabase às vezes codifica em base64
+        let raw = c.value
+        if (!raw.startsWith("{") && !raw.startsWith("eyJ")) {
+          raw = Buffer.from(raw, "base64").toString("utf8")
+        }
+        const parsed = JSON.parse(raw)
         if (parsed?.access_token) { token = parsed.access_token; break }
       } catch {
-        // pode ser o token direto
         if (c.value.startsWith("eyJ")) { token = c.value; break }
       }
     }
@@ -31,6 +37,7 @@ export async function GET(req: NextRequest) {
     return Response.json({
       error: "Sem token encontrado.",
       cookies_found: allCookies.map(c => c.name),
+      cookie_values_prefix: cookieDebug,
     }, { status: 401 })
   }
 
