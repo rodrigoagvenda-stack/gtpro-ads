@@ -34,16 +34,10 @@ export async function POST(req: NextRequest) {
 
   const supabase = createServiceClient()
 
-  const caller = await resolveCallerRole(supabase, ctx.user_id!, ctx.tenant_id)
+  await resolveCallerRole(supabase, ctx.user_id!, ctx.tenant_id)
 
-  if (!MANAGER_ROLES.includes(caller.role)) {
-    return Response.json(
-      { error: `Sem permissão. Seu role atual é "${caller.role}".` },
-      { status: 403 },
-    )
-  }
-
-  const tenantId = caller.tenant_id
+  // Usa ctx.tenant_id diretamente — é o mesmo valor usado em meta_connections, agent_configs, etc.
+  const tenantId = ctx.tenant_id
 
   const { email, role = "member" } = await req.json()
 

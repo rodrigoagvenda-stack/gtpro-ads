@@ -33,7 +33,7 @@ export async function GET(req: NextRequest) {
   const supabase = createServiceClient()
 
   const caller = await resolveCallerRole(supabase, ctx.user_id!, ctx.tenant_id)
-  const tenantId = caller.tenant_id
+  const tenantId = ctx.tenant_id  // mesmo valor usado em todos os dados do tenant
   const my_role = caller.role
 
   const { data: members, error } = await supabase
