@@ -22,8 +22,21 @@ export async function getTenant(req: NextRequest): Promise<TenantContext | null>
   try {
     const { data: { user } } = await supabase.auth.getUser(token)
     if (user) {
-      const tenantId = user.app_metadata?.tenant_id ?? user.id
-      ctx = { tenant_id: tenantId, auth_type: "jwt", user_id: user.id, user_email: user.email }
+      let tenantId: string | undefined = user.app_metadata?.tenant_id
+
+      // Se não está no app_metadata, busca na tabela tenant_members
+      if (!tenantId) {
+        const { data: member } = await supabase
+          .from("tenant_members")
+          .select("tenant_id")
+          .eq("id", user.id)
+          .single()
+        tenantId = member?.tenant_id
+      }
+
+      if (tenantId) {
+        ctx = { tenant_id: tenantId, auth_type: "jwt", user_id: user.id, user_email: user.email }
+      }
     }
   } catch {}
 
