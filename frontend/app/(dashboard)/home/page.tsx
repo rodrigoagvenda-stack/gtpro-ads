@@ -63,7 +63,10 @@ export default function HomePage() {
       if (home.status === "fulfilled")  setData(home.value)
       if (plat.status === "fulfilled")  setPlatform(plat.value)
       if (meta.status === "fulfilled")  setMetaStatus(meta.value)
-      if (me.status === "fulfilled" && me.value?.name) setUserName(me.value.name)
+      if (me.status === "fulfilled") {
+        const n = me.value?.name || me.value?.user_email?.split("@")[0] || ""
+        if (n) setUserName(n)
+      }
       setLoading(false)
     })
   }, [refreshKey])
