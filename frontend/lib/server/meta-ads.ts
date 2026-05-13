@@ -11,6 +11,15 @@ async function getToken(tenantId: string) {
 
 async function getTokenAndAccount(tenantId: string, connectionId?: string) {
   const supabase = createServiceClient()
+
+  // Diagnóstico: quais rows existem para esse tenant_id?
+  const { data: allRows, error: diagError } = await supabase
+    .from("meta_connections")
+    .select("id, tenant_id, ad_account_id, active, is_active")
+    .eq("tenant_id", tenantId)
+  console.log(`[meta-ads] getTokenAndAccount tenant_id=${tenantId} connectionId=${connectionId ?? "none"}`)
+  console.log(`[meta-ads] rows found for tenant: ${JSON.stringify(allRows)} error=${diagError?.message ?? "none"}`)
+
   let q = supabase
     .from("meta_connections")
     .select("access_token_encrypted, ad_account_id")
@@ -22,7 +31,8 @@ async function getTokenAndAccount(tenantId: string, connectionId?: string) {
     q = (q as any).eq("is_active", true)
   }
   const { data } = await (q as any).single()
-  if (!data) throw new Error("Conta Meta não conectada")
+  console.log(`[meta-ads] active+is_active query result: ${data ? `found ad_account=${data.ad_account_id}` : "NOT FOUND"}`)
+  if (!data) throw new Error(`Conta Meta não conectada (tenant_id=${tenantId}, rows_total=${allRows?.length ?? 0})`)
   return { token: decrypt(data.access_token_encrypted), adAccountId: data.ad_account_id }
 }
 
