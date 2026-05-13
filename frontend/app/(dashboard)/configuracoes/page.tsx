@@ -320,10 +320,22 @@ function MetaTab() {
   const [showManual, setShowManual] = useState(false)
   const [accounts, setAccounts] = useState<MetaAccount[]>([])
   const [switchingId, setSwitchingId] = useState<string | null>(null)
+  const [removingId, setRemovingId] = useState<string | null>(null)
   const [showAddAccount, setShowAddAccount] = useState(false)
 
   function loadAccounts() {
     api.meta.accounts().then((d: MetaAccount[]) => setAccounts(Array.isArray(d) ? d : [])).catch(() => {})
+  }
+
+  async function removeAccount(acc: MetaAccount) {
+    if (!confirm(`Remover "${acc.name || acc.ad_account_id}" desta empresa?`)) return
+    setRemovingId(acc.id)
+    try {
+      await api.delete(`/meta/accounts/${acc.id}`)
+      loadAccounts()
+    } catch (e: any) {
+      alert(e.message || "Erro ao remover conta.")
+    } finally { setRemovingId(null) }
   }
 
   useEffect(() => {
@@ -466,6 +478,13 @@ function MetaTab() {
                     className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 text-[12px] text-zinc-400 hover:text-white hover:bg-white/[0.06] rounded-lg transition-colors disabled:opacity-40">
                     {switchingId === acc.id ? <Loader2 size={11} className="animate-spin" /> : null}
                     Usar esta
+                  </button>
+                )}
+                {!acc.is_active && (
+                  <button onClick={() => removeAccount(acc)} disabled={removingId === acc.id}
+                    title="Remover desta empresa"
+                    className="shrink-0 w-7 h-7 flex items-center justify-center text-zinc-700 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors disabled:opacity-40">
+                    {removingId === acc.id ? <Loader2 size={12} className="animate-spin" /> : <Trash2 size={12} />}
                   </button>
                 )}
               </div>

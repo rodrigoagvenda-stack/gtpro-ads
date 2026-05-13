@@ -24,3 +24,30 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 
   return Response.json({ success: true })
 }
+
+export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const tenant = await getTenant(req)
+  if (!tenant) return unauthorized()
+
+  const { id } = await params
+  const supabase = createServiceClient()
+
+  // Não permite remover a conta ativa — usuário precisa ativar outra primeiro
+  const { data: acc } = await supabase
+    .from("meta_connections")
+    .select("is_active")
+    .eq("id", id)
+    .eq("tenant_id", tenant.tenant_id)
+    .single()
+
+  if (!acc) return Response.json({ error: "Conta não encontrada." }, { status: 404 })
+  if (acc.is_active) return Response.json({ error: "Não é possível remover a conta ativa. Ative outra conta primeiro." }, { status: 400 })
+
+  await supabase
+    .from("meta_connections")
+    .update({ active: false })
+    .eq("id", id)
+    .eq("tenant_id", tenant.tenant_id)
+
+  return Response.json({ success: true })
+}
