@@ -927,8 +927,9 @@ function EquipeTab() {
   const [members, setMembers] = useState<Member[]>([])
   const [pending, setPending] = useState<PendingInvite[]>([])
   const [myId, setMyId] = useState<string | null>(null)
-  const [myRole, setMyRole] = useState<string>("member")
+  const [myRole, setMyRole] = useState<string>("owner")
   const [loading, setLoading] = useState(true)
+  const [loadErr, setLoadErr] = useState("")
 
   const [showInvite, setShowInvite] = useState(false)
   const [inviteEmail, setInviteEmail] = useState("")
@@ -942,13 +943,17 @@ function EquipeTab() {
 
   async function load() {
     setLoading(true)
+    setLoadErr("")
     try {
       const teamData = await api.team.members()
       setMembers(teamData.members ?? [])
       setPending(teamData.pending_invites ?? [])
       if (teamData.my_id) setMyId(teamData.my_id)
       if (teamData.my_role) setMyRole(teamData.my_role)
-    } catch {}
+    } catch (err: any) {
+      setLoadErr(err?.message ?? "Erro ao carregar equipe.")
+      console.error("[EquipeTab] load error:", err)
+    }
     setLoading(false)
   }
 
@@ -992,10 +997,15 @@ function EquipeTab() {
     } catch {}
   }
 
-  const canManage = ["owner", "admin"].includes(myRole)
+  const canManage = ["owner", "admin", "super_admin"].includes(myRole)
 
   return (
     <div className="space-y-4">
+      {loadErr && (
+        <div className="bg-red-500/10 ring-1 ring-red-500/20 rounded-xl px-4 py-3 text-[12px] text-red-400">
+          {loadErr}
+        </div>
+      )}
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
