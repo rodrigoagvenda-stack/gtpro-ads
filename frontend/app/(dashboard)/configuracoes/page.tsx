@@ -943,17 +943,11 @@ function EquipeTab() {
   async function load() {
     setLoading(true)
     try {
-      const [teamData, meData] = await Promise.all([
-        api.team.members(),
-        api.get("/auth/me"),
-      ])
+      const teamData = await api.team.members()
       setMembers(teamData.members ?? [])
       setPending(teamData.pending_invites ?? [])
-      if (meData?.user_id) {
-        setMyId(meData.user_id)
-        const me = teamData.members?.find((m: Member) => m.id === meData.user_id)
-        if (me) setMyRole(me.role)
-      }
+      if (teamData.my_id) setMyId(teamData.my_id)
+      if (teamData.my_role) setMyRole(teamData.my_role)
     } catch {}
     setLoading(false)
   }
