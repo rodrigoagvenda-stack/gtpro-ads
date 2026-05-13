@@ -31,6 +31,8 @@ export async function POST(req: NextRequest) {
     return Response.json({ error: "Este convite expirou." }, { status: 410 })
   }
 
+  console.log(`[join] invite token=${token} email=${invite.email} role=${invite.role} tenant_id=${invite.tenant_id}`)
+
   // Cria o usuário já com tenant_id no app_metadata para garantir no JWT
   const { data: authData, error: authError } = await supabase.auth.admin.createUser({
     email: invite.email,
