@@ -70,13 +70,34 @@ export async function GET(req: NextRequest) {
     .select("id, tenant_id, ad_account_id, active, is_active")
     .eq("tenant_id", user.id)
 
+  // Busca todos os membros do mesmo tenant para verificar o tenant_id do dono
+  const { data: allMembers } = await supabase
+    .from("tenant_members")
+    .select("id, tenant_id, role")
+    .eq("tenant_id", tenantId ?? "")
+
+  // Busca meta_connections para cada membro (para encontrar onde estão os dados reais)
+  const metaByMember: Record<string, any[]> = {}
+  for (const m of allMembers ?? []) {
+    const { data } = await supabase
+      .from("meta_connections")
+      .select("id, tenant_id, ad_account_id, active, is_active")
+      .eq("tenant_id", m.id) // tenta user.id como tenant_id (contas antigas)
+    if (data && data.length > 0) metaByMember[m.id] = data
+  }
+
   return Response.json({
     user_id: user.id,
     user_email: user.email,
     app_metadata_tenant_id: user.app_metadata?.tenant_id ?? null,
     tenant_members_row: memberRow ?? null,
     resolved_tenant_id: tenantId,
+    all_members_in_tenant: allMembers ?? [],
     meta_connections_for_resolved_tenant: metaByTenant ?? [],
     meta_connections_for_user_id: metaByUserId ?? [],
+    meta_connections_by_member_userid: metaByMember,
+    diagnosis: Object.keys(metaByMember).length > 0
+      ? `Meta conectado sob user.id de um membro — tenant_id errado no convite`
+      : `Nenhuma meta_connection encontrada — verifique se o Meta está conectado`,
   })
 }
