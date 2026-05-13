@@ -34,14 +34,27 @@ export async function GET(req: NextRequest) {
     }
   })
 
-  // Convites pendentes
-  const { data: pendingInvites } = await supabase
-    .from("invites")
-    .select("id, email, role, expires_at, created_at")
-    .eq("tenant_id", ctx.tenant_id)
-    .is("accepted_at", null)
-    .gt("expires_at", new Date().toISOString())
-    .order("created_at", { ascending: false })
+  // Role do usuário atual
+  const myMember = result.find(m => m.id === ctx.user_id)
+  const my_role = myMember?.role ?? "member"
 
-  return Response.json({ members: result, pending_invites: pendingInvites ?? [] })
+  // Convites pendentes (tabela pode não existir ainda se migration não foi aplicada)
+  let pendingInvites: unknown[] = []
+  try {
+    const { data } = await supabase
+      .from("invites")
+      .select("id, email, role, expires_at, created_at")
+      .eq("tenant_id", ctx.tenant_id)
+      .is("accepted_at", null)
+      .gt("expires_at", new Date().toISOString())
+      .order("created_at", { ascending: false })
+    pendingInvites = data ?? []
+  } catch {}
+
+  return Response.json({
+    members: result,
+    pending_invites: pendingInvites,
+    my_id: ctx.user_id,
+    my_role,
+  })
 }
