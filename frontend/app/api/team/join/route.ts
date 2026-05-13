@@ -31,12 +31,13 @@ export async function POST(req: NextRequest) {
     return Response.json({ error: "Este convite expirou." }, { status: 410 })
   }
 
-  // Cria o usuário
+  // Cria o usuário já com tenant_id no app_metadata para garantir no JWT
   const { data: authData, error: authError } = await supabase.auth.admin.createUser({
     email: invite.email,
     password,
     email_confirm: true,
     user_metadata: { name: name.trim() },
+    app_metadata: { tenant_id: invite.tenant_id },
   })
 
   if (authError) {
@@ -47,11 +48,6 @@ export async function POST(req: NextRequest) {
   }
 
   const userId = authData.user.id
-
-  // Define tenant_id no JWT app_metadata
-  await supabase.auth.admin.updateUserById(userId, {
-    app_metadata: { tenant_id: invite.tenant_id },
-  })
 
   // Adiciona à equipe
   const { error: memberError } = await supabase.from("tenant_members").insert({
