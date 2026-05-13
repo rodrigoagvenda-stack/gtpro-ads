@@ -56,7 +56,7 @@ export async function DELETE(req: NextRequest, { params }: Params) {
   const supabase = createServiceClient()
   const callerRole = await getCallerRole(supabase, ctx.user_id!)
 
-  if (!callerRole || !["owner", "admin"].includes(callerRole)) {
+  if (!callerRole || !["owner", "admin", "super_admin"].includes(callerRole)) {
     return Response.json({ error: "Sem permissão para remover membros." }, { status: 403 })
   }
 

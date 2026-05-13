@@ -981,7 +981,8 @@ function EquipeTab() {
     setTimeout(() => setCopied(false), 2000)
   }
 
-  async function removeMember(userId: string) {
+  async function removeMember(userId: string, name: string) {
+    if (!confirm(`Remover ${name} da equipe?`)) return
     setRemoving(userId)
     try {
       await api.team.removeMember(userId)
@@ -1134,11 +1135,12 @@ function EquipeTab() {
                   {/* Remove button */}
                   {canManage && m.id !== myId && m.role !== "owner" && (
                     <button
-                      onClick={() => removeMember(m.id)}
+                      onClick={() => removeMember(m.id, m.name || m.email)}
                       disabled={removing === m.id}
-                      className="text-zinc-600 hover:text-red-400 transition-colors disabled:opacity-50"
+                      className="flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] text-zinc-500 hover:text-red-400 hover:bg-red-500/10 transition-colors disabled:opacity-50"
                     >
-                      {removing === m.id ? <Loader2 size={14} className="animate-spin" /> : <UserMinus size={14} />}
+                      {removing === m.id ? <Loader2 size={12} className="animate-spin" /> : <UserMinus size={12} />}
+                      Remover
                     </button>
                   )}
                 </div>

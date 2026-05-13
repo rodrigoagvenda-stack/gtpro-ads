@@ -11,9 +11,10 @@ export async function GET(req: NextRequest) {
   const supabase = createServiceClient()
   const isSuperAdminEmail = ctx.user_email === SUPER_ADMIN_EMAIL
 
-  const [memberRes, configRes] = await Promise.all([
-    supabase.from("tenant_members").select("role").eq("tenant_id", ctx.tenant_id).single(),
+  const [memberRes, configRes, authUserRes] = await Promise.all([
+    supabase.from("tenant_members").select("role").eq("id", ctx.user_id!).eq("tenant_id", ctx.tenant_id).single(),
     supabase.from("agent_configs").select("onboarding_completed, user_name").eq("tenant_id", ctx.tenant_id).single(),
+    supabase.auth.admin.getUserById(ctx.user_id!),
   ])
 
   const currentRole = memberRes.data?.role ?? "owner"
@@ -27,10 +28,13 @@ export async function GET(req: NextRequest) {
       .eq("id", ctx.user_id)
   }
 
+  const metaName = authUserRes.data?.user?.user_metadata?.name as string | undefined
+  const name = configRes.data?.user_name || metaName || ""
+
   return Response.json({
     tenant_id: ctx.tenant_id,
     is_admin: isAdmin,
     onboarding_completed: configRes.data?.onboarding_completed ?? false,
-    name: configRes.data?.user_name ?? "",
+    name,
   })
 }
