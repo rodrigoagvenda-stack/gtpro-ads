@@ -50,7 +50,7 @@ export const api = {
 
   agent: {
     query: (message: string, model?: string, history?: { role: string; content: string }[]) =>
-      fetchWithAuth("/agent/query", { method: "POST", body: JSON.stringify({ message, model, history }) }),
+      fetchWithAuth("/agent/query", { method: "POST", body: JSON.stringify({ message, model, history }), signal: AbortSignal.timeout(290000) }),
     logs: (limit = 50) => fetchWithAuth(`/agent/logs?limit=${limit}`),
     messages: () => fetchWithAuth("/agent/messages"),
     clearMessages: () => fetchWithAuth("/agent/messages", { method: "DELETE" }),

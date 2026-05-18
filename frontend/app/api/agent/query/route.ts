@@ -3,7 +3,7 @@ import { getTenant, unauthorized } from "@/lib/server/auth"
 import { runAgent } from "@/lib/server/agent"
 import { createServiceClient } from "@/lib/server/supabase"
 
-export const maxDuration = 60
+export const maxDuration = 300
 
 export async function POST(req: NextRequest) {
   const tenant = await getTenant(req)

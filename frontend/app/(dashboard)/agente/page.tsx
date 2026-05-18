@@ -223,8 +223,15 @@ export default function AgentePage() {
       const history = messages.map(m => ({ role: m.role, content: m.content }))
       const res = await api.agent.query(text, model, history)
       setMessages(p => [...p, { role: "assistant", content: res.message, tools_used: res.tools_used, actions: res.actions_taken }])
-    } catch {
-      setMessages(p => [...p, { role: "assistant", content: "Erro ao processar. Verifique se o agente está configurado." }])
+    } catch (e: any) {
+      const msg: string = e?.message ?? ""
+      const isTimeout = msg.includes("timeout") || msg.includes("abort") || msg.includes("AbortError") || msg.includes("network")
+      setMessages(p => [...p, {
+        role: "assistant",
+        content: isTimeout
+          ? "A resposta demorou mais do esperado. Se você confirmou uma ação, verifique nas campanhas se ela foi executada — o agente pode ter concluído antes do timeout."
+          : `Erro: ${msg || "verifique se o agente está configurado em Configurações."}`,
+      }])
     } finally { setLoading(false) }
   }
 
