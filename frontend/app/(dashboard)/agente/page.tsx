@@ -4,7 +4,7 @@ import { useState, useRef, useEffect } from "react"
 import { api } from "@/lib/api"
 import {
   ArrowUp, Bot, Search, BarChart2, Zap, Bell, Power, DollarSign,
-  CheckCircle2, Sparkles, ChevronDown, Trash2, FileText, Users,
+  CheckCircle2, Sparkles, ChevronDown, ChevronRight, Trash2, FileText, Users,
   Image, X, ListChecks, XCircle, RefreshCw, Paperclip, Upload, Film,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
@@ -29,23 +29,23 @@ interface LogEntry {
 const CHOICE_RE = /\?|deseja|quer\s|escolh|opç[aã]|prefere|selecione|confirma|como\s+posso|o\s+que\s+gostaria/i
 
 function extractQuickReplies(content: string): { label: string; value: string }[] | null {
-  const lines    = content.split("\n").map(l => l.trim()).filter(Boolean)
-  const hasQ     = CHOICE_RE.test(content)
+  const lines = content.split("\n").map(l => l.trim()).filter(Boolean)
+  const hasQ  = CHOICE_RE.test(content)
 
   // Numbered list: 1. Opção
   const numbered = lines.filter(l => /^\d+\.\s.+/.test(l))
-  if (numbered.length >= 2 && numbered.length <= 8 && hasQ) {
+  if (numbered.length >= 2 && numbered.length <= 6 && hasQ) {
     return numbered.map((l, i) => ({
-      label: l.replace(/^\d+\.\s/, "").split(" — ")[0].split(" - ")[0].trim(),
+      label: l.replace(/^\d+\.\s/, "").trim(),
       value: String(i + 1),
     }))
   }
 
   // Bullet list: - Opção  or • Opção
   const bullets = lines.filter(l => /^[-•*]\s.+/.test(l))
-  if (bullets.length >= 2 && bullets.length <= 8 && hasQ) {
+  if (bullets.length >= 2 && bullets.length <= 6 && hasQ) {
     return bullets.map((l, i) => ({
-      label: l.replace(/^[-•*]\s/, "").split(" — ")[0].split(" - ")[0].trim(),
+      label: l.replace(/^[-•*]\s/, "").trim(),
       value: String(i + 1),
     }))
   }
@@ -454,13 +454,19 @@ export default function AgentePage() {
                     </div>
                   )}
 
-                  {/* Quick reply buttons — only on last assistant message */}
+                  {/* Claude-style option cards — only on last assistant message */}
                   {msg.role === "assistant" && isLast && quickReplies && (
-                    <div className="flex flex-wrap gap-2 mt-2">
-                      {quickReplies.map(qr => (
-                        <button key={qr.value} onClick={() => send(qr.value)} disabled={loading}
-                          className="px-4 py-2 bg-white/[0.05] ring-1 ring-white/[0.12] hover:bg-violet-600/20 hover:ring-violet-500/40 hover:text-violet-200 rounded-full text-[12px] text-zinc-300 transition-all font-medium disabled:opacity-40">
-                          {qr.label}
+                    <div className="mt-3 w-full rounded-xl overflow-hidden ring-1 ring-white/[0.09] divide-y divide-white/[0.07]">
+                      {quickReplies.map((qr, idx) => (
+                        <button key={qr.value} onClick={() => send(qr.label)} disabled={loading}
+                          className="w-full flex items-center gap-3 px-4 py-3.5 bg-[#0f0f12] hover:bg-white/[0.05] transition-colors text-left group disabled:opacity-40">
+                          <span className="shrink-0 w-5 h-5 rounded-md bg-white/[0.06] flex items-center justify-center text-[11px] font-bold text-zinc-500 group-hover:text-zinc-300 group-hover:bg-white/[0.10] transition-colors">
+                            {idx + 1}
+                          </span>
+                          <span className="flex-1 text-[13px] text-zinc-300 group-hover:text-white leading-snug transition-colors">
+                            {qr.label}
+                          </span>
+                          <ChevronRight size={14} className="shrink-0 text-zinc-700 group-hover:text-zinc-400 transition-colors" />
                         </button>
                       ))}
                     </div>

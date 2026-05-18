@@ -43,14 +43,20 @@ function parseMetaError(raw: string): string {
     if (!err) return raw
     const code = err.code
     const sub  = err.error_subcode
+    const msg  = err.message ?? ""
     if (code === 190 || err.type === "OAuthException") {
       if (sub === 463 || sub === 467) return "Token Meta expirado. Reconecte sua conta em Configurações → Meta Ads."
-      return "Token Meta inválido. Reconecte sua conta em Configurações → Meta Ads."
+      if (sub === 458 || sub === 460) return "Token Meta revogado (senha ou permissão alterada). Reconecte sua conta em Configurações → Meta Ads."
+      // Permissão ads_management ausente — Meta retorna 190 para escrita sem esse escopo
+      if (msg.toLowerCase().includes("ads_management") || msg.toLowerCase().includes("permission") || msg.toLowerCase().includes("scope"))
+        return `Token sem permissão de escrita (ads_management). Reconecte a conta via OAuth em Configurações → Meta Ads para liberar criação e edição de campanhas. (código ${code}/${sub ?? "—"})`
+      return `Token Meta inválido (código ${code}${sub ? `/${sub}` : ""}): ${msg || "reconecte sua conta em Configurações → Meta Ads."}`
     }
-    if (code === 200 || code === 273) return `Permissão negada pela Meta: ${err.message}`
-    if (code === 100)                 return `Parâmetro inválido: ${err.message}`
+    if (code === 200 || code === 273 || code === 10)
+      return `Permissão negada pela Meta (código ${code}): ${msg}. O token precisa ter permissão 'ads_management' — reconecte a conta via OAuth em Configurações → Meta Ads.`
+    if (code === 100) return `Parâmetro inválido (código 100): ${msg}`
     if (code === 4 || code === 17 || code === 32 || code === 613) return "Limite de requisições da Meta atingido. Aguarde alguns minutos."
-    return err.message ?? raw
+    return `${msg || raw} (código Meta ${code})`
   } catch {
     return raw
   }
