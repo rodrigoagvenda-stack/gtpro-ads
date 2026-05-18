@@ -4,7 +4,11 @@ import "./globals.css"
 
 export const dynamic = "force-dynamic"
 
-const inter = Inter({ subsets: ["latin"] })
+const inter = Inter({
+  subsets: ["latin"],
+  weight: ["400", "500", "600", "700"],
+  display: "swap",
+})
 
 export const metadata: Metadata = {
   title: "GTPRO — Gestão de Tráfego com IA",
