@@ -269,6 +269,11 @@ export async function POST(req: NextRequest) {
       : allActive.filter((c: any) => c.objective === objective)
 
     const now    = new Date()
+    const presetDays: Record<string, number> = { last_7d: 7, last_14d: 14, last_30d: 30, last_90d: 90, this_month: 30, last_month: 30 }
+    const days   = presetDays[datePreset] ?? 30
+    const startD = new Date(now.getTime() - days * 86400_000)
+    const fmtDate = (d: Date) => d.toLocaleDateString("pt-BR", { day: "numeric", month: "long", year: "numeric" })
+    const periodLabel = `${fmtDate(startD)} a ${fmtDate(now)}`
     const period = `${DATE_LABELS[datePreset] ?? datePreset} — ${now.toLocaleDateString("pt-BR", { month: "long", year: "numeric" })}`
     const objConfig = OBJECTIVE_CONFIG[objective] ?? OBJECTIVE_CONFIG.all
     const objLabel  = objConfig.label
@@ -320,38 +325,147 @@ export async function POST(req: NextRequest) {
       all:                "Campanha | Objetivo | Gasto | KPI Principal | Valor KPI | Status | Justificativa",
     }[objective] ?? "Campanha | Gasto | KPI Principal | Status | Justificativa"
 
-    const prompt = `Especialista em Meta Ads. Relatório em português, markdown, tabelas para comparar campanhas.
+    // Pre-compute aggregates
+    const totalSpend       = active.reduce((a: number, c: any) => a + Number(c.metrics?.spend ?? 0), 0)
+    const totalImpressions = active.reduce((a: number, c: any) => a + Number(c.metrics?.impressions ?? 0), 0)
+    const totalReach       = active.reduce((a: number, c: any) => a + Number(c.metrics?.reach ?? 0), 0)
+    const totalClicks      = active.reduce((a: number, c: any) => a + Number(c.metrics?.clicks ?? 0), 0)
+    const totalLeads       = active.reduce((a: number, c: any) => a + Number(c.metrics?.leads ?? 0), 0)
+    const totalConversas   = active.reduce((a: number, c: any) => a + Number(c.metrics?.conversations ?? 0), 0)
+    const totalCompras     = active.reduce((a: number, c: any) => a + Number(c.metrics?.website_purchases ?? 0), 0)
+    const totalEngaj       = active.reduce((a: number, c: any) => a + Number(c.metrics?.engagements ?? 0), 0)
+    const totalFollows     = active.reduce((a: number, c: any) => a + Number(c.metrics?.follows ?? 0), 0)
+    const bestCpc          = active.reduce((best: number, c: any) => {
+      const cpc = Number(c.metrics?.cpc ?? 0)
+      return (cpc > 0 && (best === 0 || cpc < best)) ? cpc : best
+    }, 0)
+    const avgCtr   = totalClicks > 0 && totalImpressions > 0 ? (totalClicks / totalImpressions * 100) : 0
+    const dailySpend = totalSpend / days
+    const dailyReach = totalReach / days
 
-REGRAS DE ESTILO — OBRIGATÓRIAS:
-- Sem introduções, sem "neste relatório veremos", sem explicar o que você vai fazer
-- Cada bullet ou parágrafo = 1 fato + 1 número + 1 ação (quando aplicável)
-- Proibido repetir o mesmo dado em seções diferentes
-- Proibido explicar conceitos básicos (o leitor sabe o que é CTR, CPL, ROAS)
-- Frases curtas. Se puder cortar uma palavra, corte.
+    const agencyName    = config.agency_name    ?? config.tenant_name ?? "GTPRO"
+    const agencyEmail   = config.agency_email   ?? ""
+    const agencyWebsite = config.agency_website ?? ""
+    const gestora       = config.gestora        ?? ""
+    const gerente       = config.gerente        ?? ""
 
-CONFIGURAÇÕES DO CLIENTE:
-${configStr}
+    const headerLines = [
+      gestora ? `**Gestora:** ${gestora}` : "",
+      gerente ? `**Gerente:** ${gerente}` : "",
+      `**Período:** ${periodLabel}`,
+      `**Canais:** Campanhas de divulgação · Instagram · Meta Ads`,
+    ].filter(Boolean).join("\n")
 
-FOCO: ${objLabel} | KPI: ${kpiPrincipal} | Alerta: ${objConfig.alertCondition}
+    const signatureExtra = [agencyEmail, agencyWebsite].filter(Boolean).join(" · ")
+    const signature = signatureExtra
+      ? `*Relatório produzido por ${agencyName} · ${signatureExtra}*`
+      : `*Relatório produzido por ${agencyName}*`
 
-CONTA (30 dias): ${accountSummary}
+    const prompt = `Você é especialista em Meta Ads. Gere o relatório COMPLETO abaixo seguindo EXATAMENTE a estrutura fornecida. Use SOMENTE os dados reais fornecidos. Sem introduções, sem explicar o que vai fazer, sem repetir dados entre seções.
 
-CAMPANHAS (${campaignCount}):
+DADOS DA CONTA:
+Configurações: ${configStr}
+Conta (agregado): ${accountSummary}
+Objetivo analisado: ${objLabel} | KPI: ${kpiPrincipal}
+Número de campanhas ativas: ${campaignCount}
+
+TOTAIS PRÉ-CALCULADOS:
+- Impressões: ${totalImpressions.toLocaleString("pt-BR")}
+- Alcance: ${totalReach.toLocaleString("pt-BR")}
+- Cliques/interações: ${totalClicks.toLocaleString("pt-BR")}
+- Leads: ${totalLeads} | Conversas WA: ${totalConversas} | Compras: ${totalCompras} | Engajamentos: ${totalEngaj.toLocaleString("pt-BR")} | Novos seguidores: ${totalFollows}
+- Investimento total: R$ ${totalSpend.toFixed(2).replace(".", ",")}
+- CPC médio: R$ ${totalClicks > 0 ? (totalSpend / totalClicks).toFixed(2).replace(".", ",") : "—"}
+- Melhor CPC: R$ ${bestCpc > 0 ? bestCpc.toFixed(2).replace(".", ",") : "—"}
+- CTR médio: ${avgCtr.toFixed(2).replace(".", ",")}%
+- Investimento diário médio: R$ ${dailySpend.toFixed(2).replace(".", ",")}
+- Pessoas alcançadas por dia: ${Math.round(dailyReach)}
+
+CAMPANHAS (dados individuais):
 ${campaignRows}
 
-## RESUMO EXECUTIVO
-2-3 linhas. Números, problema crítico, nada mais.
+GERE o relatório com EXATAMENTE esta estrutura — substitua os placeholders pelos dados reais acima:
 
-## RANKING
-Tabela: ${rankingColumns}
-Status: 🟢 Escalar | 🟡 Otimizar | 🔴 Pausar
-${skillSections}
+# Relatório de Performance Digital
+## [nome da empresa/cliente baseado no nome da conta]
 
-## RECOMENDAÇÕES
-5 ações máximo, ordem de impacto. Formato: "Ação — motivo com número."
+${headerLines}
 
-## PRÓXIMOS 7 DIAS
-Lista numerada. Curta.`
+---
+
+## 01 · Visão Geral — Principais Resultados
+
+| Indicador | Resultado |
+|---|---|
+| Pessoas impactadas | +${totalImpressions.toLocaleString("pt-BR")} impressões |
+| Cliques e interações | ${totalClicks.toLocaleString("pt-BR")} |
+| [Resultado principal: Leads/Conversas/Compras/Seguidores/Engajamentos — use o mais relevante para o objetivo] | [valor correspondente] |
+| Investimento total | R$ ${totalSpend.toFixed(2).replace(".", ",")} |
+| Custo médio por clique | R$ ${totalClicks > 0 ? (totalSpend / totalClicks).toFixed(2).replace(".", ",") : "—"} |
+| Melhor CPC | R$ ${bestCpc > 0 ? bestCpc.toFixed(2).replace(".", ",") : "—"} |
+| Custo por [resultado principal] | [calcule com base nos totais] |
+| Taxa de interesse nos anúncios (CTR) | ${avgCtr.toFixed(2).replace(".", ",")}% |
+| Investimento diário médio | R$ ${dailySpend.toFixed(2).replace(".", ",")} |
+| Pessoas alcançadas por dia | ${Math.round(dailyReach)} |
+
+---
+
+## 02 · Análise Visual
+
+### Volume de resultados gerados
+
+[Crie um gráfico ASCII de barras proporcional com os 4 indicadores mais relevantes, no formato exato:]
+\`\`\`
+Impressões          ████████████████████  [valor]
+Cliques/interações  ████████████████████  [valor]
+[Resultado]         ████████████████████  [valor]
+Investimento (R$)   ████████████████████  [valor]
+\`\`\`
+[As barras devem ser proporcionais entre si — use mais ████ para valores maiores]
+
+### CTR — Taxa de interesse
+
+- **${avgCtr.toFixed(2).replace(".", ",")}%** do público que viu os anúncios interagiu com eles
+- ${totalClicks.toLocaleString("pt-BR")} pessoas interagiram · ${(totalImpressions - totalClicks).toLocaleString("pt-BR")} apenas visualizaram
+
+### Eficiência do investimento
+
+> Com apenas **R$${dailySpend.toFixed(2).replace(".", ",")} por dia**, a campanha alcançou **${Math.round(dailyReach)} pessoas por dia** durante ${days} dias.
+
+---
+
+## 03 · Destaques da Campanha
+
+[Escreva 6 destaques numerados usando dados reais das campanhas. Cada destaque: **título em negrito** — descrição com números reais e contexto estratégico. Destaque campanhas pelo nome real.]
+
+---
+
+## 04 · O que Esses Números Significam
+
+[4 parágrafos curtos com títulos em negrito: Alcance eficiente | [formato/criativo principal] | Anúncios relevantes | Base para conversões futuras. Cada parágrafo: 2-3 linhas, dados reais, sem repetir a seção 03.]
+
+---
+
+## 05 · Próximos Passos
+
+### Curto prazo — Ações imediatas
+
+[3 bullets com ações imediatas baseadas nos dados — o que fazer esta semana]
+
+### Médio prazo — Próxima fase
+
+[3 bullets com ações estratégicas — o que planejar para o próximo mês]
+
+---
+
+## 06 · Conclusão
+
+[1 parágrafo executivo. Mencione em negrito os 4-5 números mais importantes. Finalize com direcionamento: o que a próxima fase deve focar para transformar os resultados em negócio concreto.]
+
+---
+
+${signature}
+*${periodLabel}*`
 
     const key      = await getAnthropicKey()
     const client   = new Anthropic({ apiKey: key })

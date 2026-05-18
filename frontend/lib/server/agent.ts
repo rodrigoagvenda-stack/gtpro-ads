@@ -135,117 +135,13 @@ REGRAS GERAIS DE COMPORTAMENTO
 ────────────────────────────────────────
 TEMPLATE DE RELATÓRIO DE PERFORMANCE
 ────────────────────────────────────────
-Quando gerar relatórios, siga EXATAMENTE esta estrutura e estilo. Use os dados reais da conta, substituindo os valores de exemplo:
+Quando o usuário pedir um relatório no chat, gere um resumo analítico direto com:
+- Principais KPIs do período
+- Destaques e campanhas com melhor/pior performance
+- 3 recomendações práticas baseadas nos dados
+- Finalize com: "Para o relatório completo em PDF, acesse a seção Relatórios."
 
----
-EXCEPCIONALMENTE para relatórios: tabelas markdown com pipes | são permitidas na seção 01.
----
-
-# Relatório de Performance Digital
-## [Nome do cliente / empresa]
-
-**Gestora:** [nome da gestora configurada, ou omitir se não configurado]
-**Gerente:** [nome do gerente configurado, ou omitir se não configurado]
-**Período:** [data início] a [data fim]
-**Canais:** Campanhas de divulgação · Instagram · Meta Ads
-
----
-
-## 01 · Visão Geral — Principais Resultados
-
-| Indicador | Resultado |
-|---|---|
-| Pessoas impactadas | +X.XXX impressões |
-| Cliques e interações | X.XXX |
-| [Resultado principal conforme objetivo: Leads / Conversas / Compras / Novos seguidores] | XXX |
-| Investimento total | R$ X.XXX,XX |
-| Custo médio por clique | R$ X,XX |
-| Melhor CPC | R$ X,XX |
-| Custo por [resultado principal] | R$ X,XX |
-| Taxa de interesse nos anúncios (CTR) | X,XX% |
-| Investimento diário médio | R$ XX,XX |
-| Pessoas alcançadas por dia | XXX |
-
----
-
-## 02 · Análise Visual
-
-### Volume de resultados gerados
-
-\`\`\`
-Impressões          ████████████████████  X.XXX
-Cliques/interações  ████████████████████  X.XXX
-[Resultado]         ████████████████████    XXX
-Investimento (R$)   ████████████████████  X.XXX
-\`\`\`
-
-### CTR — Taxa de interesse
-
-- **X,XX%** do público que viu os anúncios interagiu com eles
-- X.XXX pessoas interagiram · X.XXX apenas visualizaram
-
-### Eficiência do investimento
-
-> Com apenas **R$XX,XX por dia**, a campanha alcançou **XXX pessoas por dia** durante [N] dias.
-
----
-
-## 03 · Destaques da Campanha
-
-1. **[Destaque 1 com nome real]** — [Descrição com dados reais e contexto explicativo]
-
-2. **[Campanha com melhor performance]** — [O que a destacou e por quê deve ser replicada]
-
-3. **[Menor custo alcançado]** — [Valor e comparação com benchmark do segmento]
-
-4. **[Resultado de crescimento ou conversão]** — [Custo por resultado e impacto estratégico]
-
-5. **[Segmentação e público]** — [Como o público respondeu, confirmando a segmentação]
-
-6. **[Impacto de alcance]** — [Total de pessoas impactadas e o que isso representa para a marca]
-
----
-
-## 04 · O que Esses Números Significam
-
-**Alcance eficiente**
-[Parágrafo sobre como o investimento foi bem direcionado e o custo-benefício do alcance]
-
-**[Formato principal que mais performou]**
-[Parágrafo sobre o formato de criativo que teve melhor desempenho e por quê]
-
-**Anúncios relevantes**
-[Parágrafo sobre as interações, mostrando que os anúncios geraram curiosidade genuína]
-
-**Base para conversões futuras**
-[Parágrafo sobre como os resultados atuais fortalecem as próximas campanhas]
-
----
-
-## 05 · Próximos Passos
-
-### Curto prazo — Ações imediatas
-
-- [Ação imediata 1 baseada nos dados — ex: continuar o que performou melhor]
-- [Ação imediata 2 — ex: aumentar investimento nos anúncios com maior interação]
-- [Ação imediata 3 — ex: criar novos criativos no estilo dos que mais geraram resultado]
-
-### Médio prazo — Próxima fase
-
-- [Ação estratégica 1 — ex: campanha para converter audiência em clientes]
-- [Ação estratégica 2 — ex: relacionamento com quem já interagiu]
-- [Ação estratégica 3 — ex: fortalecer conteúdo orgânico para ampliar crescimento]
-
----
-
-## 06 · Conclusão
-
-[Parágrafo executivo com os 4-5 números mais importantes em negrito, resumindo o desempenho geral. Termine com direcionamento estratégico: o que a próxima fase deve focar para transformar os resultados atuais em negócio concreto.]
-
----
-
-*Relatório produzido por [nome da agência configurada, ou "GTPRO"] · [email/site da agência se configurado]*
-*[data início] a [data fim]*`
+Não gere o relatório completo em formato .md no chat — esse é gerado automaticamente na seção Relatórios.`
 
 const o = { type: "object" as const }
 const s = { type: "string" as const }
