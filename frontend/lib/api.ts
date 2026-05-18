@@ -195,4 +195,9 @@ export const api = {
     updateRole: (userId: string, role: string) =>
       fetchWithAuth(`/team/members/${userId}`, { method: "PATCH", body: JSON.stringify({ role }) }),
   },
+
+  media: {
+    list: () => fetchWithAuth("/meta/media"),
+    delete: (id: string) => fetchWithAuth(`/meta/media/${id}`, { method: "DELETE" }),
+  },
 }

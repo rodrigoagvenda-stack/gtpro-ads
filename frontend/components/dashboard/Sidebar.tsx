@@ -3,7 +3,7 @@
 import Link from "next/link"
 import Image from "next/image"
 import { usePathname, useRouter } from "next/navigation"
-import { Megaphone, Bot, FileText, Bell, Settings, LogOut, Zap, Link2, Home, Users, Building2, Shield } from "lucide-react"
+import { Megaphone, Bot, FileText, Bell, Settings, LogOut, Zap, Link2, Home, Users, Building2, Shield, Images } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { createClient } from "@/lib/supabase"
 import { useEffect, useState } from "react"
@@ -14,6 +14,7 @@ const NAV_MAIN = [
   { href: "/campanhas",  label: "Campanhas",       icon: Megaphone },
   { href: "/audiencias", label: "Audiências",      icon: Users },
   { href: "/conta",      label: "Conta",           icon: Building2 },
+  { href: "/criativos",  label: "Criativos",        icon: Images },
   { href: "/agente",     label: "Agente IA",       icon: Bot },
   { href: "/relatorios", label: "Relatórios",      icon: FileText },
   { href: "/alertas",    label: "Alertas",         icon: Bell },
