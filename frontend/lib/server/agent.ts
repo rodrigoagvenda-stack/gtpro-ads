@@ -135,21 +135,117 @@ REGRAS GERAIS DE COMPORTAMENTO
 ────────────────────────────────────────
 TEMPLATE DE RELATÓRIO DE PERFORMANCE
 ────────────────────────────────────────
-Quando gerar relatórios, siga SEMPRE esta estrutura:
+Quando gerar relatórios, siga EXATAMENTE esta estrutura e estilo. Use os dados reais da conta, substituindo os valores de exemplo:
 
-01 · VISÃO GERAL — tabela markdown com KPIs principais: pessoas impactadas, cliques/interações, resultado principal (leads/conversas/compras conforme objetivo), investimento total, custo por resultado, CTR, investimento diário médio
+---
+EXCEPCIONALMENTE para relatórios: tabelas markdown com pipes | são permitidas na seção 01.
+---
 
-02 · ANÁLISE VISUAL — texto descritivo com: distribuição de resultados em lista, CTR explicado com contexto de benchmark, eficiência do investimento em frase resumida
+# Relatório de Performance Digital
+## [Nome do cliente / empresa]
 
-03 · DESTAQUES DA CAMPANHA — 4 a 6 pontos numerados com dados reais, cada um com contexto explicativo
+**Gestora:** [nome da gestora configurada, ou omitir se não configurado]
+**Gerente:** [nome do gerente configurado, ou omitir se não configurado]
+**Período:** [data início] a [data fim]
+**Canais:** Campanhas de divulgação · Instagram · Meta Ads
 
-04 · O QUE ESSES NÚMEROS SIGNIFICAM — 4 parágrafos curtos: alcance, formato/criativo principal, relevância dos anúncios, perspectiva futura
+---
 
-05 · PRÓXIMOS PASSOS — duas seções: "Curto prazo — Ações imediatas" e "Médio prazo — Próxima fase", cada uma com 3 bullet points
+## 01 · Visão Geral — Principais Resultados
 
-06 · CONCLUSÃO — parágrafo executivo com os números mais importantes e direcionamento estratégico
+| Indicador | Resultado |
+|---|---|
+| Pessoas impactadas | +X.XXX impressões |
+| Cliques e interações | X.XXX |
+| [Resultado principal conforme objetivo: Leads / Conversas / Compras / Novos seguidores] | XXX |
+| Investimento total | R$ X.XXX,XX |
+| Custo médio por clique | R$ X,XX |
+| Melhor CPC | R$ X,XX |
+| Custo por [resultado principal] | R$ X,XX |
+| Taxa de interesse nos anúncios (CTR) | X,XX% |
+| Investimento diário médio | R$ XX,XX |
+| Pessoas alcançadas por dia | XXX |
 
-Ao final: "Relatório produzido por [nome da agência do tenant se configurado, senão GTPRO] · período analisado"`
+---
+
+## 02 · Análise Visual
+
+### Volume de resultados gerados
+
+\`\`\`
+Impressões          ████████████████████  X.XXX
+Cliques/interações  ████████████████████  X.XXX
+[Resultado]         ████████████████████    XXX
+Investimento (R$)   ████████████████████  X.XXX
+\`\`\`
+
+### CTR — Taxa de interesse
+
+- **X,XX%** do público que viu os anúncios interagiu com eles
+- X.XXX pessoas interagiram · X.XXX apenas visualizaram
+
+### Eficiência do investimento
+
+> Com apenas **R$XX,XX por dia**, a campanha alcançou **XXX pessoas por dia** durante [N] dias.
+
+---
+
+## 03 · Destaques da Campanha
+
+1. **[Destaque 1 com nome real]** — [Descrição com dados reais e contexto explicativo]
+
+2. **[Campanha com melhor performance]** — [O que a destacou e por quê deve ser replicada]
+
+3. **[Menor custo alcançado]** — [Valor e comparação com benchmark do segmento]
+
+4. **[Resultado de crescimento ou conversão]** — [Custo por resultado e impacto estratégico]
+
+5. **[Segmentação e público]** — [Como o público respondeu, confirmando a segmentação]
+
+6. **[Impacto de alcance]** — [Total de pessoas impactadas e o que isso representa para a marca]
+
+---
+
+## 04 · O que Esses Números Significam
+
+**Alcance eficiente**
+[Parágrafo sobre como o investimento foi bem direcionado e o custo-benefício do alcance]
+
+**[Formato principal que mais performou]**
+[Parágrafo sobre o formato de criativo que teve melhor desempenho e por quê]
+
+**Anúncios relevantes**
+[Parágrafo sobre as interações, mostrando que os anúncios geraram curiosidade genuína]
+
+**Base para conversões futuras**
+[Parágrafo sobre como os resultados atuais fortalecem as próximas campanhas]
+
+---
+
+## 05 · Próximos Passos
+
+### Curto prazo — Ações imediatas
+
+- [Ação imediata 1 baseada nos dados — ex: continuar o que performou melhor]
+- [Ação imediata 2 — ex: aumentar investimento nos anúncios com maior interação]
+- [Ação imediata 3 — ex: criar novos criativos no estilo dos que mais geraram resultado]
+
+### Médio prazo — Próxima fase
+
+- [Ação estratégica 1 — ex: campanha para converter audiência em clientes]
+- [Ação estratégica 2 — ex: relacionamento com quem já interagiu]
+- [Ação estratégica 3 — ex: fortalecer conteúdo orgânico para ampliar crescimento]
+
+---
+
+## 06 · Conclusão
+
+[Parágrafo executivo com os 4-5 números mais importantes em negrito, resumindo o desempenho geral. Termine com direcionamento estratégico: o que a próxima fase deve focar para transformar os resultados atuais em negócio concreto.]
+
+---
+
+*Relatório produzido por [nome da agência configurada, ou "GTPRO"] · [email/site da agência se configurado]*
+*[data início] a [data fim]*`
 
 const o = { type: "object" as const }
 const s = { type: "string" as const }
