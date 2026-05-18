@@ -12,6 +12,19 @@ import {
   getAccountInfo,
 } from "./meta-ads"
 
+// ─── Streaming chunk types ────────────────────────────────────────────────────
+
+export type AgentChunk =
+  | { type: "text"; delta: string }
+  | { type: "tool_start"; name: string; input: Record<string, any> }
+  | { type: "tool_done"; name: string }
+  | { type: "tool_error"; name: string; error: string }
+  | { type: "action"; tool: string; input: Record<string, any>; result: any }
+  | { type: "done"; message: string; tools_used: any[]; actions_taken: any[] }
+  | { type: "error"; message: string }
+
+// ─── System prompt ────────────────────────────────────────────────────────────
+
 const SYSTEM_PROMPT = `Você é o GTPRO, agente especializado em gestão de tráfego pago no Meta Ads.
 
 Você tem acesso COMPLETO à API do Meta Ads: criar, editar, duplicar e deletar campanhas, conjuntos de anúncios e anúncios; acessar pixel, conversões, públicos e insights detalhados.
@@ -117,7 +130,26 @@ REGRAS GERAIS DE COMPORTAMENTO
 - NUNCA pergunte "em qual conta?" — use sempre a conta informada no contexto
 - Nunca delete sem confirmação explícita
 - Justifique cada ação com dados reais
-- Ao criar campanhas, sempre crie com status PAUSED por padrão`
+- Ao criar campanhas, sempre crie com status PAUSED por padrão
+
+────────────────────────────────────────
+TEMPLATE DE RELATÓRIO DE PERFORMANCE
+────────────────────────────────────────
+Quando gerar relatórios, siga SEMPRE esta estrutura:
+
+01 · VISÃO GERAL — tabela markdown com KPIs principais: pessoas impactadas, cliques/interações, resultado principal (leads/conversas/compras conforme objetivo), investimento total, custo por resultado, CTR, investimento diário médio
+
+02 · ANÁLISE VISUAL — texto descritivo com: distribuição de resultados em lista, CTR explicado com contexto de benchmark, eficiência do investimento em frase resumida
+
+03 · DESTAQUES DA CAMPANHA — 4 a 6 pontos numerados com dados reais, cada um com contexto explicativo
+
+04 · O QUE ESSES NÚMEROS SIGNIFICAM — 4 parágrafos curtos: alcance, formato/criativo principal, relevância dos anúncios, perspectiva futura
+
+05 · PRÓXIMOS PASSOS — duas seções: "Curto prazo — Ações imediatas" e "Médio prazo — Próxima fase", cada uma com 3 bullet points
+
+06 · CONCLUSÃO — parágrafo executivo com os números mais importantes e direcionamento estratégico
+
+Ao final: "Relatório produzido por [nome da agência do tenant se configurado, senão GTPRO] · período analisado"`
 
 const o = { type: "object" as const }
 const s = { type: "string" as const }
@@ -290,7 +322,8 @@ export async function runAgent(
   tenantConfig: Record<string, any>,
   modelId?: string,
   history?: { role: string; content: string }[],
-  adAccountId?: string
+  adAccountId?: string,
+  onChunk?: (chunk: AgentChunk) => void
 ) {
   const apiKey = await getAnthropicKey()
   const client = new Anthropic({ apiKey })
@@ -326,27 +359,43 @@ export async function runAgent(
   }
 
   while (true) {
-    const response = await client.messages.create({ model, max_tokens: 4096, system: SYSTEM_PROMPT, tools: TOOLS, messages })
+    const stream = client.messages.stream({
+      model, max_tokens: 4096, system: SYSTEM_PROMPT, tools: TOOLS, messages
+    })
+
+    stream.on("text", (text) => {
+      onChunk?.({ type: "text", delta: text })
+    })
+
+    const response = await stream.finalMessage()
     messages.push({ role: "assistant", content: response.content })
     trackUsage(response.usage)
 
     if (response.stop_reason === "end_turn") {
-      const text = response.content.find(b => b.type === "text")
-      return { message: (text as any)?.text ?? "", actions_taken: actionsTaken, tools_used: toolsUsed }
+      const textBlock = response.content.find(b => b.type === "text")
+      const finalMsg = (textBlock as any)?.text ?? ""
+      onChunk?.({ type: "done", message: finalMsg, tools_used: toolsUsed, actions_taken: actionsTaken })
+      return { message: finalMsg, actions_taken: actionsTaken, tools_used: toolsUsed }
     }
 
     if (response.stop_reason === "tool_use") {
       const results: Anthropic.ToolResultBlockParam[] = []
       for (const block of response.content) {
         if (block.type !== "tool_use") continue
+        onChunk?.({ type: "tool_start", name: block.name, input: block.input as any })
         toolsUsed.push({ name: block.name, input: block.input as any })
         try {
           const result = await executeTool(block.name, block.input as any, tenantId)
           logAction(tenantId, block.name, block.input, result, "success")
-          if (WRITE_TOOLS.has(block.name)) actionsTaken.push({ tool: block.name, input: block.input, result })
+          onChunk?.({ type: "tool_done", name: block.name })
+          if (WRITE_TOOLS.has(block.name)) {
+            actionsTaken.push({ tool: block.name, input: block.input, result })
+            onChunk?.({ type: "action", tool: block.name, input: block.input as any, result })
+          }
           results.push({ type: "tool_result", tool_use_id: block.id, content: JSON.stringify(result) })
         } catch (e: any) {
           logAction(tenantId, block.name, block.input, { error: e.message }, "failed")
+          onChunk?.({ type: "tool_error", name: block.name, error: e.message })
           results.push({ type: "tool_result", tool_use_id: block.id, content: `Erro: ${e.message}`, is_error: true })
         }
       }

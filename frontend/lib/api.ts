@@ -1,3 +1,49 @@
+async function fetchStreamWithAuth(
+  path: string,
+  body: unknown,
+  onChunk: (chunk: any) => void,
+  signal?: AbortSignal
+) {
+  const { createClient } = await import("./supabase")
+  const supabase = createClient()
+  const { data: { session } } = await supabase.auth.getSession()
+
+  const res = await fetch(`/api${path}`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
+    },
+    body: JSON.stringify(body),
+    signal,
+  })
+
+  if (!res.ok) {
+    const error = await res.json().catch(() => ({ error: res.statusText }))
+    throw new Error(error.error || "Erro na requisição")
+  }
+
+  const reader = res.body!.getReader()
+  const decoder = new TextDecoder()
+  let buffer = ""
+
+  while (true) {
+    const { done, value } = await reader.read()
+    if (done) break
+    buffer += decoder.decode(value, { stream: true })
+    const lines = buffer.split("\n")
+    buffer = lines.pop() ?? ""
+    for (const line of lines) {
+      if (line.startsWith("data: ")) {
+        try { onChunk(JSON.parse(line.slice(6).trim())) } catch {}
+      }
+    }
+  }
+  if (buffer.startsWith("data: ")) {
+    try { onChunk(JSON.parse(buffer.slice(6).trim())) } catch {}
+  }
+}
+
 async function fetchWithAuth(path: string, options: RequestInit = {}) {
   const { createClient } = await import("./supabase")
   const supabase = createClient()
@@ -49,8 +95,13 @@ export const api = {
   },
 
   agent: {
-    query: (message: string, model?: string, history?: { role: string; content: string }[]) =>
-      fetchWithAuth("/agent/query", { method: "POST", body: JSON.stringify({ message, model, history }), signal: AbortSignal.timeout(290000) }),
+    queryStream: (
+      message: string,
+      model?: string,
+      history?: { role: string; content: string }[],
+      onChunk?: (chunk: any) => void,
+      signal?: AbortSignal
+    ) => fetchStreamWithAuth("/agent/query", { message, model, history }, onChunk ?? (() => {}), signal ?? AbortSignal.timeout(290000)),
     logs: (limit = 50) => fetchWithAuth(`/agent/logs?limit=${limit}`),
     messages: () => fetchWithAuth("/agent/messages"),
     clearMessages: () => fetchWithAuth("/agent/messages", { method: "DELETE" }),
