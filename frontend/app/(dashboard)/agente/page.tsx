@@ -36,15 +36,15 @@ const CONFIRM_RE = /posso implementar|posso executar|confirma (a |o |essa |essa 
 const CHOICE_RE  = /\?|deseja|quer\s|escolh|opç[aã]|prefere|selecione|confirma|como\s+posso|o\s+que\s+gostaria/i
 
 const TOOL_LABELS: Record<string, string> = {
-  get_campaigns: "Campanhas", get_account_insights: "Insights", get_campaign_insights: "Análise",
-  get_insights_breakdown: "Breakdown", get_adsets: "Conjuntos", get_ads: "Anúncios",
+  get_campaigns: "Buscando campanhas", get_account_insights: "Carregando insights", get_campaign_insights: "Analisando campanha",
+  get_insights_breakdown: "Processando breakdown", get_adsets: "Carregando conjuntos", get_ads: "Carregando anúncios",
   create_campaign: "Criando campanha", update_campaign: "Atualizando campanha",
-  duplicate_campaign: "Duplicando", delete_campaign: "Deletando", toggle_campaign: "Alternando status",
+  duplicate_campaign: "Duplicando campanha", delete_campaign: "Deletando campanha", toggle_campaign: "Alterando status",
   create_adset: "Criando conjunto", update_adset: "Atualizando conjunto",
   create_ad: "Criando anúncio", update_ad: "Atualizando anúncio",
-  get_pixels: "Pixels", get_audiences: "Públicos",
-  create_lookalike_audience: "Lookalike", create_website_audience: "Público website",
-  get_account_info: "Conta", check_whatsapp_status: "WhatsApp", generate_utm: "UTM",
+  get_pixels: "Verificando pixels", get_audiences: "Carregando públicos",
+  create_lookalike_audience: "Criando lookalike", create_website_audience: "Criando público website",
+  get_account_info: "Carregando conta", check_whatsapp_status: "Verificando WhatsApp", generate_utm: "Gerando UTM",
 }
 
 const MODELS = [
@@ -54,22 +54,14 @@ const MODELS = [
 ]
 
 const SUGGESTIONS = [
-  { icon: BarChart2, text: "Analise a performance dos últimos 7 dias", color: "text-violet-400" },
-  { icon: Search,    text: "Quais campanhas estão com ROAS abaixo do mínimo?", color: "text-blue-400" },
-  { icon: DollarSign, text: "Alguma campanha com CPL muito alto?", color: "text-emerald-400" },
-  { icon: Zap,       text: "Crie uma nova campanha de captação", color: "text-amber-400" },
+  { icon: BarChart2, text: "Analise a performance dos últimos 7 dias" },
+  { icon: Search,    text: "Quais campanhas estão com ROAS abaixo do mínimo?" },
+  { icon: DollarSign, text: "Alguma campanha com CPL muito alto?" },
+  { icon: Zap,       text: "Crie uma nova campanha de captação" },
 ]
 
 const SKILL_ICONS: Record<string, any> = {
   BarChart2, Zap, Search, FileText, Users, Image, Bell, DollarSign, Power,
-}
-
-const SKILL_COLORS: Record<string, string> = {
-  violet:  "text-violet-400 bg-violet-500/10",
-  blue:    "text-blue-400   bg-blue-500/10",
-  emerald: "text-emerald-400 bg-emerald-500/10",
-  amber:   "text-amber-400  bg-amber-500/10",
-  red:     "text-red-400    bg-red-500/10",
 }
 
 // ─── Markdown renderer ────────────────────────────────────────────────────────
@@ -77,34 +69,34 @@ const SKILL_COLORS: Record<string, string> = {
 function inlineMd(text: string): React.ReactNode {
   return text.split(/(\*\*[^*]+\*\*|`[^`]+`)/g).map((p, i) => {
     if (p.startsWith("**") && p.endsWith("**"))
-      return <strong key={i} className="text-zinc-100 font-semibold">{p.slice(2,-2)}</strong>
+      return <strong key={i} className="text-white font-semibold">{p.slice(2,-2)}</strong>
     if (p.startsWith("`") && p.endsWith("`"))
-      return <code key={i} className="text-violet-300 bg-violet-500/10 px-1.5 py-0.5 rounded text-[11px] font-mono">{p.slice(1,-1)}</code>
+      return <code key={i} className="text-violet-300 bg-violet-500/[0.12] px-1.5 py-0.5 rounded-md text-[12px] font-mono">{p.slice(1,-1)}</code>
     return p
   })
 }
 
 function renderMd(text: string) {
   return text.split("\n").map((line, i) => {
-    if (line.startsWith("### ")) return <p key={i} className="text-[13px] font-semibold text-zinc-100 mt-5 mb-1.5">{line.slice(4)}</p>
-    if (line.startsWith("## "))  return <p key={i} className="text-[14px] font-semibold text-zinc-100 mt-5 mb-1.5">{line.slice(3)}</p>
-    if (line.startsWith("# "))   return <p key={i} className="text-[15px] font-bold text-white mt-5 mb-2">{line.slice(2)}</p>
-    if (line.startsWith("---"))  return <hr key={i} className="border-white/[0.08] my-3" />
+    if (line.startsWith("### ")) return <p key={i} className="text-[15px] font-semibold text-white mt-6 mb-2">{line.slice(4)}</p>
+    if (line.startsWith("## "))  return <p key={i} className="text-[16px] font-semibold text-white mt-6 mb-2">{line.slice(3)}</p>
+    if (line.startsWith("# "))   return <p key={i} className="text-[18px] font-bold text-white mt-6 mb-3">{line.slice(2)}</p>
+    if (line.startsWith("---"))  return <hr key={i} className="border-white/[0.07] my-4" />
     if (line.startsWith("- ") || line.startsWith("• ")) return (
-      <div key={i} className="flex gap-2.5 items-start my-0.5">
-        <span className="text-zinc-600 mt-[5px] shrink-0 w-1 h-1 rounded-full bg-zinc-600 inline-block" />
-        <span>{inlineMd(line.slice(2))}</span>
+      <div key={i} className="flex gap-3 items-start my-1">
+        <span className="mt-[9px] shrink-0 w-1 h-1 rounded-full bg-zinc-500 inline-block" />
+        <span className="leading-relaxed">{inlineMd(line.slice(2))}</span>
       </div>
     )
     if (/^\d+\.\s/.test(line)) return (
-      <div key={i} className="flex gap-2.5 items-start my-0.5">
-        <span className="text-zinc-500 text-[11px] mt-0.5 shrink-0 tabular-nums">{line.match(/^(\d+)/)?.[1]}.</span>
-        <span>{inlineMd(line.replace(/^\d+\.\s/, ""))}</span>
+      <div key={i} className="flex gap-3 items-start my-1">
+        <span className="text-zinc-500 text-[12px] mt-0.5 shrink-0 tabular-nums w-4 text-right">{line.match(/^(\d+)/)?.[1]}.</span>
+        <span className="leading-relaxed">{inlineMd(line.replace(/^\d+\.\s/, ""))}</span>
       </div>
     )
-    if (line.startsWith("|")) return <p key={i} className="my-0.5 text-zinc-400 font-mono text-[11px]">{line}</p>
-    if (line === "") return <div key={i} className="h-2.5" />
-    return <p key={i} className="my-0.5 leading-relaxed">{inlineMd(line)}</p>
+    if (line.startsWith("|")) return <p key={i} className="my-0.5 text-zinc-400 font-mono text-[12px]">{line}</p>
+    if (line === "") return <div key={i} className="h-3" />
+    return <p key={i} className="my-0.5 leading-[1.75]">{inlineMd(line)}</p>
   })
 }
 
@@ -113,15 +105,12 @@ function renderMd(text: string) {
 function extractQuickReplies(content: string): { label: string; value: string }[] | null {
   const lines = content.split("\n").map(l => l.trim()).filter(Boolean)
   const hasQ  = CHOICE_RE.test(content)
-
   const numbered = lines.filter(l => /^\d+\.\s.+/.test(l))
-  if (numbered.length >= 2 && numbered.length <= 6 && hasQ) {
+  if (numbered.length >= 2 && numbered.length <= 6 && hasQ)
     return numbered.map((l, i) => ({ label: l.replace(/^\d+\.\s/, "").trim(), value: String(i + 1) }))
-  }
   const bullets = lines.filter(l => /^[-•*]\s.+/.test(l))
-  if (bullets.length >= 2 && bullets.length <= 6 && hasQ) {
+  if (bullets.length >= 2 && bullets.length <= 6 && hasQ)
     return bullets.map((l, i) => ({ label: l.replace(/^[-•*]\s/, "").trim(), value: String(i + 1) }))
-  }
   return null
 }
 
@@ -140,6 +129,39 @@ function isInCreationFlow(messages: Message[]): boolean {
   return recent.includes("modo manual") || recent.includes("passo a passo") ||
     recent.includes("objetivo da campanha") || recent.includes("público-alvo") ||
     recent.includes("formato do criativo") || recent.includes("copy do anúncio")
+}
+
+// ─── Log panel ────────────────────────────────────────────────────────────────
+
+function LogsPanel({ logs, loading, onRefresh }: { logs: LogEntry[]; loading: boolean; onRefresh: () => void }) {
+  return (
+    <div className="mb-4 bg-zinc-900 ring-1 ring-white/[0.07] rounded-2xl overflow-hidden">
+      <div className="flex items-center justify-between px-5 py-3 border-b border-white/[0.05]">
+        <span className="text-[11px] font-semibold text-zinc-500 uppercase tracking-wider">Últimas 30 ações</span>
+        <button onClick={onRefresh} disabled={loading} className="text-zinc-600 hover:text-zinc-300 transition-colors disabled:opacity-40">
+          <RefreshCw size={11} className={cn(loading && "animate-spin")} />
+        </button>
+      </div>
+      <div className="max-h-48 overflow-y-auto divide-y divide-white/[0.04]">
+        {loading && <div className="px-5 py-4 text-[12px] text-zinc-600">Carregando...</div>}
+        {!loading && logs.length === 0 && <div className="px-5 py-4 text-[12px] text-zinc-600">Nenhuma ação registrada.</div>}
+        {logs.map(log => (
+          <div key={log.id} className="flex items-center gap-3 px-5 py-2.5">
+            {log.status === "success"
+              ? <CheckCircle2 size={11} className="text-emerald-400 shrink-0" />
+              : <XCircle size={11} className="text-red-400 shrink-0" />}
+            <span className="flex-1 text-[12px] text-zinc-300 truncate">{log.action}</span>
+            {log.status !== "success" && log.result?.error && (
+              <span className="text-[11px] text-red-400/70 truncate max-w-[160px]">{log.result.error}</span>
+            )}
+            <span className="text-[11px] text-zinc-700 shrink-0 tabular-nums">
+              {new Date(log.created_at).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}
+            </span>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
 }
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
@@ -209,9 +231,7 @@ export default function AgentePage() {
 
   function stopStreaming() {
     abortRef.current?.abort()
-    setLoading(false)
-    setIsStreaming(false)
-    setActiveTools([])
+    setLoading(false); setIsStreaming(false); setActiveTools([])
   }
 
   const send = useCallback(async (text: string) => {
@@ -221,16 +241,13 @@ export default function AgentePage() {
 
     const userMsg: Message = { role: "user", content: text }
     setMessages(p => [...p, userMsg, { role: "assistant", content: "", tools_used: [], actions: [] }])
-    setLoading(true)
-    setIsStreaming(false)
-    setActiveTools([])
+    setLoading(true); setIsStreaming(false); setActiveTools([])
 
     const ctrl = new AbortController()
     abortRef.current = ctrl
 
     try {
       const history = messages.map(m => ({ role: m.role, content: m.content }))
-
       await api.agent.queryStream(text, model, history, (chunk: any) => {
         if (chunk.type === "text") {
           setIsStreaming(true)
@@ -286,15 +303,13 @@ export default function AgentePage() {
             ...last,
             content: isTimeout
               ? "A resposta demorou mais do esperado. Se você confirmou uma ação, verifique nas campanhas se foi executada."
-              : `Erro ao processar: ${msg || "verifique as configurações."}`,
+              : `Erro ao processar. ${msg || "Verifique se o agente está configurado."}`,
             isError: true
           }
         return msgs
       })
     } finally {
-      setLoading(false)
-      setIsStreaming(false)
-      setActiveTools([])
+      setLoading(false); setIsStreaming(false); setActiveTools([])
     }
   }, [loading, messages, model])
 
@@ -329,10 +344,11 @@ export default function AgentePage() {
   if (loadingHistory) {
     return (
       <div className="flex items-center justify-center h-full">
-        <div className="flex items-center gap-2 text-[13px] text-zinc-600">
-          <div className="w-1 h-1 rounded-full bg-zinc-600 animate-bounce" style={{ animationDelay: "0ms" }} />
-          <div className="w-1 h-1 rounded-full bg-zinc-600 animate-bounce" style={{ animationDelay: "150ms" }} />
-          <div className="w-1 h-1 rounded-full bg-zinc-600 animate-bounce" style={{ animationDelay: "300ms" }} />
+        <div className="flex gap-1">
+          {[0, 120, 240].map(d => (
+            <span key={d} className="w-2 h-2 rounded-full bg-violet-500/40 animate-bounce"
+              style={{ animationDelay: `${d}ms`, animationDuration: "1.2s" }} />
+          ))}
         </div>
       </div>
     )
@@ -349,26 +365,30 @@ export default function AgentePage() {
     <div className="flex flex-col" style={{ height: "calc(100vh - 3.5rem)" }}>
 
       {/* Top bar */}
-      <div className="flex items-center justify-between py-2 shrink-0">
-        <button onClick={() => { if (!logsOpen) loadLogs(); setLogsOpen(v => !v) }}
-          className={cn("flex items-center gap-1.5 px-3 py-1.5 text-[11px] rounded-lg transition-colors",
-            logsOpen ? "text-violet-400 bg-violet-500/10" : "text-zinc-600 hover:text-zinc-400 hover:bg-white/[0.04]"
+      <div className="flex items-center justify-between py-3 shrink-0">
+        <button
+          onClick={() => { if (!logsOpen) loadLogs(); setLogsOpen(v => !v) }}
+          className={cn("flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[12px] font-medium transition-all",
+            logsOpen
+              ? "text-violet-300 bg-violet-500/10 ring-1 ring-violet-500/25"
+              : "text-zinc-600 hover:text-zinc-300 hover:bg-white/[0.04]"
           )}>
-          <ListChecks size={11} />
+          <ListChecks size={13} />
           Logs
-          <ChevronDown size={9} className={cn("transition-transform", logsOpen && "rotate-180")} />
+          <ChevronDown size={10} className={cn("transition-transform", logsOpen && "rotate-180")} />
         </button>
-        <div className="flex items-center gap-1">
+
+        <div className="flex items-center gap-1.5">
           {loading && (
             <button onClick={stopStreaming}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-[11px] text-zinc-500 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors">
-              <Square size={9} /> Parar
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[12px] text-zinc-500 hover:text-red-400 hover:bg-red-500/[0.08] ring-1 ring-white/[0.07] transition-all">
+              <Square size={10} fill="currentColor" /> Parar
             </button>
           )}
           {messages.length > 0 && !loading && (
             <button onClick={clearHistory}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-[11px] text-zinc-600 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors">
-              <Trash2 size={11} />
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[12px] text-zinc-600 hover:text-red-400 hover:bg-red-500/[0.08] transition-all">
+              <Trash2 size={13} />
             </button>
           )}
         </div>
@@ -376,30 +396,20 @@ export default function AgentePage() {
 
       {/* Logs panel */}
       {logsOpen && (
-        <div className="shrink-0 mb-3 bg-[#0e0e11] ring-1 ring-white/[0.06] rounded-xl overflow-hidden">
-          <div className="flex items-center justify-between px-4 py-2.5 border-b border-white/[0.05]">
-            <span className="text-[10px] font-semibold text-zinc-600 uppercase tracking-wider">Últimas 30 ações</span>
-            <button onClick={loadLogs} disabled={logsLoading} className="text-zinc-600 hover:text-zinc-400 transition-colors disabled:opacity-40">
-              <RefreshCw size={10} className={cn(logsLoading && "animate-spin")} />
-            </button>
-          </div>
-          <div className="max-h-44 overflow-y-auto divide-y divide-white/[0.04]">
-            {logsLoading && <div className="px-4 py-3 text-[11px] text-zinc-600">Carregando...</div>}
-            {!logsLoading && logs.length === 0 && <div className="px-4 py-3 text-[11px] text-zinc-600">Nenhuma ação registrada.</div>}
-            {logs.map(log => (
-              <div key={log.id} className="flex items-start gap-3 px-4 py-2">
-                {log.status === "success"
-                  ? <CheckCircle2 size={10} className="text-emerald-400 shrink-0 mt-0.5" />
-                  : <XCircle size={10} className="text-red-400 shrink-0 mt-0.5" />}
-                <div className="flex-1 min-w-0">
-                  <span className="text-[11px] font-medium text-zinc-300">{log.action}</span>
-                  {log.status !== "success" && log.result?.error && (
-                    <p className="text-[10px] text-red-400/70 mt-0.5">{log.result.error}</p>
-                  )}
-                </div>
-                <span className="text-[10px] text-zinc-700 shrink-0 tabular-nums">
-                  {new Date(log.created_at).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}
-                </span>
+        <LogsPanel logs={logs} loading={logsLoading} onRefresh={loadLogs} />
+      )}
+
+      {/* Step progress */}
+      {inFlow && currentStep >= 0 && (
+        <div className="shrink-0 mb-3">
+          <div className="flex items-center gap-1">
+            {CREATION_STEPS.map((label, i) => (
+              <div key={label} className="flex-1 flex flex-col items-center gap-1">
+                <div className={cn("h-[3px] w-full rounded-full transition-all duration-500",
+                  i < currentStep  ? "bg-violet-500" :
+                  i === currentStep ? "bg-violet-400 shadow-[0_0_8px_rgba(139,92,246,0.6)]" : "bg-white/[0.06]"
+                )} />
+                {i === currentStep && <span className="text-[9px] text-violet-400 font-medium">{label}</span>}
               </div>
             ))}
           </div>
@@ -408,44 +418,46 @@ export default function AgentePage() {
 
       {/* Scroll area */}
       <div className="flex-1 min-h-0 overflow-y-auto">
-        <div className="max-w-2xl mx-auto w-full py-6 px-1">
+        <div className="max-w-[700px] mx-auto w-full py-8 px-2">
 
           {/* Empty state */}
           {messages.length === 0 && !loading && (
-            <div className="flex flex-col items-center gap-8 py-12">
-              <div className="flex flex-col items-center gap-3">
-                <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-violet-600/20 to-violet-800/10 ring-1 ring-violet-500/20 flex items-center justify-center">
-                  <Sparkles size={20} className="text-violet-400" />
+            <div className="flex flex-col items-center gap-10 pt-8 pb-4">
+              <div className="flex flex-col items-center gap-4">
+                <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-violet-600/25 to-violet-900/10 ring-1 ring-violet-500/20 flex items-center justify-center shadow-[0_0_40px_rgba(139,92,246,0.12)]">
+                  <Sparkles size={28} className="text-violet-400" />
                 </div>
-                <div className="text-center">
-                  <p className="text-[17px] font-semibold text-white">Como posso ajudar?</p>
-                  <p className="text-[12px] text-zinc-500 mt-1">Analiso, otimizo e executo no Meta Ads.</p>
+                <div className="text-center space-y-2">
+                  <h2 className="text-[26px] font-bold text-white tracking-tight">Como posso ajudar?</h2>
+                  <p className="text-[14px] text-zinc-500 max-w-xs leading-relaxed">
+                    Analiso, otimizo e executo no Meta Ads — campanhas, públicos, criativos e relatórios.
+                  </p>
                 </div>
               </div>
+
               {skills.length > 0 ? (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 w-full max-w-lg">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 w-full max-w-xl">
                   {skills.map(skill => {
                     const Icon = SKILL_ICONS[skill.icon] ?? Zap
-                    const cls  = SKILL_COLORS[skill.color] ?? SKILL_COLORS.violet
                     return (
                       <button key={skill.id} onClick={() => send(skill.prompt)}
-                        className="text-left px-4 py-3.5 bg-white/[0.03] ring-1 ring-white/[0.06] rounded-xl hover:bg-white/[0.06] transition-all group">
-                        <div className="flex items-center gap-2.5 mb-1">
-                          <Icon size={12} className={cls.split(" ")[0]} />
-                          <span className="text-[12px] font-medium text-zinc-200 group-hover:text-white">{skill.name}</span>
+                        className="text-left px-5 py-4 bg-white/[0.03] ring-1 ring-white/[0.07] rounded-2xl hover:bg-white/[0.06] hover:ring-white/[0.12] transition-all group">
+                        <div className="flex items-center gap-2.5 mb-1.5">
+                          <Icon size={14} className="text-violet-400" />
+                          <span className="text-[13px] font-semibold text-zinc-200 group-hover:text-white">{skill.name}</span>
                         </div>
-                        <p className="text-[11px] text-zinc-600 leading-snug line-clamp-2">{skill.prompt.slice(0, 80)}…</p>
+                        <p className="text-[12px] text-zinc-600 leading-snug line-clamp-2">{skill.prompt.slice(0, 80)}…</p>
                       </button>
                     )
                   })}
                 </div>
               ) : (
-                <div className="grid grid-cols-2 gap-2 w-full max-w-lg">
+                <div className="grid grid-cols-2 gap-2.5 w-full max-w-xl">
                   {SUGGESTIONS.map(s => (
                     <button key={s.text} onClick={() => send(s.text)}
-                      className="flex items-start gap-2.5 text-left px-4 py-3.5 bg-white/[0.03] ring-1 ring-white/[0.06] rounded-xl hover:bg-white/[0.06] transition-all group">
-                      <s.icon size={12} className={cn(s.color, "mt-0.5 shrink-0")} />
-                      <span className="text-[12px] text-zinc-400 group-hover:text-zinc-200 leading-snug transition-colors">{s.text}</span>
+                      className="flex items-start gap-3 text-left px-5 py-4 bg-white/[0.03] ring-1 ring-white/[0.07] rounded-2xl hover:bg-white/[0.06] hover:ring-white/[0.12] transition-all group">
+                      <s.icon size={14} className="text-zinc-500 mt-0.5 shrink-0 group-hover:text-zinc-300 transition-colors" />
+                      <span className="text-[13px] text-zinc-400 group-hover:text-zinc-200 leading-snug transition-colors">{s.text}</span>
                     </button>
                   ))}
                 </div>
@@ -453,85 +465,71 @@ export default function AgentePage() {
             </div>
           )}
 
-          {/* Step progress bar */}
-          {inFlow && currentStep >= 0 && (
-            <div className="mb-5 px-1">
-              <div className="flex items-center gap-1">
-                {CREATION_STEPS.map((label, i) => (
-                  <div key={label} className="flex-1 flex flex-col items-center gap-1">
-                    <div className={cn("h-0.5 w-full rounded-full transition-all duration-500",
-                      i < currentStep  ? "bg-violet-500" :
-                      i === currentStep ? "bg-violet-400" : "bg-white/[0.07]"
-                    )} />
-                    {i === currentStep && <span className="text-[9px] text-violet-400">{label}</span>}
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
           {/* Messages */}
           {messages.length > 0 && (
-            <div className="space-y-7">
+            <div className="space-y-8">
               {messages.map((msg, i) => {
                 const isLast = i === messages.length - 1
                 const showCursor = isLast && isStreaming && msg.role === "assistant"
                 const showToolActivity = isLast && loading && activeTools.length > 0
 
                 return (
-                  <div key={i} className={cn("flex gap-3", msg.role === "user" ? "justify-end" : "justify-start items-start")}>
+                  <div key={i} className={cn("flex gap-4", msg.role === "user" ? "justify-end" : "justify-start items-start")}>
 
+                    {/* Bot avatar */}
                     {msg.role === "assistant" && (
                       <div className={cn(
-                        "shrink-0 w-6 h-6 rounded-lg flex items-center justify-center mt-0.5 transition-all",
+                        "shrink-0 w-8 h-8 rounded-xl flex items-center justify-center mt-0.5 transition-all",
                         loading && isLast
-                          ? "bg-violet-500/20 ring-1 ring-violet-500/30 shadow-[0_0_12px_rgba(139,92,246,0.2)]"
-                          : "bg-violet-600/10 ring-1 ring-violet-500/15"
+                          ? "bg-violet-500/20 ring-1 ring-violet-500/40 shadow-[0_0_16px_rgba(139,92,246,0.25)]"
+                          : "bg-white/[0.05] ring-1 ring-white/[0.08]"
                       )}>
-                        <Bot size={12} className={cn("text-violet-400", loading && isLast && "animate-pulse")} />
+                        <Bot size={14} className={cn("text-violet-400", loading && isLast && "animate-pulse")} />
                       </div>
                     )}
 
-                    <div className={cn("flex flex-col gap-2", msg.role === "user" ? "items-end max-w-[78%]" : "flex-1 min-w-0")}>
+                    <div className={cn("flex flex-col gap-3", msg.role === "user" ? "items-end max-w-[75%]" : "flex-1 min-w-0")}>
 
                       {/* Media bubble */}
                       {msg.mediaUpload ? (
-                        <div className="flex items-center gap-2.5 bg-white/[0.05] ring-1 ring-white/[0.08] rounded-2xl rounded-tr-sm px-4 py-2.5">
+                        <div className="flex items-center gap-3 bg-white/[0.05] ring-1 ring-white/[0.08] rounded-2xl rounded-tr-sm px-4 py-3">
                           {msg.mediaUpload.type === "video"
-                            ? <Film size={13} className="text-violet-400 shrink-0" />
-                            : <Image size={13} className="text-violet-400 shrink-0" />}
+                            ? <Film size={14} className="text-violet-400 shrink-0" />
+                            : <Image size={14} className="text-violet-400 shrink-0" />}
                           <div>
-                            <p className="text-[12px] text-zinc-200 font-medium">{msg.mediaUpload.name}</p>
-                            <p className="text-[10px] text-zinc-600 font-mono mt-0.5">
+                            <p className="text-[13px] text-zinc-200 font-medium">{msg.mediaUpload.name}</p>
+                            <p className="text-[11px] text-zinc-600 font-mono mt-0.5">
                               {msg.mediaUpload.videoId ? `video_id: ${msg.mediaUpload.videoId}` : `hash: ${msg.mediaUpload.hash}`}
                             </p>
                           </div>
                         </div>
                       ) : msg.role === "user" ? (
-                        <div className="bg-zinc-800 ring-1 ring-white/[0.08] rounded-2xl rounded-tr-sm px-4 py-2.5 text-[13px] text-zinc-100 leading-relaxed">
+                        /* User bubble */
+                        <div className="bg-zinc-800/80 ring-1 ring-white/[0.09] rounded-2xl rounded-tr-sm px-5 py-3.5 text-[14px] text-zinc-100 leading-relaxed">
                           {msg.content}
                         </div>
                       ) : (
-                        <div className={cn("text-[13px] leading-relaxed space-y-0.5", msg.isError ? "text-red-400" : "text-zinc-300")}>
+                        /* Assistant message */
+                        <div className={cn("text-[14px] leading-[1.75] space-y-0.5 w-full", msg.isError ? "text-red-400" : "text-zinc-300")}>
 
-                          {/* Tool activity inline */}
+                          {/* Tool activity pills */}
                           {showToolActivity && (
-                            <div className="flex flex-wrap gap-1.5 mb-2">
+                            <div className="flex flex-wrap gap-2 mb-3">
                               {activeTools.map(tool => (
                                 <span key={tool.name} className={cn(
-                                  "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium ring-1 transition-all",
-                                  tool.status === "running" ? "text-violet-400 bg-violet-500/10 ring-violet-500/20" :
-                                  tool.status === "done"    ? "text-emerald-400 bg-emerald-500/8 ring-emerald-500/15" :
-                                                              "text-red-400 bg-red-500/8 ring-red-500/15"
+                                  "inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-[12px] font-medium ring-1 transition-all",
+                                  tool.status === "running" ? "text-violet-300 bg-violet-500/10 ring-violet-500/20" :
+                                  tool.status === "done"    ? "text-emerald-300 bg-emerald-500/8 ring-emerald-500/15" :
+                                                              "text-red-300 bg-red-500/8 ring-red-500/15"
                                 )}>
                                   {tool.status === "running" ? (
-                                    <svg className="w-2.5 h-2.5 animate-spin" viewBox="0 0 24 24" fill="none">
+                                    <svg className="w-3 h-3 animate-spin" viewBox="0 0 24 24" fill="none">
                                       <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" strokeDasharray="32" strokeDashoffset="10" strokeLinecap="round" />
                                     </svg>
                                   ) : tool.status === "done" ? (
-                                    <CheckCircle2 size={9} />
+                                    <CheckCircle2 size={11} />
                                   ) : (
-                                    <XCircle size={9} />
+                                    <XCircle size={11} />
                                   )}
                                   {TOOL_LABELS[tool.name] ?? tool.name}
                                 </span>
@@ -539,30 +537,32 @@ export default function AgentePage() {
                             </div>
                           )}
 
-                          {/* Thinking dots — before first text */}
+                          {/* Thinking animation — before first text */}
                           {isLast && loading && !msg.content && !showToolActivity && (
-                            <div className="flex items-center gap-1 py-1">
-                              {[0, 150, 300].map(delay => (
-                                <span key={delay} className="w-1.5 h-1.5 rounded-full bg-zinc-600 animate-bounce inline-block"
-                                  style={{ animationDelay: `${delay}ms`, animationDuration: "1s" }} />
+                            <div className="flex items-center gap-1.5 py-2">
+                              {[0, 160, 320].map(delay => (
+                                <span key={delay} className="w-2 h-2 rounded-full bg-zinc-600 animate-bounce inline-block"
+                                  style={{ animationDelay: `${delay}ms`, animationDuration: "1.2s" }} />
                               ))}
                             </div>
                           )}
 
                           {/* Rendered text + cursor */}
                           {msg.content && (
-                            <>
+                            <div>
                               {renderMd(msg.content)}
-                              {showCursor && <span className="inline-block w-0.5 h-3.5 bg-zinc-400 ml-0.5 animate-pulse align-middle" />}
-                            </>
+                              {showCursor && (
+                                <span className="inline-block w-[3px] h-4 bg-zinc-400/70 ml-0.5 animate-pulse align-middle rounded-full" />
+                              )}
+                            </div>
                           )}
 
-                          {/* Tool used pills (historic) */}
+                          {/* Historic tool pills */}
                           {!isLast && msg.tools_used && msg.tools_used.length > 0 && (
-                            <div className="flex flex-wrap gap-1 mt-2">
+                            <div className="flex flex-wrap gap-1.5 mt-3">
                               {[...new Map(msg.tools_used.map(t => [t.name, t])).values()].map((t, j) => (
-                                <span key={j} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] text-zinc-600 bg-white/[0.03] ring-1 ring-white/[0.06]">
-                                  <CheckCircle2 size={8} className="text-emerald-500/60" />
+                                <span key={j} className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] text-zinc-600 bg-white/[0.03] ring-1 ring-white/[0.06]">
+                                  <CheckCircle2 size={9} className="text-emerald-500/60" />
                                   {TOOL_LABELS[t.name] ?? t.name}
                                 </span>
                               ))}
@@ -571,12 +571,12 @@ export default function AgentePage() {
 
                           {/* Actions taken */}
                           {msg.actions && msg.actions.length > 0 && (
-                            <div className="mt-3 space-y-1">
+                            <div className="mt-4 space-y-1.5">
                               {msg.actions.map((a, j) => (
-                                <div key={j} className="flex items-center gap-2 px-3 py-2 bg-emerald-500/5 ring-1 ring-emerald-500/15 rounded-lg">
-                                  <CheckCircle2 size={11} className="text-emerald-400 shrink-0" />
-                                  <span className="text-[12px] text-emerald-300 font-medium">{TOOL_LABELS[a.tool] ?? a.tool}</span>
-                                  <span className="text-[11px] text-emerald-500/60">executado</span>
+                                <div key={j} className="flex items-center gap-3 px-4 py-2.5 bg-emerald-500/5 ring-1 ring-emerald-500/15 rounded-xl">
+                                  <CheckCircle2 size={13} className="text-emerald-400 shrink-0" />
+                                  <span className="text-[13px] text-emerald-300 font-medium">{TOOL_LABELS[a.tool] ?? a.tool}</span>
+                                  <span className="text-[12px] text-emerald-600">executado com sucesso</span>
                                 </div>
                               ))}
                             </div>
@@ -584,49 +584,61 @@ export default function AgentePage() {
                         </div>
                       )}
 
-                      {/* Confirmation buttons */}
+                      {/* ── Confirmation card ── */}
                       {msg.role === "assistant" && isLast && isConfirm && (
-                        <div className="mt-3 w-full rounded-xl overflow-hidden ring-1 ring-white/[0.09] divide-y divide-white/[0.07]">
+                        <div className="mt-2 w-full rounded-2xl overflow-hidden ring-1 ring-white/[0.1] bg-zinc-900">
                           <button onClick={() => send("Sim, pode implementar")}
-                            className="w-full flex items-center gap-3 px-4 py-3.5 bg-[#0f0f12] hover:bg-emerald-500/5 hover:ring-emerald-500/20 transition-colors text-left group">
-                            <span className="shrink-0 w-5 h-5 rounded-md bg-emerald-500/10 flex items-center justify-center">
-                              <Check size={11} className="text-emerald-400" />
+                            className="w-full flex items-center gap-4 px-5 py-4 hover:bg-emerald-500/5 border-b border-white/[0.06] transition-colors text-left group">
+                            <span className="shrink-0 w-8 h-8 rounded-xl bg-emerald-500/10 ring-1 ring-emerald-500/20 flex items-center justify-center">
+                              <Check size={14} className="text-emerald-400" />
                             </span>
-                            <span className="flex-1 text-[13px] text-zinc-200 group-hover:text-white">Sim, pode implementar</span>
-                            <ChevronRight size={13} className="text-zinc-700 group-hover:text-zinc-400 shrink-0" />
+                            <div className="flex-1">
+                              <span className="text-[14px] font-medium text-zinc-100 group-hover:text-white">Sim, pode implementar</span>
+                              <p className="text-[12px] text-zinc-600 mt-0.5">Executar a ação proposta</p>
+                            </div>
+                            <ChevronRight size={16} className="text-zinc-700 group-hover:text-zinc-400 shrink-0" />
                           </button>
                           <button onClick={() => send("Não, precisa ajustar")}
-                            className="w-full flex items-center gap-3 px-4 py-3.5 bg-[#0f0f12] hover:bg-white/[0.04] transition-colors text-left group">
-                            <span className="shrink-0 w-5 h-5 rounded-md bg-white/[0.06] flex items-center justify-center">
-                              <ThumbsDown size={10} className="text-zinc-500" />
+                            className="w-full flex items-center gap-4 px-5 py-4 hover:bg-white/[0.04] border-b border-white/[0.06] transition-colors text-left group">
+                            <span className="shrink-0 w-8 h-8 rounded-xl bg-white/[0.05] ring-1 ring-white/[0.08] flex items-center justify-center">
+                              <ThumbsDown size={13} className="text-zinc-500" />
                             </span>
-                            <span className="flex-1 text-[13px] text-zinc-400 group-hover:text-zinc-200">Não, precisa ajustar</span>
-                            <ChevronRight size={13} className="text-zinc-700 group-hover:text-zinc-400 shrink-0" />
+                            <div className="flex-1">
+                              <span className="text-[14px] font-medium text-zinc-400 group-hover:text-zinc-200">Não, precisa ajustar</span>
+                              <p className="text-[12px] text-zinc-600 mt-0.5">Revisar antes de executar</p>
+                            </div>
+                            <ChevronRight size={16} className="text-zinc-700 group-hover:text-zinc-400 shrink-0" />
                           </button>
                           <button onClick={() => { setTimeout(() => textareaRef.current?.focus(), 50) }}
-                            className="w-full flex items-center gap-3 px-4 py-3.5 bg-[#0f0f12] hover:bg-white/[0.04] transition-colors text-left group">
-                            <span className="shrink-0 w-5 h-5 rounded-md bg-white/[0.06] flex items-center justify-center">
-                              <MessageSquare size={10} className="text-zinc-500" />
+                            className="w-full flex items-center gap-4 px-5 py-4 hover:bg-white/[0.04] transition-colors text-left group">
+                            <span className="shrink-0 w-8 h-8 rounded-xl bg-white/[0.05] ring-1 ring-white/[0.08] flex items-center justify-center">
+                              <MessageSquare size={13} className="text-zinc-500" />
                             </span>
-                            <span className="flex-1 text-[13px] text-zinc-400 group-hover:text-zinc-200">Quero discutir mais</span>
-                            <ChevronRight size={13} className="text-zinc-700 group-hover:text-zinc-400 shrink-0" />
+                            <div className="flex-1">
+                              <span className="text-[14px] font-medium text-zinc-400 group-hover:text-zinc-200">Quero discutir mais</span>
+                              <p className="text-[12px] text-zinc-600 mt-0.5">Continuar a conversa</p>
+                            </div>
+                            <ChevronRight size={16} className="text-zinc-700 group-hover:text-zinc-400 shrink-0" />
                           </button>
                         </div>
                       )}
 
-                      {/* Claude-style numbered option cards */}
+                      {/* ── Quick reply cards ── */}
                       {msg.role === "assistant" && isLast && quickReplies && !isConfirm && (
-                        <div className="mt-3 w-full rounded-xl overflow-hidden ring-1 ring-white/[0.09] divide-y divide-white/[0.07]">
+                        <div className="mt-2 w-full rounded-2xl overflow-hidden ring-1 ring-white/[0.1] bg-zinc-900">
                           {quickReplies.map((qr, idx) => (
                             <button key={qr.value} onClick={() => send(qr.label)} disabled={loading}
-                              className="w-full flex items-center gap-3 px-4 py-3.5 bg-[#0f0f12] hover:bg-white/[0.05] transition-colors text-left group disabled:opacity-40">
-                              <span className="shrink-0 w-5 h-5 rounded-md bg-white/[0.06] flex items-center justify-center text-[10px] font-bold text-zinc-500 group-hover:text-zinc-300 group-hover:bg-white/[0.10] transition-colors">
+                              className={cn(
+                                "w-full flex items-center gap-4 px-5 py-4 hover:bg-white/[0.05] transition-colors text-left group disabled:opacity-40",
+                                idx < quickReplies.length - 1 && "border-b border-white/[0.06]"
+                              )}>
+                              <span className="shrink-0 w-8 h-8 rounded-xl bg-white/[0.05] ring-1 ring-white/[0.08] flex items-center justify-center text-[12px] font-bold text-zinc-500 group-hover:text-zinc-200 group-hover:bg-white/[0.09] transition-colors">
                                 {idx + 1}
                               </span>
-                              <span className="flex-1 text-[13px] text-zinc-300 group-hover:text-white leading-snug transition-colors">
+                              <span className="flex-1 text-[14px] text-zinc-300 group-hover:text-white leading-snug transition-colors">
                                 {qr.label}
                               </span>
-                              <ChevronRight size={13} className="shrink-0 text-zinc-700 group-hover:text-zinc-400 transition-colors" />
+                              <ChevronRight size={16} className="shrink-0 text-zinc-700 group-hover:text-zinc-400 transition-colors" />
                             </button>
                           ))}
                         </div>
@@ -636,37 +648,38 @@ export default function AgentePage() {
                 )
               })}
 
-              <div ref={bottomRef} className="h-2" />
+              <div ref={bottomRef} className="h-4" />
             </div>
           )}
         </div>
       </div>
 
-      {/* Input area */}
-      <div className="shrink-0 pb-5 pt-2">
-        <div className="max-w-2xl mx-auto">
-          <div ref={skillsRef} className="relative bg-zinc-900/80 ring-1 ring-white/[0.08] rounded-2xl backdrop-blur-sm transition-all focus-within:ring-white/[0.13]">
+      {/* ── Input area ── */}
+      <div className="shrink-0 pb-6 pt-2">
+        <div className="max-w-[700px] mx-auto">
+          <div ref={skillsRef} className="relative">
 
             {/* Skills popover */}
             {skillsOpen && skills.length > 0 && (
-              <div className="absolute bottom-full mb-2 left-0 w-full bg-[#16161a] ring-1 ring-white/[0.09] rounded-xl overflow-hidden z-30 shadow-2xl">
-                <div className="flex items-center justify-between px-4 py-2.5 border-b border-white/[0.05]">
-                  <span className="text-[10px] font-semibold text-zinc-600 uppercase tracking-wider">Skills</span>
-                  <button onClick={() => setSkillsOpen(false)} className="text-zinc-600 hover:text-zinc-400"><X size={12} /></button>
+              <div className="absolute bottom-full mb-3 left-0 w-full bg-zinc-900 ring-1 ring-white/[0.1] rounded-2xl overflow-hidden z-30 shadow-2xl">
+                <div className="flex items-center justify-between px-5 py-3 border-b border-white/[0.06]">
+                  <span className="text-[11px] font-semibold text-zinc-500 uppercase tracking-wider">Skills</span>
+                  <button onClick={() => setSkillsOpen(false)} className="text-zinc-600 hover:text-zinc-300 transition-colors">
+                    <X size={13} />
+                  </button>
                 </div>
-                <div className="py-1 max-h-64 overflow-y-auto">
+                <div className="py-1.5 max-h-64 overflow-y-auto">
                   {skills.map(skill => {
                     const Icon = SKILL_ICONS[skill.icon] ?? Zap
-                    const cls  = SKILL_COLORS[skill.color] ?? SKILL_COLORS.violet
                     return (
                       <button key={skill.id} onClick={() => { send(skill.prompt); setSkillsOpen(false) }} disabled={loading}
-                        className="w-full flex items-start gap-3 px-4 py-2.5 hover:bg-white/[0.04] transition-colors text-left group disabled:opacity-40">
-                        <div className={cn("mt-0.5 shrink-0 w-5 h-5 rounded-md flex items-center justify-center", cls.split(" ").slice(1).join(" "))}>
-                          <Icon size={11} className={cls.split(" ")[0]} />
+                        className="w-full flex items-start gap-3 px-5 py-3 hover:bg-white/[0.04] transition-colors text-left group disabled:opacity-40">
+                        <div className="mt-0.5 shrink-0 w-6 h-6 rounded-lg bg-violet-500/10 flex items-center justify-center">
+                          <Icon size={12} className="text-violet-400" />
                         </div>
                         <div className="min-w-0">
-                          <p className="text-[12px] font-medium text-zinc-200 group-hover:text-white">{skill.name}</p>
-                          <p className="text-[11px] text-zinc-600 truncate mt-0.5">{skill.prompt.slice(0, 65)}…</p>
+                          <p className="text-[13px] font-medium text-zinc-200 group-hover:text-white">{skill.name}</p>
+                          <p className="text-[12px] text-zinc-600 truncate mt-0.5">{skill.prompt.slice(0, 65)}…</p>
                         </div>
                       </button>
                     )
@@ -675,63 +688,81 @@ export default function AgentePage() {
               </div>
             )}
 
-            <textarea ref={textareaRef} rows={1} value={input}
-              onChange={e => { setInput(e.target.value); e.target.style.height = "auto"; e.target.style.height = Math.min(e.target.scrollHeight, 160) + "px" }}
-              onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(input) } }}
-              placeholder="Responder..."
-              disabled={loading}
-              className="w-full px-4 pt-3.5 pb-2 bg-transparent text-[13px] text-zinc-100 placeholder-zinc-600 focus:outline-none resize-none leading-relaxed disabled:opacity-50"
-            />
+            {/* Input box */}
+            <div className="bg-zinc-900 ring-1 ring-white/[0.1] rounded-3xl transition-all focus-within:ring-white/[0.17] focus-within:shadow-[0_0_0_3px_rgba(139,92,246,0.06)] overflow-hidden">
+              <textarea
+                ref={textareaRef}
+                rows={1}
+                value={input}
+                onChange={e => {
+                  setInput(e.target.value)
+                  e.target.style.height = "auto"
+                  e.target.style.height = Math.min(e.target.scrollHeight, 180) + "px"
+                }}
+                onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(input) } }}
+                placeholder="Pergunte sobre campanhas, métricas ou peça uma ação..."
+                disabled={loading}
+                className="w-full px-5 pt-4 pb-2 bg-transparent text-[14px] text-zinc-100 placeholder-zinc-600 focus:outline-none resize-none leading-relaxed disabled:opacity-50"
+              />
 
-            <div className="flex items-center justify-between px-3 pb-2.5 pt-0.5">
-              <div className="flex items-center gap-0.5">
-                <button onClick={() => setSkillsOpen(v => !v)} disabled={skills.length === 0}
-                  className={cn("flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] transition-colors disabled:opacity-20",
-                    skillsOpen ? "text-violet-400 bg-violet-500/10" : "text-zinc-600 hover:text-zinc-400 hover:bg-white/[0.04]"
-                  )}>
-                  <Sparkles size={11} /><span>Skills</span>
-                </button>
-
-                <input ref={fileRef} type="file" accept="image/*,video/*" className="hidden"
-                  onChange={e => { const f = e.target.files?.[0]; if (f) handleFileUpload(f); e.target.value = "" }} />
-                <button onClick={() => fileRef.current?.click()} disabled={loading || uploading}
-                  className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] text-zinc-600 hover:text-zinc-400 hover:bg-white/[0.04] transition-colors disabled:opacity-40">
-                  {uploading ? <Upload size={11} className="animate-bounce" /> : <Paperclip size={11} />}
-                  <span>{uploading ? "Enviando…" : "Mídia"}</span>
-                </button>
-              </div>
-
-              <div className="flex items-center gap-2">
-                <div className="relative">
-                  <button onClick={() => setModelOpen(v => !v)}
-                    className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] text-zinc-600 hover:text-zinc-400 hover:bg-white/[0.04] transition-colors">
-                    {MODELS.find(m => m.id === model)?.label ?? "Sonnet 4.6"}
-                    <ChevronDown size={9} className={cn("transition-transform", modelOpen && "rotate-180")} />
+              <div className="flex items-center justify-between px-4 pb-3.5 pt-1">
+                <div className="flex items-center gap-1">
+                  <button onClick={() => setSkillsOpen(v => !v)} disabled={skills.length === 0}
+                    className={cn("flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[12px] font-medium transition-all disabled:opacity-20",
+                      skillsOpen ? "text-violet-300 bg-violet-500/10 ring-1 ring-violet-500/20" : "text-zinc-600 hover:text-zinc-300 hover:bg-white/[0.05]"
+                    )}>
+                    <Sparkles size={12} /> Skills
                   </button>
-                  {modelOpen && (
-                    <div className="absolute bottom-full mb-1.5 right-0 bg-[#1a1a1e] ring-1 ring-white/[0.09] rounded-xl overflow-hidden z-20 min-w-[155px] shadow-xl">
-                      {MODELS.map(m => (
-                        <button key={m.id} onClick={() => { setModel(m.id); setModelOpen(false) }}
-                          className={cn("w-full flex items-center justify-between px-4 py-2.5 hover:bg-white/[0.04] transition-colors",
-                            model === m.id ? "text-white" : "text-zinc-400")}>
-                          <span className="text-[12px] font-medium">{m.label}</span>
-                          <span className="text-[10px] text-zinc-600">{m.desc}</span>
-                        </button>
-                      ))}
-                    </div>
-                  )}
+
+                  <input ref={fileRef} type="file" accept="image/*,video/*" className="hidden"
+                    onChange={e => { const f = e.target.files?.[0]; if (f) handleFileUpload(f); e.target.value = "" }} />
+                  <button onClick={() => fileRef.current?.click()} disabled={loading || uploading}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[12px] font-medium text-zinc-600 hover:text-zinc-300 hover:bg-white/[0.05] transition-all disabled:opacity-40">
+                    {uploading ? <Upload size={12} className="animate-bounce" /> : <Paperclip size={12} />}
+                    <span>{uploading ? "Enviando…" : "Mídia"}</span>
+                  </button>
                 </div>
 
-                <button onClick={() => send(input)} disabled={loading || !input.trim()}
-                  className={cn("w-7 h-7 flex items-center justify-center rounded-lg transition-all",
-                    input.trim() && !loading ? "bg-white text-zinc-900 hover:bg-zinc-100 shadow-sm" : "bg-white/[0.05] text-zinc-700 cursor-default"
-                  )}>
-                  <ArrowUp size={13} />
-                </button>
+                <div className="flex items-center gap-2">
+                  {/* Model picker */}
+                  <div className="relative">
+                    <button onClick={() => setModelOpen(v => !v)}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[12px] font-medium text-zinc-600 hover:text-zinc-300 hover:bg-white/[0.05] transition-all">
+                      {MODELS.find(m => m.id === model)?.label ?? "Sonnet 4.6"}
+                      <ChevronDown size={10} className={cn("transition-transform", modelOpen && "rotate-180")} />
+                    </button>
+                    {modelOpen && (
+                      <div className="absolute bottom-full mb-2 right-0 bg-zinc-900 ring-1 ring-white/[0.1] rounded-2xl overflow-hidden z-20 min-w-[160px] shadow-2xl">
+                        {MODELS.map(m => (
+                          <button key={m.id} onClick={() => { setModel(m.id); setModelOpen(false) }}
+                            className={cn("w-full flex items-center justify-between px-4 py-3 hover:bg-white/[0.05] transition-colors",
+                              model === m.id ? "text-white" : "text-zinc-400")}>
+                            <span className="text-[13px] font-medium">{m.label}</span>
+                            <span className="text-[11px] text-zinc-600">{m.desc}</span>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Send button */}
+                  <button onClick={() => send(input)} disabled={loading || !input.trim()}
+                    className={cn(
+                      "w-8 h-8 flex items-center justify-center rounded-xl transition-all",
+                      input.trim() && !loading
+                        ? "bg-white text-zinc-900 hover:bg-zinc-100 shadow-sm"
+                        : "bg-white/[0.06] text-zinc-700 cursor-default"
+                    )}>
+                    <ArrowUp size={15} />
+                  </button>
+                </div>
               </div>
             </div>
+
+            <p className="text-center text-[11px] text-zinc-700 mt-2.5">
+              GTPRO pode cometer erros — verifique decisões importantes.
+            </p>
           </div>
-          <p className="text-center text-[10px] text-zinc-700 mt-2">GTPRO pode cometer erros — verifique decisões importantes.</p>
         </div>
       </div>
     </div>
