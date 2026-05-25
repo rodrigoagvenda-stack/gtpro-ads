@@ -413,4 +413,8 @@ export async function runAgent(
       messages.push({ role: "user", content: results })
     }
   }
+
+  const fallback = "Limite de iterações atingido."
+  onChunk?.({ type: "done", message: fallback, tools_used: toolsUsed, actions_taken: actionsTaken })
+  return { message: fallback, actions_taken: actionsTaken, tools_used: toolsUsed }
 }
