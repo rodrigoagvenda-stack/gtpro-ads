@@ -195,6 +195,20 @@ export async function getCampaigns(tenantId: string, datePreset = "last_7d", con
   })
 }
 
+// Normalize legacy objectives (pre-v17) to Meta API v22 OUTCOME_* format
+const LEGACY_OBJECTIVE_MAP: Record<string, string> = {
+  LEAD_GENERATION:  "OUTCOME_LEADS",
+  LINK_CLICKS:      "OUTCOME_TRAFFIC",
+  CONVERSIONS:      "OUTCOME_SALES",
+  PAGE_LIKES:       "OUTCOME_ENGAGEMENT",
+  POST_ENGAGEMENT:  "OUTCOME_ENGAGEMENT",
+  REACH:            "OUTCOME_AWARENESS",
+  BRAND_AWARENESS:  "OUTCOME_AWARENESS",
+  VIDEO_VIEWS:      "OUTCOME_AWARENESS",
+  APP_INSTALLS:     "OUTCOME_APP_PROMOTION",
+  MESSAGES:         "OUTCOME_ENGAGEMENT",
+}
+
 export async function createCampaign(tenantId: string, params: Record<string, any>) {
   const { token, adAccountId } = await getTokenAndAccount(tenantId)
 
@@ -203,12 +217,25 @@ export async function createCampaign(tenantId: string, params: Record<string, an
     ? params.special_ad_categories
     : ["NONE"]
 
+  // Normalize legacy objective names to v22 OUTCOME_* format
+  const rawObjective = (params.objective ?? "").toUpperCase()
+  const objective = LEGACY_OBJECTIVE_MAP[rawObjective] ?? rawObjective
+
+  const hasCampaignBudget = !!(params.daily_budget || params.lifetime_budget)
+
   const body: Record<string, unknown> = {
     name:                  params.name,
-    objective:             params.objective,
+    objective,
     status:                params.status ?? "PAUSED",
     special_ad_categories: cats,
   }
+
+  // Meta API v22: required when campaign has NO budget (ABO — budget lives on ad sets)
+  // true = ad sets can share 20% of budget across each other; false = each ad set has fixed budget
+  if (!hasCampaignBudget) {
+    body.is_adset_budget_sharing_enabled = params.is_adset_budget_sharing_enabled ?? false
+  }
+
   if (params.daily_budget)    body.daily_budget    = Math.round(params.daily_budget * 100)
   if (params.lifetime_budget) body.lifetime_budget = Math.round(params.lifetime_budget * 100)
   if (params.start_time) body.start_time = params.start_time
