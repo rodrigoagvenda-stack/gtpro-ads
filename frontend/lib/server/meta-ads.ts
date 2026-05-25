@@ -103,7 +103,7 @@ export async function getAccountInfo(tenantId: string) {
 
 export async function getCampaigns(tenantId: string, datePreset = "last_7d", connectionId?: string) {
   const { token, adAccountId } = await getTokenAndAccount(tenantId, connectionId)
-  const insightFields = "spend,impressions,clicks,reach,ctr,cpc,cpm,actions,action_values,purchase_roas"
+  const insightFields = "spend,impressions,clicks,reach,ctr,cpc,cpm,frequency,actions,action_values,purchase_roas"
   const fields = `id,name,status,objective,daily_budget,lifetime_budget,start_time,stop_time,budget_remaining,buying_type,insights.date_preset(${datePreset}){${insightFields}}`
 
   // Paginação completa — contas com mais de 100 campanhas
@@ -145,6 +145,10 @@ export async function getCampaigns(tenantId: string, datePreset = "last_7d", con
     // Engajamento
     const engagements = pick("post_engagement", "page_engagement")
 
+    // Seguidores / curtidas de página
+    const follows    = pick("follow", "onsite_conversion.post_follow")
+    const page_likes = pick("like", "page_like")
+
     // Compras: purchase_roas vem como array [{action_type, value}]
     const purchaseRoasEntry = (ins.purchase_roas ?? []).find(
       (x: any) => x.action_type === "omni_purchase" || x.action_type === "offsite_conversion.fb_pixel_purchase"
@@ -162,6 +166,8 @@ export async function getCampaigns(tenantId: string, datePreset = "last_7d", con
 
     return {
       ...c,
+      daily_budget:    c.daily_budget    ? Number(c.daily_budget)    / 100 : undefined,
+      lifetime_budget: c.lifetime_budget ? Number(c.lifetime_budget) / 100 : undefined,
       metrics: {
         spend,
         impressions: Number(ins.impressions ?? 0),
@@ -170,12 +176,14 @@ export async function getCampaigns(tenantId: string, datePreset = "last_7d", con
         ctr:         Number(ins.ctr ?? 0),
         cpc:         Number(ins.cpc ?? 0),
         cpm:         Number(ins.cpm ?? 0),
+        frequency:   ins.frequency ? Number(ins.frequency) : undefined,
         leads,
         cpl,
-        conversations,
+        messaging_conversations: conversations,
         cpc_conv,
-        engagements,
-        cpe,
+        post_engagement: engagements,
+        page_likes,
+        follows,
         roas: roas ?? roasFallback,
       },
     }

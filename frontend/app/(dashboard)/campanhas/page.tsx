@@ -26,7 +26,7 @@ const PRESETS = [
   { value: "custom",    label: "Personalizado" },
 ]
 
-const PAGE_SIZE = 4
+const PAGE_SIZE = 10
 
 // ─── Objective tabs ───────────────────────────────────────────────────────────
 
@@ -45,10 +45,10 @@ const KPI_OBJECTIVES: { id: ObjectiveId; label: string }[] = [
 // Default metrics per objective
 const DEFAULT_METRICS: Record<ObjectiveId, MetricKey[]> = {
   geral:       ["spend", "roas", "cpl", "ctr"],
-  ecommerce:   ["spend", "roas", "conversions", "ctr"],
+  ecommerce:   ["spend", "roas", "website_purchases", "ctr"],
   leads:       ["spend", "leads", "cpl", "ctr"],
-  whatsapp:    ["spend", "cpc_conv", "clicks", "ctr"],
-  engajamento: ["spend", "impressions", "frequency", "ctr"],
+  whatsapp:    ["spend", "messaging_conversations", "cpc_conv", "ctr"],
+  engajamento: ["spend", "post_engagement", "reach", "cpm"],
   trafego:     ["spend", "clicks", "cpc", "ctr"],
   seguidores:  ["spend", "follows", "reach", "impressions"],
 }
@@ -141,9 +141,9 @@ function MetricsPicker({ objective, selected, onChange }: {
 
 const OBJECTIVE_META_MAP: Record<ObjectiveId, string[]> = {
   geral:       [],
-  ecommerce:   ["OUTCOME_SALES"],
-  leads:       ["OUTCOME_LEADS"],
-  whatsapp:    ["MESSAGES", "OUTCOME_TRAFFIC"],
+  ecommerce:   ["OUTCOME_SALES", "PRODUCT_CATALOG_SALES", "CONVERSIONS"],
+  leads:       ["OUTCOME_LEADS", "LEAD_GENERATION"],
+  whatsapp:    ["MESSAGES"],
   engajamento: ["OUTCOME_ENGAGEMENT", "POST_ENGAGEMENT", "PAGE_ENGAGEMENT", "VIDEO_VIEWS"],
   trafego:     ["OUTCOME_TRAFFIC", "LINK_CLICKS", "WEBSITE_CONVERSIONS"],
   seguidores:  ["OUTCOME_AWARENESS", "PAGE_LIKES"],
@@ -386,11 +386,24 @@ export default function CampanhasPage() {
     setCampaigns(prev => prev.map(c => c.id === id ? { ...c, status: next as Campaign["status"] } : c))
   }
 
-  const totalSpend     = campaigns.reduce((a, c) => a + (c.metrics?.spend || 0), 0)
-  const funnelData     = objectiveInsights(campaigns, objective, insights)
-  const funnelSteps    = buildFunnel(objective, funnelData)
-  const maxVal         = funnelSteps[0]?.value || 1
+  const totalSpend  = campaigns.reduce((a, c) => a + (c.metrics?.spend || 0), 0)
+  const funnelData  = objectiveInsights(campaigns, objective, insights)
+  const funnelSteps = buildFunnel(objective, funnelData)
+  const maxVal      = funnelSteps[0]?.value || 1
   const metricDefs  = getMetricDefs(selectedMetrics)
+
+  const filteredCampaigns = objective === "geral"
+    ? campaigns
+    : campaigns.filter(c => {
+        const wanted = OBJECTIVE_META_MAP[objective]
+        return wanted.some(w => (c.objective ?? "").toUpperCase().includes(w))
+      })
+
+  const countByObjective = (id: ObjectiveId) => {
+    if (id === "geral") return campaigns.length
+    const wanted = OBJECTIVE_META_MAP[id]
+    return campaigns.filter(c => wanted.some(w => (c.objective ?? "").toUpperCase().includes(w))).length
+  }
 
   return (
     <div className="space-y-7">
@@ -426,14 +439,24 @@ export default function CampanhasPage() {
 
       {/* Objective tabs */}
       <div className="flex items-center gap-1.5 flex-wrap">
-        {KPI_OBJECTIVES.map(o => (
-          <button key={o.id} onClick={() => setObjective(o.id)}
-            className={cn("px-3 py-1 rounded-full text-[11px] font-medium transition-colors",
-              objective === o.id ? "bg-violet-600 text-white" : "bg-white/[0.04] text-zinc-500 hover:text-zinc-300 ring-1 ring-white/[0.06]"
-            )}>
-            {o.label}
-          </button>
-        ))}
+        {KPI_OBJECTIVES.map(o => {
+          const cnt = countByObjective(o.id)
+          return (
+            <button key={o.id} onClick={() => { setObjective(o.id); setPage(1) }}
+              className={cn("flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-medium transition-colors",
+                objective === o.id ? "bg-violet-600 text-white" : "bg-white/[0.04] text-zinc-500 hover:text-zinc-300 ring-1 ring-white/[0.06]"
+              )}>
+              {o.label}
+              {cnt > 0 && (
+                <span className={cn("text-[10px] px-1 rounded-full",
+                  objective === o.id ? "bg-white/20 text-white" : "bg-white/[0.06] text-zinc-600"
+                )}>
+                  {cnt}
+                </span>
+              )}
+            </button>
+          )
+        })}
       </div>
 
       {/* KPIs */}
@@ -471,13 +494,21 @@ export default function CampanhasPage() {
 
       {/* Table */}
       <div className="bg-white/[0.02] ring-1 ring-white/[0.06] rounded-xl overflow-hidden">
-        <div className="px-5 py-3.5 border-b border-white/[0.05] flex items-center justify-between">
-          <p className="text-[12px] font-medium text-zinc-400">
-            {campaigns.length} campanha{campaigns.length !== 1 ? "s" : ""}
+        {/* Table header */}
+        <div className="px-5 py-3 border-b border-white/[0.05] flex items-center justify-between">
+          <p className="text-[12px] font-medium text-zinc-500">
+            {filteredCampaigns.length > 0
+              ? <>{filteredCampaigns.length} campanha{filteredCampaigns.length !== 1 ? "s" : ""}{objective !== "geral" && <span className="text-zinc-700"> · {KPI_OBJECTIVES.find(o => o.id === objective)?.label}</span>}</>
+              : <span className="text-zinc-700">Nenhuma campanha</span>
+            }
           </p>
           <div className="flex items-center gap-4">
-            <div className="hidden md:flex gap-5 text-[11px] text-zinc-600 uppercase tracking-wider">
-              {metricDefs.map(d => <span key={d.key}>{d.label}</span>)}
+            <div className="hidden md:flex gap-5 items-center">
+              {metricDefs.map(d => (
+                <span key={d.key} className="text-[10px] text-zinc-600 uppercase tracking-wider min-w-[72px] text-right">
+                  {d.label}
+                </span>
+              ))}
             </div>
             <MetricsPicker objective={objective} selected={selectedMetrics} onChange={setSelectedMetrics} />
           </div>
@@ -529,11 +560,16 @@ export default function CampanhasPage() {
               </>
             )}
           </div>
-        ) : campaigns.length === 0 ? (
-          <div className="px-5 py-14 text-center text-[13px] text-zinc-600">Nenhuma campanha encontrada.</div>
+        ) : filteredCampaigns.length === 0 ? (
+          <div className="px-5 py-14 text-center text-[13px] text-zinc-600">
+            {campaigns.length > 0
+              ? `Nenhuma campanha com objetivo ${KPI_OBJECTIVES.find(o => o.id === objective)?.label ?? objective}.`
+              : "Nenhuma campanha encontrada."
+            }
+          </div>
         ) : (() => {
-          const pageCount = Math.ceil(campaigns.length / PAGE_SIZE)
-          const paginated = campaigns.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
+          const pageCount = Math.ceil(filteredCampaigns.length / PAGE_SIZE)
+          const paginated = filteredCampaigns.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
           return (
             <>
               <div className="divide-y divide-white/[0.04]">
@@ -543,18 +579,19 @@ export default function CampanhasPage() {
               </div>
               {pageCount > 1 && (
                 <div className="flex items-center justify-between px-5 py-3 border-t border-white/[0.05]">
-                  <p className="text-[12px] text-zinc-600">{campaigns.length} campanhas · página {page} de {pageCount}</p>
+                  <p className="text-[12px] text-zinc-600">{filteredCampaigns.length} campanhas · página {page} de {pageCount}</p>
                   <div className="flex items-center gap-1">
                     <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1}
                       className="px-3 py-1.5 text-[12px] text-zinc-500 hover:text-zinc-200 disabled:opacity-30 hover:bg-white/[0.04] rounded-lg transition-colors">
                       ← Anterior
                     </button>
-                    {Array.from({ length: pageCount }, (_, i) => i + 1).map(n => (
+                    {Array.from({ length: Math.min(pageCount, 7) }, (_, i) => i + 1).map(n => (
                       <button key={n} onClick={() => setPage(n)}
                         className={cn("w-7 h-7 text-[12px] rounded-lg transition-colors", n === page ? "bg-white/[0.08] text-white" : "text-zinc-600 hover:text-zinc-300 hover:bg-white/[0.04]")}>
                         {n}
                       </button>
                     ))}
+                    {pageCount > 7 && <span className="text-[12px] text-zinc-700 px-1">…{pageCount}</span>}
                     <button onClick={() => setPage(p => Math.min(pageCount, p + 1))} disabled={page === pageCount}
                       className="px-3 py-1.5 text-[12px] text-zinc-500 hover:text-zinc-200 disabled:opacity-30 hover:bg-white/[0.04] rounded-lg transition-colors">
                       Próxima →
