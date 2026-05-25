@@ -50,7 +50,7 @@ const DEFAULT_METRICS: Record<ObjectiveId, MetricKey[]> = {
   whatsapp:    ["spend", "cpc_conv", "clicks", "ctr"],
   engajamento: ["spend", "impressions", "frequency", "ctr"],
   trafego:     ["spend", "clicks", "cpc", "ctr"],
-  seguidores:  ["spend", "impressions", "frequency", "ctr"],
+  seguidores:  ["spend", "follows", "reach", "impressions"],
 }
 
 function getMetricDefs(keys: MetricKey[]): MetricDef[] {
@@ -167,18 +167,18 @@ function objectiveInsights(campaigns: Campaign[], obj: ObjectiveId, fallback: Re
     ? { impressions: subImpressions, reach: sumF("reach"), clicks: sumF("clicks"), spend: sumF("spend") }
     : { impressions: Number(fallback.impressions ?? 0), reach: Number(fallback.reach ?? 0), clicks: Number(fallback.clicks ?? 0), spend: Number(fallback.spend ?? 0) }
 
-  const leads = sumF("leads")
-  const convs = sumF("conversations") || sumF("messaging_conversations")
-  const engs  = sumF("engagements")
-  const likes = sumF("page_likes")
+  const leads   = sumF("leads")
+  const convs   = sumF("conversations") || sumF("messaging_conversations")
+  const engs    = sumF("engagements")
+  const follows = sumF("follows")
 
   return {
     ...base,
     actions: [
-      ...fakeAct(leads, "lead"),
-      ...fakeAct(convs, "onsite_conversion.messaging_conversation_started_7d"),
-      ...fakeAct(engs,  "post_engagement"),
-      ...fakeAct(likes, "like"),
+      ...fakeAct(leads,   "lead"),
+      ...fakeAct(convs,   "onsite_conversion.messaging_conversation_started_7d"),
+      ...fakeAct(engs,    "post_engagement"),
+      ...fakeAct(follows, "follow"),
     ],
   }
 }
@@ -230,11 +230,9 @@ function buildFunnel(obj: ObjectiveId, insights: Record<string, any>) {
       break
     }
     case "seguidores": {
-      const likes    = act("like")
-      const follows  = act("follow") || act("onsite_conversion.post_follow")
+      const follows = act("follow") || act("onsite_conversion.post_follow")
       steps.push({ label: "Impressões", value: impressions })
       if (reach > 0)   steps.push({ label: "Alcance",          value: reach })
-      if (likes > 0)   steps.push({ label: "Curtidas/Pág.",    value: likes })
       if (follows > 0) steps.push({ label: "Novos Seguidores", value: follows })
       break
     }
@@ -321,12 +319,12 @@ function KpiCards({ obj, insights, totalSpend }: { obj: ObjectiveId; insights: R
   }
 
   if (obj === "seguidores") {
-    const likes = act("like")
-    const cpf   = likes > 0 ? spend / likes : 0
+    const follows = act("follow") || act("onsite_conversion.post_follow")
+    const cpf     = follows > 0 ? spend / follows : 0
     return <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
       <KpiCard label="Gasto total" value={formatCurrency(spend)} highlight />
       <KpiCard label="Alcance" value={reach > 0 ? `${(reach / 1000).toFixed(1)}k` : "—"} />
-      <KpiCard label="Curtidas/Seg." value={likes > 0 ? likes.toLocaleString("pt-BR") : "—"} />
+      <KpiCard label="Novos Seguidores" value={follows > 0 ? follows.toLocaleString("pt-BR") : "—"} />
       <KpiCard label="Custo/seguidor" value={cpf > 0 ? formatCurrency(cpf) : "—"} />
     </div>
   }
