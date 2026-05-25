@@ -360,11 +360,11 @@ export async function createAdSet(tenantId: string, params: Record<string, any>)
     )
   }
 
-  // Enforce minimum radius for city targeting — Meta rejects < 15km for most Brazilian cities
+  // Enforce minimum radius for city targeting — Meta rejects < 25km for non-metro Brazilian cities
   if (targeting.geo_locations?.cities?.length) {
     targeting.geo_locations.cities = targeting.geo_locations.cities.map((city: any) => ({
       ...city,
-      radius:        Math.max(Number(city.radius ?? 25), 15),
+      radius:        Math.max(Number(city.radius ?? 40), 25),
       distance_unit: city.distance_unit ?? "kilometer",
     }))
   }

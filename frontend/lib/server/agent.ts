@@ -78,7 +78,7 @@ GEOLOCALIZAÇÃO — REGRA CRÍTICA
   geo_locations: { cities: [{ key: "KEY_RETORNADO", radius: 25, distance_unit: "kilometer" }] }
 - Para Brasil inteiro: geo_locations: { countries: ["BR"] }
 - NUNCA chute um key de cidade. Sempre busque primeiro.
-- Raio mínimo para cidades brasileiras: 15km. Padrão recomendado: 25km.
+- Raio mínimo para cidades brasileiras: 25km (enforçado no código). Padrão recomendado: 40km para cidades fora de São Paulo e Rio.
 
 ────────────────────────────────────────
 INTERESSES — REGRA CRÍTICA
@@ -131,6 +131,13 @@ OUTCOME_SALES (Vendas / E-commerce):
 - promoted_object: { pixel_id: "<PIXEL_ID>", custom_event_type: "PURCHASE" }
 - Verificar pixel ativo com get_pixels antes de criar
 - Budget mínimo: R$50/dia (fase de aprendizado da Meta)
+
+────────────────────────────────────────
+ORÇAMENTO — REGRA ABSOLUTA
+────────────────────────────────────────
+- daily_budget e lifetime_budget são SEMPRE em reais (BRL). Ex: R$50/dia → daily_budget: 50
+- NUNCA converta para centavos — o código faz isso automaticamente. Enviar 5000 quando o usuário disse 50 gasta 100× mais.
+- Se o usuário disse "50", passe daily_budget: 50. Ponto final.
 
 ────────────────────────────────────────
 BID AMOUNT — REGRA ABSOLUTA
