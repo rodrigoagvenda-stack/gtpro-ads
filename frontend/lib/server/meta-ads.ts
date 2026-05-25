@@ -252,6 +252,27 @@ export async function createCampaign(tenantId: string, params: Record<string, an
   if (params.lifetime_budget) body.lifetime_budget = Math.round(params.lifetime_budget * 100)
   if (params.start_time) body.start_time = params.start_time
   if (params.stop_time)  body.stop_time  = params.stop_time
+
+  // bid_strategy: LOWEST_COST_WITH_BID_CAP e COST_CAP exigem bid_amount — sem ele a criação de conjuntos falha (erro 100/2490487).
+  // Estratégias sem bid_amount obrigatório: LOWEST_COST_WITHOUT_CAP (padrão Meta quando omitido) e TARGET_COST.
+  const BID_STRATEGIES_REQUIRING_AMOUNT = ["LOWEST_COST_WITH_BID_CAP", "COST_CAP"]
+  if (params.bid_strategy) {
+    const strat = (params.bid_strategy as string).toUpperCase()
+    if (BID_STRATEGIES_REQUIRING_AMOUNT.includes(strat)) {
+      if (!params.bid_amount || params.bid_amount <= 0) {
+        throw new Error(
+          `bid_strategy "${strat}" exige bid_amount (valor máximo de lance em R$). ` +
+          "Informe bid_amount ou use lance automático omitindo bid_strategy."
+        )
+      }
+      body.bid_strategy = strat
+    } else {
+      body.bid_strategy = strat
+    }
+  }
+  // bid_amount no nível de campanha (CBO com bid cap)
+  if (params.bid_amount && params.bid_amount > 0) body.bid_amount = Math.round(params.bid_amount * 100)
+
   return graphPost(`/act_${adAccountId}/campaigns`, token, body)
 }
 
@@ -439,6 +460,21 @@ export async function createAdSet(tenantId: string, params: Record<string, any>)
   if (params.lifetime_budget) body.lifetime_budget = Math.round(params.lifetime_budget * 100)
   if (params.start_time) body.start_time = params.start_time
   if (params.end_time)   body.end_time   = params.end_time
+
+  // bid_strategy no conjunto: LOWEST_COST_WITH_BID_CAP e COST_CAP exigem bid_amount (erro 100/2490487 se omitido)
+  const BID_STRATEGIES_REQUIRING_AMOUNT = ["LOWEST_COST_WITH_BID_CAP", "COST_CAP"]
+  if (params.bid_strategy) {
+    const strat = (params.bid_strategy as string).toUpperCase()
+    if (BID_STRATEGIES_REQUIRING_AMOUNT.includes(strat)) {
+      if (!params.bid_amount || params.bid_amount <= 0) {
+        throw new Error(
+          `bid_strategy "${strat}" exige bid_amount (valor máximo de lance em R$). ` +
+          "Informe bid_amount ou omita bid_strategy para usar lance automático."
+        )
+      }
+    }
+    body.bid_strategy = strat
+  }
   // bid_amount: only set if explicitly provided — Meta uses automatic bidding by default
   if (params.bid_amount != null && params.bid_amount > 0) body.bid_amount = Math.round(params.bid_amount * 100)
 

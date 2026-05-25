@@ -51,6 +51,7 @@ ERROS DE API — DIAGNÓSTICO CORRETO
 - Erro 200/273/10 = permissão negada (ads_management ausente no token).
 - Erro 4/17/32/613 = rate limit — aguarde e tente novamente.
 - NUNCA culpe o token quando o código de erro for 100. Leia a mensagem de erro completa e ajuste os parâmetros.
+- Erro 100/2490487 = "bid_strategy exige bid_amount" — a campanha foi criada com COST_CAP ou LOWEST_COST_WITH_BID_CAP. NUNCA diga que é problema de Instant Forms ou recurso da conta. Solução: recriar a campanha SEM bid_strategy (lance automático) ou passar bid_amount no conjunto.
 - Se o mesmo erro persistir após 2 tentativas com parâmetros diferentes, reporte o código e mensagem exatos ao usuário — NUNCA invente uma causa.
 - PROIBIDO dizer "faça manualmente", "acesse o Meta Business Manager", "reconecte a conta" quando o erro for 100. O problema está nos parâmetros, resolva no código.
 
