@@ -192,11 +192,17 @@ export async function getCampaigns(tenantId: string, datePreset = "last_7d", con
 
 export async function createCampaign(tenantId: string, params: Record<string, any>) {
   const { token, adAccountId } = await getTokenAndAccount(tenantId)
+
+  // Meta API v22: special_ad_categories must be a non-empty array — ["NONE"] when no special category
+  const cats: string[] = params.special_ad_categories?.length
+    ? params.special_ad_categories
+    : ["NONE"]
+
   const body: Record<string, unknown> = {
-    name: params.name,
-    objective: params.objective,
-    status: params.status ?? "PAUSED",
-    special_ad_categories: params.special_ad_categories ?? [],
+    name:                  params.name,
+    objective:             params.objective,
+    status:                params.status ?? "PAUSED",
+    special_ad_categories: cats,
   }
   if (params.daily_budget)    body.daily_budget    = Math.round(params.daily_budget * 100)
   if (params.lifetime_budget) body.lifetime_budget = Math.round(params.lifetime_budget * 100)
@@ -260,32 +266,121 @@ export async function getAdSetById(tenantId: string, adSetId: string) {
   return graphGet(`/${adSetId}`, { access_token: token, fields })
 }
 
+// Maps Meta campaign objectives (v22) → sensible optimization_goal default
+const OBJECTIVE_TO_GOAL: Record<string, string> = {
+  OUTCOME_LEADS:           "LEAD_GENERATION",
+  OUTCOME_TRAFFIC:         "LINK_CLICKS",
+  OUTCOME_SALES:           "OFFSITE_CONVERSIONS",
+  OUTCOME_ENGAGEMENT:      "POST_ENGAGEMENT",
+  OUTCOME_AWARENESS:       "REACH",
+  OUTCOME_APP_PROMOTION:   "APP_INSTALLS",
+  // Legacy objectives (pre-v17)
+  LEAD_GENERATION:         "LEAD_GENERATION",
+  LINK_CLICKS:             "LINK_CLICKS",
+  CONVERSIONS:             "OFFSITE_CONVERSIONS",
+  PAGE_LIKES:              "PAGE_LIKES",
+  POST_ENGAGEMENT:         "POST_ENGAGEMENT",
+  REACH:                   "REACH",
+  BRAND_AWARENESS:         "REACH",
+  VIDEO_VIEWS:             "VIDEO_VIEWS",
+  APP_INSTALLS:            "APP_INSTALLS",
+  MESSAGES:                "CONVERSATIONS",
+}
+
+// billing_event that's valid for each optimization_goal (Meta API v22)
+const GOAL_TO_BILLING: Record<string, string> = {
+  LINK_CLICKS:          "LINK_CLICKS",
+  LANDING_PAGE_VIEWS:   "IMPRESSIONS",
+  LEAD_GENERATION:      "IMPRESSIONS",
+  QUALITY_LEAD:         "IMPRESSIONS",
+  OFFSITE_CONVERSIONS:  "IMPRESSIONS",
+  POST_ENGAGEMENT:      "IMPRESSIONS",
+  PAGE_LIKES:           "IMPRESSIONS",
+  REACH:                "IMPRESSIONS",
+  IMPRESSIONS:          "IMPRESSIONS",
+  VIDEO_VIEWS:          "IMPRESSIONS",
+  THRUPLAY:             "THRUPLAY",
+  APP_INSTALLS:         "IMPRESSIONS",
+  CONVERSATIONS:        "IMPRESSIONS",
+}
+
 export async function createAdSet(tenantId: string, params: Record<string, any>) {
   const { token, adAccountId } = await getTokenAndAccount(tenantId)
+
+  // Validate required fields upfront with clear messages
+  if (!params.campaign_id) throw new Error("campaign_id é obrigatório para criar um conjunto de anúncios.")
+  if (!params.name)        throw new Error("name é obrigatório para criar um conjunto de anúncios.")
+
+  // Infer optimization_goal from campaign_objective if not explicitly provided
+  const campaignObj = (params.campaign_objective ?? "").toUpperCase()
+  const inferredGoal = OBJECTIVE_TO_GOAL[campaignObj] ?? null
+  const optimizationGoal = (params.optimization_goal ?? inferredGoal ?? "LINK_CLICKS").toUpperCase()
+
+  // billing_event must match optimization_goal — use the correct mapping
+  const billingEvent = (params.billing_event ?? GOAL_TO_BILLING[optimizationGoal] ?? "IMPRESSIONS").toUpperCase()
+
+  // targeting is required — validate before the API call to surface clear errors
+  const targeting = params.targeting
+  if (!targeting || typeof targeting !== "object" || Object.keys(targeting).length === 0) {
+    throw new Error(
+      "targeting é obrigatório para criar um conjunto de anúncios. " +
+      "Inclua ao menos geo_locations (ex: { countries: ['BR'] }) ou custom_audiences."
+    )
+  }
+
   const body: Record<string, unknown> = {
     campaign_id:       params.campaign_id,
     name:              params.name,
-    optimization_goal: params.optimization_goal,
-    billing_event:     params.billing_event ?? "IMPRESSIONS",
-    targeting:         params.targeting,
+    optimization_goal: optimizationGoal,
+    billing_event:     billingEvent,
+    targeting,
     status:            params.status ?? "PAUSED",
   }
 
-  // promoted_object — required per objective
+  // promoted_object — required for objectives that link to a page, pixel, or app
   if (params.promoted_object) {
     body.promoted_object = params.promoted_object
-  } else if (params.page_id) {
-    // Auto-build promoted_object from page_id when objective requires it
-    const goal = (params.optimization_goal ?? "").toUpperCase()
-    const needsPage = ["LEAD_GENERATION", "CONVERSATIONS", "POST_ENGAGEMENT", "PAGE_LIKES", "OFFSITE_CONVERSIONS"].includes(goal)
-    if (needsPage) body.promoted_object = { page_id: params.page_id }
+  } else {
+    const needsPromo = [
+      "LEAD_GENERATION", "QUALITY_LEAD",
+      "CONVERSATIONS",
+      "POST_ENGAGEMENT",
+      "PAGE_LIKES",
+      "OFFSITE_CONVERSIONS",
+      "VIDEO_VIEWS",
+    ].includes(optimizationGoal)
+
+    if (needsPromo) {
+      if (optimizationGoal === "OFFSITE_CONVERSIONS") {
+        // pixel_id required for conversion campaigns
+        if (!params.pixel_id) throw new Error(
+          "pixel_id é obrigatório para campanhas de conversão (OFFSITE_CONVERSIONS). " +
+          "Solicite ao usuário o ID do Pixel Meta conectado à conta."
+        )
+        const promoObj: Record<string, unknown> = { pixel_id: params.pixel_id }
+        if (params.custom_event_type) promoObj.custom_event_type = params.custom_event_type
+        if (params.page_id)           promoObj.page_id           = params.page_id
+        body.promoted_object = promoObj
+      } else {
+        // page_id required for all other objectives
+        if (!params.page_id) throw new Error(
+          `page_id é obrigatório para o objetivo ${optimizationGoal}. ` +
+          "Solicite ao usuário o ID da Página do Facebook."
+        )
+        const promoObj: Record<string, unknown> = { page_id: params.page_id }
+        if (optimizationGoal === "LEAD_GENERATION" && params.pixel_id) {
+          promoObj.pixel_id = params.pixel_id
+        }
+        body.promoted_object = promoObj
+      }
+    }
   }
 
   // destination_type — required for MESSAGES / WhatsApp campaigns
   if (params.destination_type) {
     body.destination_type = params.destination_type
-  } else if ((params.optimization_goal ?? "").toUpperCase() === "CONVERSATIONS") {
-    body.destination_type = "WHATSAPP"
+  } else if (optimizationGoal === "CONVERSATIONS") {
+    body.destination_type = params.destination_type ?? "MESSENGER"
   }
 
   if (params.daily_budget)    body.daily_budget    = Math.round(params.daily_budget * 100)
@@ -383,29 +478,59 @@ const DEFAULT_UTM_TAGS = "utm_source={{site_source_name}}&utm_medium=paid_social
 
 export async function createAd(tenantId: string, params: Record<string, any>) {
   const { token, adAccountId } = await getTokenAndAccount(tenantId)
+
+  if (!params.adset_id) throw new Error("adset_id é obrigatório para criar um anúncio.")
+  if (!params.name)     throw new Error("name é obrigatório para criar um anúncio.")
+
   const creative: Record<string, any> = {}
+  const isLeadGen = (params.optimization_goal ?? "").toUpperCase() === "LEAD_GENERATION"
 
   if (params.creative_id) {
+    // Reuse existing creative — just reference it
     creative.creative_id = params.creative_id
+  } else if (isLeadGen && params.lead_gen_form_id) {
+    // Lead generation: creative uses lead_gen_form_id, not a destination URL
+    if (!params.page_id) throw new Error("page_id é obrigatório para anúncios de geração de leads. Solicite ao usuário o ID da Página do Facebook.")
+    const spec: Record<string, any> = { page_id: params.page_id }
+    if (params.instagram_actor_id) spec.instagram_actor_id = params.instagram_actor_id
+    const linkData: Record<string, any> = {
+      message:          params.body ?? params.message ?? "",
+      name:             params.headline ?? "",
+      call_to_action:   { type: "SIGN_UP", value: { lead_gen_form_id: params.lead_gen_form_id } },
+    }
+    if (params.image_hash)  linkData.image_hash  = params.image_hash
+    if (params.description) linkData.description = params.description
+    spec.link_data = linkData
+    creative.name              = params.creative_name ?? params.name
+    creative.object_story_spec = spec
   } else {
     if (!params.page_id) throw new Error("page_id é obrigatório para criar um anúncio. Solicite ao usuário o ID da Página do Facebook.")
 
     const spec: Record<string, any> = { page_id: params.page_id }
     if (params.instagram_actor_id) spec.instagram_actor_id = params.instagram_actor_id
 
-    // video_id takes priority — can't use both video and image in same creative
     if (params.video_id) {
+      // Video creative — can't mix with image
+      const ctaValue: Record<string, any> = {}
+      const destUrl = params.link_url ?? params.website_url
+      if (destUrl) ctaValue.link = destUrl
       spec.video_data = {
         video_id:       params.video_id,
-        title:          params.headline,
-        message:        params.body ?? params.message,
-        call_to_action: { type: params.cta ?? "LEARN_MORE", value: { link: params.link_url ?? params.website_url } },
+        title:          params.headline ?? "",
+        message:        params.body ?? params.message ?? "",
+        call_to_action: { type: params.cta ?? "LEARN_MORE", value: ctaValue },
       }
     } else {
+      // Image / link creative
+      const destUrl = params.link_url ?? params.website_url
+      if (!destUrl) throw new Error(
+        "link_url ou website_url é obrigatório para criar um anúncio de imagem/link. " +
+        "Solicite ao usuário a URL de destino da campanha."
+      )
       const linkData: Record<string, any> = {
-        message:        params.body ?? params.message,
-        name:           params.headline,
-        link:           params.link_url ?? params.website_url ?? "https://facebook.com",
+        message:        params.body ?? params.message ?? "",
+        name:           params.headline ?? "",
+        link:           destUrl,
         call_to_action: { type: params.cta ?? "LEARN_MORE" },
       }
       if (params.image_hash)  linkData.image_hash  = params.image_hash
@@ -419,17 +544,17 @@ export async function createAd(tenantId: string, params: Record<string, any>) {
   }
 
   const body: Record<string, any> = {
-    name:      params.name,
-    adset_id:  params.adset_id,
+    name:     params.name,
+    adset_id: params.adset_id,
     creative,
-    status:    params.status ?? "PAUSED",
-    // Inject UTM tags automatically unless caller provides them
-    tracking_specs: params.tracking_specs ?? undefined,
+    status:   params.status ?? "PAUSED",
   }
+  if (params.tracking_specs) body.tracking_specs = params.tracking_specs
 
-  // url_tags injects UTM params into all destination URLs in the creative
-  if (!params.url_tags && !params.skip_utm) {
-    body.url_tags = params.utm_tags ?? DEFAULT_UTM_TAGS
+  // url_tags injects UTM params — skip for lead gen (no destination URL) and when caller opts out
+  const skipUtm = isLeadGen || params.skip_utm || params.url_tags === false
+  if (!skipUtm) {
+    body.url_tags = typeof params.url_tags === "string" ? params.url_tags : DEFAULT_UTM_TAGS
   }
 
   const { creative: _c, ...adBody } = body
