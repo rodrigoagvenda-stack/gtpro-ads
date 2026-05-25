@@ -461,21 +461,25 @@ export async function createAdSet(tenantId: string, params: Record<string, any>)
   if (params.start_time) body.start_time = params.start_time
   if (params.end_time)   body.end_time   = params.end_time
 
-  // bid_strategy no conjunto: LOWEST_COST_WITH_BID_CAP e COST_CAP exigem bid_amount (erro 100/2490487 se omitido)
-  const BID_STRATEGIES_REQUIRING_AMOUNT = ["LOWEST_COST_WITH_BID_CAP", "COST_CAP"]
+  // bid_strategy: contas podem ter padrão COST_CAP/LOWEST_COST_WITH_BID_CAP configurado — nesses casos
+  // a Meta exige bid_amount mesmo sem bid_strategy no body (erro 100/2490487).
+  // Solução: sempre declarar LOWEST_COST_WITHOUT_CAP quando nenhuma estratégia foi pedida,
+  // sobrescrevendo o padrão da conta e eliminando a exigência de bid_amount.
+  const BID_STRATEGIES_REQUIRING_AMOUNT = ["LOWEST_COST_WITH_BID_CAP", "COST_CAP", "MINIMUM_ROAS"]
   if (params.bid_strategy) {
     const strat = (params.bid_strategy as string).toUpperCase()
-    if (BID_STRATEGIES_REQUIRING_AMOUNT.includes(strat)) {
-      if (!params.bid_amount || params.bid_amount <= 0) {
-        throw new Error(
-          `bid_strategy "${strat}" exige bid_amount (valor máximo de lance em R$). ` +
-          "Informe bid_amount ou omita bid_strategy para usar lance automático."
-        )
-      }
+    if (BID_STRATEGIES_REQUIRING_AMOUNT.includes(strat) && (!params.bid_amount || params.bid_amount <= 0)) {
+      throw new Error(
+        `bid_strategy "${strat}" exige bid_amount (valor máximo de lance em R$). ` +
+        "Informe bid_amount ou omita bid_strategy para lance automático."
+      )
     }
     body.bid_strategy = strat
+  } else {
+    // Força lance automático puro — sobrescreve qualquer padrão da conta
+    body.bid_strategy = "LOWEST_COST_WITHOUT_CAP"
   }
-  // bid_amount: only set if explicitly provided — Meta uses automatic bidding by default
+  // bid_amount: only set if explicitly provided
   if (params.bid_amount != null && params.bid_amount > 0) body.bid_amount = Math.round(params.bid_amount * 100)
 
   return graphPost(`/act_${adAccountId}/adsets`, token, body)
