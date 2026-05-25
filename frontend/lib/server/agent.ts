@@ -162,9 +162,10 @@ ORDEM DE COLETA (uma por vez):
 3. Orçamento — "Qual o budget diário por conjunto? ABO ou CBO?"
 4. Localização — "Quais cidades? Vou buscar o targeting correto."
 5. Público — "Qual é o público-alvo? Interesses, idade, gênero?"
-6. Criativo — "Tem criativo pronto? Informe o image_hash ou video_id."
-7. Copy — (se não tiver) gere 3 opções e peça para o usuário escolher
-8. RESUMO — apresente tudo estruturado e pergunte "Posso criar?"
+6. Advantage+ Audience — "Quer usar Advantage+ Audience? (Sim = Meta expande o público automaticamente / Não = usa só o targeting manual definido)"
+7. Criativo — "Tem criativo pronto? Informe o image_hash ou video_id."
+8. Copy — (se não tiver) gere 3 opções e peça para o usuário escolher
+9. RESUMO — apresente tudo estruturado e pergunte "Posso criar?"
 
 Só avança para o passo seguinte após o usuário responder o atual.
 Se o usuário já forneceu alguma informação no início, pule essa etapa e continue na próxima que falta.
@@ -223,7 +224,7 @@ const TOOLS: Anthropic.Tool[] = [
   { name: "get_adset_insights", description: "Métricas detalhadas de um conjunto de anúncios.", input_schema: { ...o, properties: { adset_id: s, date_preset: s }, required: ["adset_id"] } },
 
   // ── Ad Sets — Write
-  { name: "create_adset", description: "Cria um novo conjunto de anúncios. OBRIGATÓRIO: targeting com geo_locations (use search_geo para obter o key de cidades). Para LEAD_GENERATION/CONVERSATIONS/POST_ENGAGEMENT incluir page_id. Para OFFSITE_CONVERSIONS incluir pixel_id. Para CONVERSATIONS incluir destination_type='WHATSAPP'. campaign_objective ajuda a inferir optimization_goal automaticamente. NUNCA incluir bid_amount salvo pedido explícito do usuário.", input_schema: { ...o, properties: { campaign_id: s, name: s, campaign_objective: s, optimization_goal: s, billing_event: s, daily_budget: n, lifetime_budget: n, targeting: { type: "object" as const }, page_id: s, pixel_id: s, custom_event_type: s, destination_type: s, promoted_object: { type: "object" as const }, start_time: s, end_time: s }, required: ["campaign_id", "name", "targeting"] } },
+  { name: "create_adset", description: "Cria um novo conjunto de anúncios. OBRIGATÓRIO: targeting com geo_locations (use search_geo para obter o key de cidades) e advantage_audience (0 = público manual, 1 = Advantage+ automático — SEMPRE perguntar ao usuário). Para LEAD_GENERATION/CONVERSATIONS/POST_ENGAGEMENT incluir page_id. Para OFFSITE_CONVERSIONS incluir pixel_id. Para CONVERSATIONS incluir destination_type='WHATSAPP'. campaign_objective ajuda a inferir optimization_goal automaticamente. NUNCA incluir bid_amount salvo pedido explícito do usuário.", input_schema: { ...o, properties: { campaign_id: s, name: s, campaign_objective: s, optimization_goal: s, billing_event: s, daily_budget: n, lifetime_budget: n, targeting: { type: "object" as const }, advantage_audience: { type: "number" as const, enum: [0, 1], description: "0 = público manual (respeita interesses/geo), 1 = Advantage+ (Meta expande automaticamente)" }, page_id: s, pixel_id: s, custom_event_type: s, destination_type: s, promoted_object: { type: "object" as const }, start_time: s, end_time: s }, required: ["campaign_id", "name", "targeting", "advantage_audience"] } },
   { name: "update_adset", description: "Atualiza campos de um conjunto de anúncios.", input_schema: { ...o, properties: { adset_id: s, name: s, status: s, daily_budget: n, lifetime_budget: n, targeting: { type: "object" as const }, bid_amount: n }, required: ["adset_id"] } },
   { name: "duplicate_adset", description: "Duplica um conjunto de anúncios.", input_schema: { ...o, properties: { adset_id: s, campaign_id: s }, required: ["adset_id"] } },
   { name: "delete_adset",    description: "Deleta um conjunto de anúncios.", input_schema: { ...o, properties: { adset_id: s }, required: ["adset_id"] } },
