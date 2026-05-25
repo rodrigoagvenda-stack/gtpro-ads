@@ -384,9 +384,12 @@ function MetaTab() {
     setSwitchingId(id)
     try {
       await api.meta.switchAccount(id)
-      setMetaStatus(await api.meta.status())
-      loadAccounts()
-    } catch (e: any) { setMetaMsg({ type: "err", text: e.message }) } finally { setSwitchingId(null) }
+      setMetaMsg({ type: "ok", text: "Conta ativada. Recarregando..." })
+      setTimeout(() => window.location.reload(), 900)
+    } catch (e: any) {
+      setMetaMsg({ type: "err", text: e.message })
+      setSwitchingId(null)
+    }
   }
 
   return (
