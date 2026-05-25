@@ -610,16 +610,29 @@ export async function createAd(tenantId: string, params: Record<string, any>) {
     if (params.instagram_actor_id) spec.instagram_actor_id = params.instagram_actor_id
 
     if (params.video_id) {
-      // Video creative — can't mix with image
+      // Video creative — thumbnail obrigatório (erro 1443226 sem ele)
+      // Usa image_url/image_hash se fornecido; senão busca automaticamente nos thumbnails do vídeo
+      let thumbnailUrl: string | undefined = params.image_url ?? params.thumbnail_url
+      if (!thumbnailUrl && !params.image_hash) {
+        const thumbData = await graphGet(`/${params.video_id}/thumbnails`, {
+          access_token: token,
+          fields: "id,uri,is_preferred",
+        })
+        const preferred = (thumbData.data ?? []).find((t: any) => t.is_preferred) ?? thumbData.data?.[0]
+        if (preferred?.uri) thumbnailUrl = preferred.uri
+      }
       const ctaValue: Record<string, any> = {}
       const destUrl = params.link_url ?? params.website_url
       if (destUrl) ctaValue.link = destUrl
-      spec.video_data = {
+      const videoData: Record<string, any> = {
         video_id:       params.video_id,
         title:          params.headline ?? "",
         message:        params.body ?? params.message ?? "",
         call_to_action: { type: params.cta ?? "LEARN_MORE", value: ctaValue },
       }
+      if (params.image_hash) videoData.image_hash = params.image_hash
+      else if (thumbnailUrl) videoData.image_url  = thumbnailUrl
+      spec.video_data = videoData
     } else {
       // Image / link creative
       const destUrl = params.link_url ?? params.website_url
