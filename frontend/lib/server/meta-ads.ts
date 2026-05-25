@@ -73,12 +73,17 @@ async function graphGet(path: string, params: Record<string, string>) {
 async function graphPost(path: string, token: string, body: Record<string, unknown>) {
   const url = new URL(`${GRAPH}${path}`)
   url.searchParams.set("access_token", token)
+  console.log(`[meta-ads] POST ${path} body=${JSON.stringify(body)}`)
   const res = await fetch(url.toString(), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   })
-  if (!res.ok) throw new Error(parseMetaError(await res.text()))
+  if (!res.ok) {
+    const raw = await res.text()
+    console.error(`[meta-ads] POST ${path} FAILED status=${res.status} response=${raw}`)
+    throw new Error(parseMetaError(raw))
+  }
   return res.json()
 }
 
