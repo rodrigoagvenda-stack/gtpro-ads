@@ -3,8 +3,26 @@ import Image from "next/image"
 import Link from "next/link"
 
 export const metadata: Metadata = {
-  title: "Política de Privacidade — GTPRO",
-  description: "Como o GTPRO coleta, usa e protege seus dados",
+  title: "Política de Privacidade e Proteção de Dados — GTPRO",
+  description: "Política de privacidade e proteção de dados pessoais da plataforma GTPRO, em conformidade com a LGPD (Lei 13.709/2018) e as políticas da Meta Platforms.",
+}
+
+function Section({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <section className="space-y-3">
+      <h2 className="text-sm font-semibold text-white uppercase tracking-wide border-b border-white/10 pb-2">{title}</h2>
+      <div className="space-y-3 text-sm leading-7 text-zinc-400">{children}</div>
+    </section>
+  )
+}
+
+function Sub({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div>
+      <p className="text-zinc-300 font-medium mb-1">{title}</p>
+      <div className="text-zinc-400">{children}</div>
+    </div>
+  )
 }
 
 export default function PrivacidadePage() {
@@ -12,202 +30,412 @@ export default function PrivacidadePage() {
     <div className="min-h-screen bg-[#08080a] text-zinc-300">
       <div className="max-w-3xl mx-auto px-6 py-16">
 
+        {/* Header */}
         <div className="mb-12 flex items-center justify-between">
           <Image src="/logo.png" alt="Grupo Venda" width={180} height={40} className="object-contain" />
           <Link href="/" className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors">← Voltar</Link>
         </div>
 
-        <h1 className="text-2xl font-semibold text-white mb-2">Política de Privacidade</h1>
-        <p className="text-xs text-zinc-500 mb-10">Última atualização: maio de 2026 · GTPRO — gtpro.vendai.pro</p>
+        <div className="mb-10">
+          <h1 className="text-2xl font-semibold text-white mb-1">Política de Privacidade e Proteção de Dados</h1>
+          <p className="text-xs text-zinc-500">
+            Versão 1.0 · Vigência: 01 de junho de 2026 · Em conformidade com a Lei Geral de Proteção de Dados (Lei nº 13.709/2018 — LGPD)
+          </p>
+        </div>
 
-        <div className="space-y-10 text-sm leading-relaxed">
+        {/* Aviso de destaque */}
+        <div className="mb-10 p-4 rounded-lg border border-violet-500/20 bg-violet-500/5 text-xs text-zinc-400 leading-relaxed">
+          Esta Política descreve como a <strong className="text-zinc-200">Grupo Venda Tecnologia</strong>, controladora da plataforma GTPRO
+          (acessível em <strong className="text-zinc-200">gtpro.vendai.pro</strong>), coleta, usa, armazena, protege e compartilha dados
+          pessoais, em conformidade com a LGPD, o Marco Civil da Internet (Lei nº 12.965/2014) e as Políticas da Meta Platforms.
+          Ao usar a Plataforma, você declara ter lido, compreendido e concordado com os termos aqui dispostos.
+        </div>
 
-          <section>
-            <h2 className="text-base font-medium text-white mb-3">1. Quem somos</h2>
+        <div className="space-y-10">
+
+          <Section title="1. Identificação e qualificação das partes">
+            <Sub title="Controladora de Dados">
+              <p>
+                <strong className="text-zinc-300">Grupo Venda Tecnologia</strong><br />
+                Plataforma: GTPRO — gtpro.vendai.pro<br />
+                E-mail do Encarregado (DPO): <a href="mailto:privacidade@vendai.pro" className="text-violet-400 hover:text-violet-300">privacidade@vendai.pro</a><br />
+                A Controladora é responsável pelas decisões sobre o tratamento dos dados pessoais coletados por meio da Plataforma.
+              </p>
+            </Sub>
+            <Sub title="Encarregado de Dados (DPO)">
+              <p>
+                Nos termos do art. 41 da LGPD, a Controladora designou um Encarregado de Proteção de Dados, responsável por:
+                (i) aceitar reclamações e comunicações dos titulares; (ii) prestar esclarecimentos; e (iii) adotar providências.
+                Contato: <a href="mailto:privacidade@vendai.pro" className="text-violet-400 hover:text-violet-300">privacidade@vendai.pro</a> — Resposta em até 15 dias úteis.
+              </p>
+            </Sub>
+            <Sub title="Operadores">
+              <p>
+                Atuam como operadores de dados em nome da Controladora: Supabase Inc. (banco de dados e autenticação),
+                Anthropic PBC (processamento de linguagem natural) e Meta Platforms Inc. (Marketing API).
+                Cada operador processa os dados estritamente conforme instruções da Controladora e possui políticas de
+                privacidade próprias que complementam esta.
+              </p>
+            </Sub>
+          </Section>
+
+          <Section title="2. Dados pessoais tratados e finalidade">
             <p>
-              O GTPRO é uma plataforma SaaS de gestão de tráfego pago com inteligência artificial,
-              operada pela Vendai Tecnologia. Esta política descreve como coletamos, usamos, armazenamos
-              e protegemos os dados dos usuários que acessam a plataforma em <strong className="text-zinc-200">gtpro.vendai.pro</strong>.
+              Tratamos apenas os dados estritamente necessários ao funcionamento da Plataforma,
+              observando o princípio da minimização previsto no art. 6º, III, da LGPD.
             </p>
-          </section>
 
-          <section>
-            <h2 className="text-base font-medium text-white mb-3">2. Dados que coletamos</h2>
-            <p className="mb-3">Coletamos apenas os dados necessários para o funcionamento da plataforma:</p>
-            <ul className="space-y-2 list-disc list-inside text-zinc-400">
-              <li><span className="text-zinc-300">Dados de conta:</span> nome, e-mail e senha (armazenada com hash) fornecidos no cadastro.</li>
-              <li><span className="text-zinc-300">Tokens de acesso Meta:</span> tokens OAuth da Meta API, armazenados criptografados, usados exclusivamente para gerenciar as campanhas de anúncios do usuário.</li>
-              <li><span className="text-zinc-300">Dados de campanhas:</span> informações de campanhas, conjuntos de anúncios, criativos e métricas de performance obtidas via Meta Marketing API em nome do usuário.</li>
-              <li><span className="text-zinc-300">Dados de uso:</span> logs de acesso, endereço IP e interações com a plataforma para fins de segurança e melhoria do serviço.</li>
-              <li><span className="text-zinc-300">Cookies:</span> cookies de sessão para manutenção do login e cookies de preferência (ex: aceite desta política).</li>
-            </ul>
-            <p className="mt-3 text-zinc-500">
-              Não coletamos dados pessoais de leads ou usuários finais das campanhas gerenciadas.
-              Dados de conversão e leads pertencem exclusivamente à conta Meta do usuário.
-            </p>
-          </section>
-
-          <section>
-            <h2 className="text-base font-medium text-white mb-3">3. Como usamos os dados</h2>
-            <ul className="space-y-2 list-disc list-inside text-zinc-400">
-              <li>Autenticar e identificar o usuário na plataforma.</li>
-              <li>Executar operações na Meta Marketing API (criar campanhas, ler métricas, otimizar anúncios) em nome do usuário autenticado.</li>
-              <li>Exibir relatórios e insights de performance das campanhas.</li>
-              <li>Enviar notificações de alertas configurados pelo usuário.</li>
-              <li>Melhorar a plataforma com base em métricas de uso agregadas e anonimizadas.</li>
-              <li>Cumprir obrigações legais e responder a requisições de autoridades competentes.</li>
-            </ul>
-            <p className="mt-3 text-zinc-500">
-              Não vendemos, alugamos nem compartilhamos dados de usuários com terceiros para fins
-              comerciais ou publicitários.
-            </p>
-          </section>
-
-          <section>
-            <h2 className="text-base font-medium text-white mb-3">4. Compartilhamento de dados</h2>
-            <p className="mb-3">Os dados são compartilhados somente com:</p>
-            <ul className="space-y-2 list-disc list-inside text-zinc-400">
-              <li><span className="text-zinc-300">Meta Platforms (Facebook):</span> para execução das chamadas à Marketing API usando o token do próprio usuário. Os dados transitam sob os Termos de Serviço da Meta.</li>
-              <li><span className="text-zinc-300">Supabase:</span> banco de dados e autenticação, hospedado em infraestrutura segura com criptografia em repouso.</li>
-              <li><span className="text-zinc-300">Anthropic:</span> o assistente de IA processa contexto de campanhas para gerar recomendações. Nenhum dado de identificação pessoal é enviado.</li>
-              <li><span className="text-zinc-300">Autoridades públicas:</span> quando exigido por lei, ordem judicial ou regulação aplicável.</li>
-            </ul>
-          </section>
-
-          <section>
-            <h2 className="text-base font-medium text-white mb-3">5. Armazenamento e segurança</h2>
-            <ul className="space-y-2 list-disc list-inside text-zinc-400">
-              <li>Tokens de acesso Meta são armazenados criptografados com AES-256. Nunca são expostos em logs ou respostas de API.</li>
-              <li>Senhas são armazenadas exclusivamente como hash — não temos acesso à senha original.</li>
-              <li>Todo tráfego entre cliente e servidor usa TLS 1.2 ou superior.</li>
-              <li>O acesso ao banco de dados é restrito a serviços autenticados via chaves de serviço.</li>
-              <li>Dados são armazenados em servidores localizados no Brasil ou na União Europeia, conforme a infraestrutura do Supabase.</li>
-            </ul>
-          </section>
-
-          <section>
-            <h2 className="text-base font-medium text-white mb-3">6. Retenção de dados</h2>
-            <ul className="space-y-2 list-disc list-inside text-zinc-400">
-              <li><span className="text-zinc-300">Dados de conta:</span> mantidos enquanto a conta estiver ativa e por até 90 dias após o cancelamento.</li>
-              <li><span className="text-zinc-300">Tokens Meta:</span> removidos imediatamente após a desconexão da conta Meta ou cancelamento da assinatura.</li>
-              <li><span className="text-zinc-300">Logs de acesso:</span> retidos por até 12 meses para fins de segurança.</li>
-              <li><span className="text-zinc-300">Dados de campanhas:</span> removidos junto com a conta do usuário, conforme solicitação de exclusão.</li>
-            </ul>
-          </section>
-
-          <section>
-            <h2 className="text-base font-medium text-white mb-3">7. Seus direitos (LGPD — Lei 13.709/2018)</h2>
-            <p className="mb-3">Como titular de dados, você tem direito a:</p>
-            <ul className="space-y-2 list-disc list-inside text-zinc-400">
-              <li><span className="text-zinc-300">Acesso:</span> solicitar uma cópia de todos os dados que temos sobre você.</li>
-              <li><span className="text-zinc-300">Correção:</span> corrigir dados incompletos, inexatos ou desatualizados.</li>
-              <li><span className="text-zinc-300">Exclusão:</span> solicitar a exclusão de seus dados pessoais, respeitados os prazos legais de retenção.</li>
-              <li><span className="text-zinc-300">Portabilidade:</span> receber seus dados em formato estruturado e legível por máquina.</li>
-              <li><span className="text-zinc-300">Revogação de consentimento:</span> retirar o consentimento a qualquer momento, sem prejuízo ao tratamento já realizado.</li>
-              <li><span className="text-zinc-300">Oposição:</span> opor-se ao tratamento de dados em casos de descumprimento desta política.</li>
-            </ul>
-            <p className="mt-3">
-              Para exercer qualquer direito, envie um e-mail para{" "}
-              <a href="mailto:privacidade@vendai.pro" className="text-violet-400 hover:text-violet-300">
-                privacidade@vendai.pro
-              </a>{" "}
-              com o assunto "LGPD — [seu direito]". Respondemos em até 15 dias úteis.
-            </p>
-          </section>
-
-          <section>
-            <h2 className="text-base font-medium text-white mb-3">8. Cancelamento e exclusão de conta</h2>
-            <p className="mb-3">Para cancelar sua conta e solicitar a exclusão completa dos dados:</p>
-            <ol className="space-y-2 list-decimal list-inside text-zinc-400">
-              <li>Acesse <strong className="text-zinc-300">Configurações → Conta</strong> dentro da plataforma e clique em "Cancelar assinatura".</li>
-              <li>Ou envie um e-mail para <a href="mailto:privacidade@vendai.pro" className="text-violet-400">privacidade@vendai.pro</a> com o assunto "Exclusão de conta".</li>
-            </ol>
-            <p className="mt-3 text-zinc-500">
-              Após a solicitação, seus dados são removidos em até 30 dias, exceto onde a retenção
-              for exigida por lei (ex: registros fiscais, conforme previsto na legislação brasileira).
-            </p>
-          </section>
-
-          <section>
-            <h2 className="text-base font-medium text-white mb-3">9. Cookies</h2>
-            <p className="mb-3">Utilizamos os seguintes tipos de cookies:</p>
             <div className="overflow-x-auto">
               <table className="w-full text-xs border-collapse">
                 <thead>
                   <tr className="border-b border-white/10">
-                    <th className="text-left py-2 pr-4 text-zinc-400 font-medium">Tipo</th>
-                    <th className="text-left py-2 pr-4 text-zinc-400 font-medium">Finalidade</th>
-                    <th className="text-left py-2 text-zinc-400 font-medium">Obrigatório</th>
+                    <th className="text-left py-2.5 pr-4 text-zinc-400 font-medium w-1/4">Categoria</th>
+                    <th className="text-left py-2.5 pr-4 text-zinc-400 font-medium w-2/5">Dados coletados</th>
+                    <th className="text-left py-2.5 text-zinc-400 font-medium">Finalidade</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-white/5">
                   <tr>
-                    <td className="py-2.5 pr-4 text-zinc-300">Sessão</td>
-                    <td className="py-2.5 pr-4 text-zinc-500">Manter o usuário autenticado</td>
-                    <td className="py-2.5 text-zinc-500">Sim</td>
+                    <td className="py-3 pr-4 text-zinc-300 align-top">Cadastro</td>
+                    <td className="py-3 pr-4 text-zinc-500 align-top">Nome, e-mail, senha (hash bcrypt)</td>
+                    <td className="py-3 text-zinc-500 align-top">Identificação e autenticação na Plataforma</td>
                   </tr>
                   <tr>
-                    <td className="py-2.5 pr-4 text-zinc-300">Preferência</td>
-                    <td className="py-2.5 pr-4 text-zinc-500">Lembrar aceite desta política e configurações de interface</td>
-                    <td className="py-2.5 text-zinc-500">Sim</td>
+                    <td className="py-3 pr-4 text-zinc-300 align-top">Credenciais Meta</td>
+                    <td className="py-3 pr-4 text-zinc-500 align-top">Token OAuth (criptografado AES-256), ID da conta de anúncios</td>
+                    <td className="py-3 text-zinc-500 align-top">Execução de operações na Meta Marketing API em nome do Usuário</td>
                   </tr>
                   <tr>
-                    <td className="py-2.5 pr-4 text-zinc-300">Analítico</td>
-                    <td className="py-2.5 pr-4 text-zinc-500">Métricas de uso agregadas e anonimizadas (sem identificação pessoal)</td>
-                    <td className="py-2.5 text-zinc-500">Não</td>
+                    <td className="py-3 pr-4 text-zinc-300 align-top">Dados de campanhas</td>
+                    <td className="py-3 pr-4 text-zinc-500 align-top">Campanhas, conjuntos, criativos, métricas de performance, públicos</td>
+                    <td className="py-3 text-zinc-500 align-top">Exibição de relatórios e alimentação do assistente de IA</td>
+                  </tr>
+                  <tr>
+                    <td className="py-3 pr-4 text-zinc-300 align-top">Dados de uso</td>
+                    <td className="py-3 pr-4 text-zinc-500 align-top">Endereço IP, user-agent, logs de acesso, ações na interface</td>
+                    <td className="py-3 text-zinc-500 align-top">Segurança, detecção de fraudes, melhoria do serviço</td>
+                  </tr>
+                  <tr>
+                    <td className="py-3 pr-4 text-zinc-300 align-top">Dados de pagamento</td>
+                    <td className="py-3 pr-4 text-zinc-500 align-top">Status da assinatura, histórico de cobranças (sem dados do cartão)</td>
+                    <td className="py-3 text-zinc-500 align-top">Gestão de assinaturas e cobrança recorrente</td>
+                  </tr>
+                  <tr>
+                    <td className="py-3 pr-4 text-zinc-300 align-top">Cookies</td>
+                    <td className="py-3 pr-4 text-zinc-500 align-top">Identificador de sessão, preferências de interface, aceite desta política</td>
+                    <td className="py-3 text-zinc-500 align-top">Manutenção do login e personalização</td>
                   </tr>
                 </tbody>
               </table>
             </div>
-            <p className="mt-3 text-zinc-500">
-              Você pode gerenciar ou recusar cookies não essenciais a qualquer momento nas configurações do seu navegador.
-            </p>
-          </section>
 
-          <section>
-            <h2 className="text-base font-medium text-white mb-3">10. Integrações com terceiros</h2>
-            <p>
-              A plataforma se integra à Meta Platform através de OAuth. Ao conectar sua conta Meta,
-              você autoriza o GTPRO a acessar e gerenciar sua conta de anúncios conforme os escopos
-              solicitados no momento da autenticação. Esta autorização pode ser revogada a qualquer
-              momento em <strong className="text-zinc-200">facebook.com/settings → Aplicativos e sites</strong>.
+            <p className="text-zinc-500 text-xs">
+              Não coletamos dados sensíveis (art. 5º, II, LGPD). Não coletamos dados pessoais de leads
+              ou usuários finais das campanhas — esses dados pertencem exclusivamente à conta Meta do Usuário.
             </p>
-          </section>
+          </Section>
 
-          <section>
-            <h2 className="text-base font-medium text-white mb-3">11. Menores de idade</h2>
-            <p>
-              O GTPRO é destinado exclusivamente a pessoas jurídicas e profissionais de marketing digital
-              maiores de 18 anos. Não coletamos intencionalmente dados de menores de idade.
-            </p>
-          </section>
-
-          <section>
-            <h2 className="text-base font-medium text-white mb-3">12. Alterações nesta política</h2>
-            <p>
-              Podemos atualizar esta política periodicamente. Quando houver alterações relevantes,
-              notificaremos por e-mail e/ou através de aviso na plataforma. O uso continuado após
-              a notificação implica aceite das alterações.
-            </p>
-          </section>
-
-          <section>
-            <h2 className="text-base font-medium text-white mb-3">13. Contato e DPO</h2>
-            <p>Para dúvidas, solicitações ou reclamações relacionadas a privacidade:</p>
-            <div className="mt-3 p-4 bg-white/[0.03] rounded-lg border border-white/[0.06] space-y-1 text-zinc-400">
-              <p><span className="text-zinc-300">E-mail:</span> <a href="mailto:privacidade@vendai.pro" className="text-violet-400 hover:text-violet-300">privacidade@vendai.pro</a></p>
-              <p><span className="text-zinc-300">Plataforma:</span> gtpro.vendai.pro</p>
-              <p><span className="text-zinc-300">Autoridade supervisora:</span> ANPD — <a href="https://www.gov.br/anpd" target="_blank" rel="noopener noreferrer" className="text-violet-400 hover:text-violet-300">gov.br/anpd</a></p>
+          <Section title="3. Base legal para o tratamento (art. 7º LGPD)">
+            <p>Cada atividade de tratamento de dados possui base legal específica:</p>
+            <div className="space-y-2">
+              {[
+                ["Execução de contrato (art. 7º, V)", "Tratamento de dados de cadastro, credenciais Meta e dados de campanhas — necessários para prestar o serviço contratado."],
+                ["Legítimo interesse (art. 7º, IX)", "Dados de uso e logs de segurança — necessários para proteger a integridade da Plataforma e dos dados dos Usuários."],
+                ["Consentimento (art. 7º, I)", "Cookies analíticos não essenciais — coletados apenas após aceite explícito pelo banner de cookies."],
+                ["Cumprimento de obrigação legal (art. 7º, II)", "Retenção de logs e registros fiscais conforme exigência legal (Marco Civil, legislação tributária)."],
+              ].map(([base, desc]) => (
+                <div key={base} className="flex gap-3 p-3 bg-white/[0.02] rounded-lg border border-white/[0.05]">
+                  <div className="w-1 rounded-full bg-violet-500/50 shrink-0" />
+                  <div>
+                    <p className="text-zinc-300 text-xs font-medium">{base}</p>
+                    <p className="text-zinc-500 text-xs mt-0.5">{desc}</p>
+                  </div>
+                </div>
+              ))}
             </div>
-          </section>
+          </Section>
+
+          <Section title="4. Compartilhamento e transferência de dados">
+            <p>
+              Os dados são compartilhados somente com terceiros estritamente necessários à operação da Plataforma,
+              todos vinculados por acordos de processamento de dados adequados à LGPD:
+            </p>
+            <Sub title="Meta Platforms Inc. (EUA)">
+              Os tokens de acesso são usados exclusivamente para realizar chamadas à Meta Marketing API
+              em nome do Usuário autenticado. Nenhum dado é enviado à Meta além do necessário para executar
+              a operação solicitada. Rege-se pelos Termos de Serviço da Meta e pelas Cláusulas Contratuais Padrão (SCCs) da UE.
+            </Sub>
+            <Sub title="Supabase Inc. (EUA / UE)">
+              Banco de dados e autenticação. Os dados são armazenados em servidores certificados (SOC 2 Type II)
+              com criptografia em repouso e em trânsito. A transferência internacional é amparada por SCCs.
+            </Sub>
+            <Sub title="Anthropic PBC (EUA)">
+              O assistente de IA processa contexto de campanhas (nomes, métricas, objetivos) para gerar
+              recomendações. Nenhum dado de identificação pessoal do Usuário ou de terceiros é enviado.
+              A transferência é amparada por SCCs e pela política de privacidade da Anthropic.
+            </Sub>
+            <Sub title="Autoridades públicas">
+              Dados poderão ser divulgados a autoridades competentes mediante ordem judicial, requisição
+              da ANPD, ou obrigação legal aplicável, nos termos do art. 7º, II e VI, da LGPD.
+            </Sub>
+            <p className="text-zinc-500 text-xs p-3 bg-white/[0.02] rounded-lg border border-white/[0.05]">
+              A Controladora não vende, aluga, cede ou compartilha dados pessoais com terceiros para
+              fins comerciais, publicitários ou de perfilamento externo.
+            </p>
+          </Section>
+
+          <Section title="5. Transferência internacional de dados">
+            <p>
+              Alguns de nossos operadores estão localizados nos Estados Unidos. A transferência de dados
+              para esses países é realizada com base em mecanismos de proteção adequados, conforme
+              previsto no art. 33 da LGPD:
+            </p>
+            <ul className="space-y-1.5 list-disc list-inside text-zinc-400">
+              <li>Cláusulas Contratuais Padrão (SCCs) aprovadas por autoridades de proteção de dados;</li>
+              <li>Certificações e relatórios de conformidade (SOC 2, ISO 27001) dos operadores;</li>
+              <li>Consentimento específico do Usuário, quando aplicável e exigido pela LGPD.</li>
+            </ul>
+            <p>
+              Para obter cópia dos mecanismos de transferência aplicáveis, entre em contato com o DPO.
+            </p>
+          </Section>
+
+          <Section title="6. Segurança e medidas técnicas">
+            <p>
+              Adotamos medidas técnicas e organizacionais adequadas para proteger os dados pessoais contra
+              acesso não autorizado, perda, alteração, divulgação ou destruição:
+            </p>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              {[
+                ["Criptografia em trânsito", "TLS 1.2+ em todas as comunicações"],
+                ["Criptografia em repouso", "AES-256 para tokens de acesso Meta e dados sensíveis"],
+                ["Autenticação segura", "Senhas armazenadas com hash bcrypt (fator de custo ≥12)"],
+                ["Controle de acesso", "Princípio do menor privilégio — acesso restrito por função"],
+                ["Isolamento de dados", "Arquitetura multi-tenant com Row Level Security (RLS) no Supabase"],
+                ["Auditoria e logs", "Registros de acesso e operações críticas com retenção de 12 meses"],
+                ["Revisão periódica", "Avaliações de segurança e atualização de dependências regulares"],
+                ["Backup", "Backups automáticos com retenção e criptografia"],
+              ].map(([title, desc]) => (
+                <div key={title} className="p-3 bg-white/[0.02] rounded-lg border border-white/[0.05]">
+                  <p className="text-zinc-300 text-xs font-medium">{title}</p>
+                  <p className="text-zinc-500 text-xs mt-0.5">{desc}</p>
+                </div>
+              ))}
+            </div>
+          </Section>
+
+          <Section title="7. Retenção e eliminação de dados">
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs border-collapse">
+                <thead>
+                  <tr className="border-b border-white/10">
+                    <th className="text-left py-2.5 pr-4 text-zinc-400 font-medium">Categoria</th>
+                    <th className="text-left py-2.5 pr-4 text-zinc-400 font-medium">Prazo de retenção</th>
+                    <th className="text-left py-2.5 text-zinc-400 font-medium">Fundamento</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-white/5">
+                  {[
+                    ["Dados de conta", "Vigência da conta + 90 dias após cancelamento", "Execução do contrato"],
+                    ["Tokens Meta", "Removidos imediatamente após desconexão ou cancelamento", "Minimização"],
+                    ["Dados de campanhas", "Vigência da conta + 90 dias após cancelamento", "Execução do contrato"],
+                    ["Logs de acesso", "12 meses", "Marco Civil da Internet (art. 15)"],
+                    ["Registros fiscais", "5 anos", "Código Tributário Nacional"],
+                    ["Cookies de sessão", "Sessão do navegador", "Técnico"],
+                    ["Cookies de preferência", "12 meses", "Consentimento"],
+                  ].map(([cat, prazo, fund]) => (
+                    <tr key={cat}>
+                      <td className="py-2.5 pr-4 text-zinc-300 align-top">{cat}</td>
+                      <td className="py-2.5 pr-4 text-zinc-500 align-top">{prazo}</td>
+                      <td className="py-2.5 text-zinc-500 align-top">{fund}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <p>
+              Após o vencimento dos prazos, os dados são eliminados de forma segura e irreversível,
+              incluindo cópias de backup, conforme art. 16 da LGPD.
+            </p>
+          </Section>
+
+          <Section title="8. Direitos dos titulares (art. 18 LGPD)">
+            <p>
+              Como titular de dados pessoais, você possui os seguintes direitos, exercíveis a qualquer
+              momento mediante solicitação ao DPO:
+            </p>
+            <div className="space-y-2">
+              {[
+                ["Confirmação e acesso", "Confirmar se tratamos seus dados e obter cópia completa em formato legível."],
+                ["Correção", "Solicitar a correção de dados incompletos, inexatos ou desatualizados."],
+                ["Anonimização, bloqueio ou eliminação", "Dados desnecessários, excessivos ou tratados em desconformidade com a LGPD."],
+                ["Portabilidade", "Receber seus dados em formato estruturado, interoperável, para transferência a outro fornecedor."],
+                ["Eliminação", "Solicitar a exclusão de dados tratados com base em consentimento (art. 18, VI)."],
+                ["Revogação do consentimento", "Retirar o consentimento a qualquer momento, sem prejuízo do tratamento realizado anteriormente."],
+                ["Informação sobre compartilhamento", "Saber com quais entidades públicas e privadas seus dados foram compartilhados."],
+                ["Oposição", "Opor-se ao tratamento realizado com base em outras hipóteses legais, em caso de descumprimento."],
+                ["Revisão de decisões automatizadas", "Solicitar revisão humana de decisões tomadas exclusivamente por meios automatizados (art. 20)."],
+              ].map(([dir, desc]) => (
+                <div key={dir} className="flex gap-3">
+                  <span className="text-violet-400 text-xs mt-1 shrink-0">→</span>
+                  <div>
+                    <span className="text-zinc-300 text-xs font-medium">{dir}: </span>
+                    <span className="text-zinc-500 text-xs">{desc}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className="p-4 bg-white/[0.03] rounded-lg border border-white/[0.06]">
+              <p className="text-zinc-300 text-xs font-medium mb-2">Como exercer seus direitos</p>
+              <p className="text-zinc-500 text-xs leading-relaxed">
+                Envie e-mail para <a href="mailto:privacidade@vendai.pro" className="text-violet-400">privacidade@vendai.pro</a> com
+                assunto <strong className="text-zinc-300">"LGPD — [Direito solicitado]"</strong>, informando seu nome completo e
+                e-mail cadastrado. Responderemos em até <strong className="text-zinc-300">15 dias úteis</strong>. Em caso de
+                impossibilidade de atendimento imediato, informaremos o motivo e o prazo para resposta definitiva.
+                Você também pode registrar reclamação perante a <strong className="text-zinc-300">ANPD</strong> em{" "}
+                <a href="https://www.gov.br/anpd" target="_blank" rel="noopener noreferrer" className="text-violet-400">gov.br/anpd</a>.
+              </p>
+            </div>
+          </Section>
+
+          <Section title="9. Decisões automatizadas e inteligência artificial">
+            <p>
+              A Plataforma utiliza modelos de linguagem (IA) para gerar recomendações de otimização,
+              copy de anúncios e análise de performance. Em conformidade com o art. 20 da LGPD:
+            </p>
+            <ul className="space-y-1.5 list-disc list-inside text-zinc-400">
+              <li>As recomendações da IA são <strong className="text-zinc-300">sugestivas</strong> — a decisão final é sempre do Usuário;</li>
+              <li>Nenhuma decisão com efeito jurídico ou impacto significativo é tomada exclusivamente por meios automatizados;</li>
+              <li>O Usuário pode solicitar revisão humana de qualquer saída gerada pela IA pelo canal do DPO;</li>
+              <li>Os prompts enviados à IA não incluem dados de identificação pessoal de terceiros.</li>
+            </ul>
+          </Section>
+
+          <Section title="10. Cookies e tecnologias de rastreamento">
+            <p>Utilizamos as seguintes categorias de cookies:</p>
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs border-collapse">
+                <thead>
+                  <tr className="border-b border-white/10">
+                    <th className="text-left py-2.5 pr-3 text-zinc-400 font-medium">Categoria</th>
+                    <th className="text-left py-2.5 pr-3 text-zinc-400 font-medium">Nome / Exemplo</th>
+                    <th className="text-left py-2.5 pr-3 text-zinc-400 font-medium">Duração</th>
+                    <th className="text-left py-2.5 pr-3 text-zinc-400 font-medium">Finalidade</th>
+                    <th className="text-left py-2.5 text-zinc-400 font-medium">Essencial</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-white/5">
+                  {[
+                    ["Sessão", "sb-access-token", "Sessão", "Autenticação Supabase", "Sim"],
+                    ["Preferência", "gtpro_cookie_consent", "12 meses", "Registro do aceite desta política", "Sim"],
+                    ["Segurança", "sb-refresh-token", "60 dias", "Renovação de sessão segura", "Sim"],
+                    ["Analítico", "gtpro_analytics_*", "12 meses", "Métricas de uso anonimizadas", "Não"],
+                  ].map(([cat, nome, dur, fin, ess]) => (
+                    <tr key={cat}>
+                      <td className="py-2.5 pr-3 text-zinc-300 align-top">{cat}</td>
+                      <td className="py-2.5 pr-3 text-zinc-500 font-mono align-top">{nome}</td>
+                      <td className="py-2.5 pr-3 text-zinc-500 align-top">{dur}</td>
+                      <td className="py-2.5 pr-3 text-zinc-500 align-top">{fin}</td>
+                      <td className={`py-2.5 align-top font-medium ${ess === "Sim" ? "text-emerald-500" : "text-zinc-500"}`}>{ess}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <p>
+              Cookies não essenciais são coletados apenas após consentimento explícito. Você pode
+              gerenciar ou revogar o consentimento a qualquer momento nas configurações do navegador
+              ou por e-mail ao DPO.
+            </p>
+          </Section>
+
+          <Section title="11. Incidentes de segurança">
+            <p>
+              Em caso de incidente de segurança que possa acarretar risco ou dano relevante aos titulares,
+              a Controladora adotará os seguintes procedimentos, conforme art. 48 da LGPD:
+            </p>
+            <ul className="space-y-1.5 list-disc list-inside text-zinc-400">
+              <li>Comunicação à <strong className="text-zinc-300">ANPD</strong> em prazo razoável após a ciência do incidente;</li>
+              <li>Notificação ao <strong className="text-zinc-300">Usuário afetado</strong> por e-mail, descrevendo a natureza dos dados envolvidos, os riscos e as medidas adotadas;</li>
+              <li>Contenção imediata e investigação do incidente com apoio de equipe técnica especializada;</li>
+              <li>Registro e documentação do incidente para fins de auditoria e melhoria contínua.</li>
+            </ul>
+            <p>Para relatar suspeita de incidente ou vulnerabilidade: <a href="mailto:seguranca@vendai.pro" className="text-violet-400 hover:text-violet-300">seguranca@vendai.pro</a></p>
+          </Section>
+
+          <Section title="12. Integração com a Meta Platform">
+            <p>
+              Ao conectar sua conta Meta, você autoriza a Plataforma a acessar sua conta de anúncios
+              com os escopos <code className="text-xs bg-white/[0.06] px-1.5 py-0.5 rounded text-violet-300">ads_management</code>,{" "}
+              <code className="text-xs bg-white/[0.06] px-1.5 py-0.5 rounded text-violet-300">ads_read</code> e{" "}
+              <code className="text-xs bg-white/[0.06] px-1.5 py-0.5 rounded text-violet-300">pages_read_engagement</code>.
+              Esta autorização pode ser revogada a qualquer momento em{" "}
+              <strong className="text-zinc-300">facebook.com → Configurações → Aplicativos e sites</strong>.
+              A revogação do acesso na Meta não exclui automaticamente os dados armazenados na Plataforma —
+              para isso, solicite a exclusão ao DPO.
+            </p>
+          </Section>
+
+          <Section title="13. Menores de idade">
+            <p>
+              A Plataforma é destinada exclusivamente a pessoas jurídicas e profissionais maiores de 18 anos.
+              Não coletamos intencionalmente dados de menores. Caso identifiquemos tratamento de dados
+              de menor de idade sem o consentimento adequado, os dados serão eliminados imediatamente.
+            </p>
+          </Section>
+
+          <Section title="14. Links externos">
+            <p>
+              A Plataforma pode conter links para sites de terceiros (Meta, Supabase, etc.).
+              Esta Política não se aplica a esses sites. Recomendamos a leitura das políticas de
+              privacidade de cada serviço externo acessado.
+            </p>
+          </Section>
+
+          <Section title="15. Alterações desta política">
+            <p>
+              Esta Política pode ser atualizada para refletir mudanças legais, tecnológicas ou operacionais.
+              Alterações relevantes serão comunicadas com <strong className="text-zinc-300">30 dias de antecedência</strong> por
+              e-mail cadastrado e/ou aviso na Plataforma. A versão em vigor é sempre a publicada em{" "}
+              <strong className="text-zinc-300">gtpro.vendai.pro/privacidade</strong>.
+              O uso continuado após a data de vigência implica aceite das alterações.
+            </p>
+          </Section>
+
+          <Section title="16. Contato e canais de atendimento">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              {[
+                ["DPO / Privacidade", "privacidade@vendai.pro", "Direitos LGPD, solicitações de dados, incidentes"],
+                ["Suporte técnico", "suporte@vendai.pro", "Dúvidas sobre o funcionamento da Plataforma"],
+                ["Segurança", "seguranca@vendai.pro", "Relato de vulnerabilidades e incidentes"],
+              ].map(([role, email, desc]) => (
+                <div key={role} className="p-4 bg-white/[0.03] rounded-lg border border-white/[0.06]">
+                  <p className="text-zinc-300 text-xs font-medium mb-1">{role}</p>
+                  <a href={`mailto:${email}`} className="text-violet-400 hover:text-violet-300 text-xs">{email}</a>
+                  <p className="text-zinc-600 text-xs mt-1">{desc}</p>
+                </div>
+              ))}
+            </div>
+            <div className="p-4 bg-white/[0.02] rounded-lg border border-white/[0.05] text-xs text-zinc-500">
+              <strong className="text-zinc-400">Autoridade Nacional de Proteção de Dados (ANPD):</strong>{" "}
+              <a href="https://www.gov.br/anpd" target="_blank" rel="noopener noreferrer" className="text-violet-400 hover:text-violet-300">gov.br/anpd</a>{" "}
+              — Você tem o direito de registrar reclamação perante a ANPD caso entenda que seus direitos não foram atendidos.
+            </div>
+          </Section>
 
         </div>
 
+        {/* Footer */}
         <div className="mt-16 pt-8 border-t border-white/[0.06] flex flex-col items-center gap-4">
           <Image src="/logo.png" alt="Grupo Venda" width={120} height={28} className="object-contain opacity-40" />
-          <p className="text-xs text-zinc-600 text-center">
-            GTPRO · gtpro.vendai.pro · © {new Date().getFullYear()} Grupo Venda · Todos os direitos reservados
-          </p>
+          <div className="text-center text-xs text-zinc-600 space-y-1">
+            <p>GTPRO · gtpro.vendai.pro · © {new Date().getFullYear()} Grupo Venda Tecnologia</p>
+            <p>
+              <Link href="/termos" className="hover:text-zinc-400 transition-colors">Termos de Uso</Link>
+              {" · "}
+              <Link href="/privacidade" className="hover:text-zinc-400 transition-colors">Política de Privacidade</Link>
+            </p>
+          </div>
         </div>
 
       </div>
