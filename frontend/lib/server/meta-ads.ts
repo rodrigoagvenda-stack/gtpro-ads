@@ -2,7 +2,7 @@ import { createServiceClient } from "./supabase"
 import { decrypt, encrypt } from "./crypto"
 import { getMetaAppId, getMetaAppSecret } from "./platform"
 
-const GRAPH = "https://graph.facebook.com/v22.0"
+const GRAPH = "https://graph.facebook.com/v25.0"
 
 async function getToken(tenantId: string) {
   const { token } = await getTokenAndAccount(tenantId)
@@ -55,7 +55,9 @@ function parseMetaError(raw: string): string {
     if (code === 200 || code === 273 || code === 10)
       return `Permissão negada pela Meta (código ${code}): ${msg}. O token precisa ter permissão 'ads_management' — reconecte a conta via OAuth em Configurações → Meta Ads.`
     if (code === 100) return `Parâmetro inválido (código 100): ${msg}`
-    if (code === 4 || code === 17 || code === 32 || code === 613) return "Limite de requisições da Meta atingido. Aguarde alguns minutos."
+    if (code === 4 || code === 17 || code === 32 || code === 613 ||
+        (code >= 80001 && code <= 80014))
+      return "Limite de requisições da Meta atingido. Aguarde alguns minutos."
     return `${msg || raw} (código Meta ${code})`
   } catch {
     return raw
@@ -65,8 +67,13 @@ function parseMetaError(raw: string): string {
 async function graphGet(path: string, params: Record<string, string>) {
   const url = new URL(`${GRAPH}${path}`)
   Object.entries(params).forEach(([k, v]) => url.searchParams.set(k, v))
+  console.log(`[meta-ads] GET ${path} params=${JSON.stringify(Object.fromEntries(Object.entries(params).filter(([k]) => k !== "access_token")))}`)
   const res = await fetch(url.toString())
-  if (!res.ok) throw new Error(parseMetaError(await res.text()))
+  if (!res.ok) {
+    const raw = await res.text()
+    console.error(`[meta-ads] GET ${path} FAILED status=${res.status} response=${raw}`)
+    throw new Error(parseMetaError(raw))
+  }
   return res.json()
 }
 
@@ -90,8 +97,13 @@ async function graphPost(path: string, token: string, body: Record<string, unkno
 async function graphDelete(path: string, token: string) {
   const url = new URL(`${GRAPH}${path}`)
   url.searchParams.set("access_token", token)
+  console.log(`[meta-ads] DELETE ${path}`)
   const res = await fetch(url.toString(), { method: "DELETE" })
-  if (!res.ok) throw new Error(parseMetaError(await res.text()))
+  if (!res.ok) {
+    const raw = await res.text()
+    console.error(`[meta-ads] DELETE ${path} FAILED status=${res.status} response=${raw}`)
+    throw new Error(parseMetaError(raw))
+  }
   return res.json()
 }
 
@@ -360,11 +372,10 @@ export async function createAdSet(tenantId: string, params: Record<string, any>)
     )
   }
 
-  // Enforce minimum radius for city targeting — Meta rejects < 25km for non-metro Brazilian cities
+  // Normalize distance_unit for city targeting — ensure it's always set
   if (targeting.geo_locations?.cities?.length) {
     targeting.geo_locations.cities = targeting.geo_locations.cities.map((city: any) => ({
       ...city,
-      radius:        Math.max(Number(city.radius ?? 40), 25),
       distance_unit: city.distance_unit ?? "kilometer",
     }))
   }
@@ -709,10 +720,15 @@ export async function getPixels(tenantId: string) {
 export async function getPixelStats(tenantId: string, pixelId: string, datePreset = "last_7d") {
   const token = await getToken(tenantId)
   const now = Math.floor(Date.now() / 1000)
-  const sevenDaysAgo = now - 7 * 24 * 3600
+  const PRESET_DAYS: Record<string, number> = {
+    today: 1, yesterday: 1, last_3d: 3, last_7d: 7,
+    last_14d: 14, last_28d: 28, last_30d: 30, last_90d: 90,
+  }
+  const days = PRESET_DAYS[datePreset] ?? 7
+  const startTime = now - days * 24 * 3600
   const data = await graphGet(`/${pixelId}/stats`, {
     access_token: token,
-    start_time: String(sevenDaysAgo),
+    start_time: String(startTime),
     end_time: String(now),
     aggregation: "event",
   })
