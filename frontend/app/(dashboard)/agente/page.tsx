@@ -6,9 +6,11 @@ import {
   ArrowUp, Bot, Search, BarChart2, Zap, Bell, Power, DollarSign,
   CheckCircle2, Sparkles, ChevronDown, ChevronRight, Trash2, FileText,
   Users, Image, X, ListChecks, XCircle, RefreshCw, Paperclip, Upload,
-  Film, Check, ThumbsDown, MessageSquare, Square,
+  Film, Check, ThumbsDown, MessageSquare, Square, PauseCircle, TrendingUp,
+  Plus,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
+import WizardPanel from "./WizardPanel"
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -59,6 +61,38 @@ const SUGGESTIONS = [
   { icon: DollarSign, text: "Alguma campanha com CPL muito alto?" },
   { icon: Zap,       text: "Crie uma nova campanha de captação" },
 ]
+
+type ActiveAction = "analise" | "pausar" | "otimizar" | null
+
+const MAIN_ACTIONS = [
+  { id: "analise",  label: "Análise",         icon: BarChart2,    color: "text-blue-400 bg-blue-500/10 ring-blue-500/25 hover:bg-blue-500/15" },
+  { id: "criar",    label: "Criar campanha",  icon: Plus,          color: "text-violet-400 bg-violet-500/10 ring-violet-500/25 hover:bg-violet-500/15" },
+  { id: "pausar",   label: "Pausar",          icon: PauseCircle,   color: "text-amber-400 bg-amber-500/10 ring-amber-500/25 hover:bg-amber-500/15" },
+  { id: "otimizar", label: "Otimizar",        icon: TrendingUp,    color: "text-emerald-400 bg-emerald-500/10 ring-emerald-500/25 hover:bg-emerald-500/15" },
+] as const
+
+const SUB_ACTIONS: Record<Exclude<ActiveAction, null>, { label: string; prompt: string }[]> = {
+  analise: [
+    { label: "Conta completa",  prompt: "Faça uma análise completa da conta dos últimos 7 dias com métricas de performance e recomendações de otimização." },
+    { label: "Por campanha",    prompt: "Analise o desempenho individual de cada campanha ativa nos últimos 7 dias e identifique as melhores e piores." },
+    { label: "Criativo",        prompt: "Analise CTR e frequência dos criativos. Identifique os que estão saturados e sugira pausar." },
+    { label: "Público",         prompt: "Faça um breakdown do desempenho por idade, sexo e região das campanhas ativas." },
+    { label: "Conjuntos",       prompt: "Compare o desempenho dos conjuntos de anúncios. Identifique os melhores para escalar." },
+    { label: "Placement",       prompt: "Analise custo por resultado por placement: Facebook Feed vs Reels vs Stories vs Messenger." },
+  ],
+  pausar: [
+    { label: "Pausar todas",          prompt: "Liste todas as campanhas ativas e me mostre um resumo. Quais devo pausar?" },
+    { label: "ROAS abaixo do mínimo", prompt: "Identifique campanhas com ROAS abaixo do aceitável e recomende quais pausar com justificativa." },
+    { label: "CPL muito alto",        prompt: "Identifique campanhas com CPL acima do benchmark e recomende pausar as piores." },
+    { label: "Frequência alta",       prompt: "Identifique conjuntos com frequência acima de 3 que estão saturados e sugira pausar." },
+  ],
+  otimizar: [
+    { label: "Aumentar budget",    prompt: "Analise quais campanhas estão com bom ROAS e recomende aumento de budget com valores sugeridos." },
+    { label: "Pausar ruins",       prompt: "Identifique os anúncios e conjuntos com pior performance e recomende pausar com dados." },
+    { label: "Duplicar vencedora", prompt: "Identifique a campanha com melhor ROAS e sugira como duplicar com novo público." },
+    { label: "Ajustar público",    prompt: "Analise o breakdown por idade/sexo/região e sugira como otimizar o targeting dos conjuntos." },
+  ],
+}
 
 const SKILL_ICONS: Record<string, any> = {
   BarChart2, Zap, Search, FileText, Users, Image, Bell, DollarSign, Power,
@@ -181,6 +215,8 @@ export default function AgentePage() {
   const [logsOpen, setLogsOpen]             = useState(false)
   const [logsLoading, setLogsLoading]       = useState(false)
   const [uploading, setUploading]           = useState(false)
+  const [wizardOpen, setWizardOpen]         = useState(false)
+  const [activeAction, setActiveAction]     = useState<ActiveAction>(null)
 
   const bottomRef   = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
@@ -421,7 +457,7 @@ export default function AgentePage() {
         <div className="max-w-[700px] mx-auto w-full py-8 px-2">
 
           {/* Empty state */}
-          {messages.length === 0 && !loading && (
+          {messages.length === 0 && !loading && !wizardOpen && (
             <div className="flex flex-col items-center gap-10 pt-8 pb-4">
               <div className="flex flex-col items-center gap-4">
                 <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-violet-600/25 to-violet-900/10 ring-1 ring-violet-500/20 flex items-center justify-center shadow-[0_0_40px_rgba(139,92,246,0.12)]">
@@ -435,38 +471,90 @@ export default function AgentePage() {
                 </div>
               </div>
 
-              {skills.length > 0 ? (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 w-full max-w-xl">
-                  {skills.map(skill => {
-                    const Icon = SKILL_ICONS[skill.icon] ?? Zap
+              {/* Primary action buttons */}
+              <div className="w-full max-w-xl space-y-3">
+                <div className="flex flex-wrap gap-2 justify-center">
+                  {MAIN_ACTIONS.map(action => {
+                    const Icon    = action.icon
+                    const isActive = action.id !== "criar" && activeAction === action.id
                     return (
-                      <button key={skill.id} onClick={() => send(skill.prompt)}
-                        className="text-left px-5 py-4 bg-white/[0.03] ring-1 ring-white/[0.07] rounded-2xl hover:bg-white/[0.06] hover:ring-white/[0.12] transition-all group">
-                        <div className="flex items-center gap-2.5 mb-1.5">
-                          <Icon size={14} className="text-violet-400" />
-                          <span className="text-[13px] font-semibold text-zinc-200 group-hover:text-white">{skill.name}</span>
-                        </div>
-                        <p className="text-[12px] text-zinc-600 leading-snug line-clamp-2">{skill.prompt.slice(0, 80)}…</p>
+                      <button key={action.id}
+                        onClick={() => {
+                          if (action.id === "criar") { setWizardOpen(true); setActiveAction(null) }
+                          else setActiveAction(isActive ? null : action.id as ActiveAction)
+                        }}
+                        className={cn(
+                          "flex items-center gap-2 px-4 py-2.5 rounded-2xl text-[13px] font-semibold ring-1 transition-all",
+                          isActive
+                            ? "bg-white/[0.1] text-white ring-white/[0.2]"
+                            : action.color
+                        )}>
+                        <Icon size={14} />
+                        {action.label}
                       </button>
                     )
                   })}
                 </div>
-              ) : (
-                <div className="grid grid-cols-2 gap-2.5 w-full max-w-xl">
-                  {SUGGESTIONS.map(s => (
-                    <button key={s.text} onClick={() => send(s.text)}
-                      className="flex items-start gap-3 text-left px-5 py-4 bg-white/[0.03] ring-1 ring-white/[0.07] rounded-2xl hover:bg-white/[0.06] hover:ring-white/[0.12] transition-all group">
-                      <s.icon size={14} className="text-zinc-500 mt-0.5 shrink-0 group-hover:text-zinc-300 transition-colors" />
-                      <span className="text-[13px] text-zinc-400 group-hover:text-zinc-200 leading-snug transition-colors">{s.text}</span>
-                    </button>
-                  ))}
-                </div>
+
+                {/* Sub-chips */}
+                {activeAction && activeAction in SUB_ACTIONS && (
+                  <div className="flex flex-wrap gap-2 justify-center animate-in fade-in slide-in-from-top-1 duration-200">
+                    {SUB_ACTIONS[activeAction].map(sub => (
+                      <button key={sub.label}
+                        onClick={() => { send(sub.prompt); setActiveAction(null) }}
+                        className="px-3.5 py-2 rounded-xl text-[12px] font-medium bg-white/[0.04] text-zinc-300 ring-1 ring-white/[0.08] hover:bg-white/[0.09] hover:text-white transition-all">
+                        {sub.label}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Skills / suggestions */}
+              {!activeAction && (
+                skills.length > 0 ? (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 w-full max-w-xl">
+                    {skills.map(skill => {
+                      const Icon = SKILL_ICONS[skill.icon] ?? Zap
+                      return (
+                        <button key={skill.id} onClick={() => send(skill.prompt)}
+                          className="text-left px-5 py-4 bg-white/[0.03] ring-1 ring-white/[0.07] rounded-2xl hover:bg-white/[0.06] hover:ring-white/[0.12] transition-all group">
+                          <div className="flex items-center gap-2.5 mb-1.5">
+                            <Icon size={14} className="text-violet-400" />
+                            <span className="text-[13px] font-semibold text-zinc-200 group-hover:text-white">{skill.name}</span>
+                          </div>
+                          <p className="text-[12px] text-zinc-600 leading-snug line-clamp-2">{skill.prompt.slice(0, 80)}…</p>
+                        </button>
+                      )
+                    })}
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-2 gap-2.5 w-full max-w-xl">
+                    {SUGGESTIONS.map(s => (
+                      <button key={s.text} onClick={() => send(s.text)}
+                        className="flex items-start gap-3 text-left px-5 py-4 bg-white/[0.03] ring-1 ring-white/[0.07] rounded-2xl hover:bg-white/[0.06] hover:ring-white/[0.12] transition-all group">
+                        <s.icon size={14} className="text-zinc-500 mt-0.5 shrink-0 group-hover:text-zinc-300 transition-colors" />
+                        <span className="text-[13px] text-zinc-400 group-hover:text-zinc-200 leading-snug transition-colors">{s.text}</span>
+                      </button>
+                    ))}
+                  </div>
+                )
               )}
             </div>
           )}
 
+          {/* Wizard — fills chat area when open */}
+          {wizardOpen && (
+            <div className="py-4">
+              <WizardPanel
+                onSubmit={msg => { setWizardOpen(false); send(msg) }}
+                onClose={() => setWizardOpen(false)}
+              />
+            </div>
+          )}
+
           {/* Messages */}
-          {messages.length > 0 && (
+          {messages.length > 0 && !wizardOpen && (
             <div className="space-y-8">
               {messages.map((msg, i) => {
                 const isLast = i === messages.length - 1
@@ -712,6 +800,13 @@ export default function AgentePage() {
                       skillsOpen ? "text-violet-300 bg-violet-500/10 ring-1 ring-violet-500/20" : "text-zinc-600 hover:text-zinc-300 hover:bg-white/[0.05]"
                     )}>
                     <Sparkles size={12} /> Skills
+                  </button>
+
+                  <button onClick={() => setWizardOpen(v => !v)} disabled={loading}
+                    className={cn("flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[12px] font-medium transition-all disabled:opacity-40",
+                      wizardOpen ? "text-violet-300 bg-violet-500/10 ring-1 ring-violet-500/20" : "text-zinc-600 hover:text-zinc-300 hover:bg-white/[0.05]"
+                    )}>
+                    <Plus size={12} /> Campanha
                   </button>
 
                   <input ref={fileRef} type="file" accept="image/*,video/*" className="hidden"

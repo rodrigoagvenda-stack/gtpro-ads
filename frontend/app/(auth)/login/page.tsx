@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase"
 import { useRouter } from "next/navigation"
 import Image from "next/image"
 import Link from "next/link"
+import { Sparkles } from "lucide-react"
 
 export default function LoginPage() {
   const [email, setEmail] = useState("")
@@ -34,8 +35,12 @@ export default function LoginPage() {
       <div className="w-full max-w-[360px] px-4">
 
         <div className="flex flex-col items-center mb-8">
-          <Image src="/logo.png" alt="GTPRO" width={140} height={48} className="object-contain mb-2" priority />
-          <p className="text-[13px] text-zinc-500 mt-1">Gestão de tráfego com inteligência artificial</p>
+          {/* Brand icon */}
+          <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-violet-600/30 to-violet-900/15 ring-1 ring-violet-500/25 flex items-center justify-center shadow-[0_0_40px_rgba(139,92,246,0.15)] mb-5">
+            <Sparkles size={24} className="text-violet-400" />
+          </div>
+          <Image src="/logo.png" alt="GTPRO" width={120} height={40} className="object-contain mb-1" priority />
+          <p className="text-[12px] text-zinc-600 mt-1">Gestão de tráfego com inteligência artificial</p>
         </div>
 
         <form onSubmit={handleLogin} className="space-y-3">
@@ -72,6 +77,14 @@ export default function LoginPage() {
           <Link href="/cadastro" className="text-violet-400 hover:text-violet-300 transition-colors">
             Criar conta
           </Link>
+        </p>
+
+        <p className="text-center text-[12px] text-zinc-700 mt-3">
+          Precisa de ajuda?{" "}
+          <a href="https://forms.gle/gtpro-suporte" target="_blank" rel="noopener noreferrer"
+            className="text-zinc-500 hover:text-zinc-300 transition-colors underline underline-offset-2">
+            Falar com suporte
+          </a>
         </p>
       </div>
     </div>
