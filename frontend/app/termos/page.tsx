@@ -1,4 +1,5 @@
 import type { Metadata } from "next"
+import Image from "next/image"
 import Link from "next/link"
 
 export const metadata: Metadata = {
@@ -11,7 +12,8 @@ export default function TermosPage() {
     <div className="min-h-screen bg-[#08080a] text-zinc-300">
       <div className="max-w-3xl mx-auto px-6 py-16">
 
-        <div className="mb-10">
+        <div className="mb-12 flex items-center justify-between">
+          <Image src="/logo.png" alt="Grupo Venda" width={180} height={40} className="object-contain" />
           <Link href="/" className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors">← Voltar</Link>
         </div>
 
@@ -186,8 +188,11 @@ export default function TermosPage() {
 
         </div>
 
-        <div className="mt-16 pt-8 border-t border-white/[0.06] text-xs text-zinc-600 text-center">
-          GTPRO · gtpro.vendai.pro · © {new Date().getFullYear()} Vendai Tecnologia · Todos os direitos reservados
+        <div className="mt-16 pt-8 border-t border-white/[0.06] flex flex-col items-center gap-4">
+          <Image src="/logo.png" alt="Grupo Venda" width={120} height={28} className="object-contain opacity-40" />
+          <p className="text-xs text-zinc-600 text-center">
+            GTPRO · gtpro.vendai.pro · © {new Date().getFullYear()} Grupo Venda · Todos os direitos reservados
+          </p>
         </div>
 
       </div>
