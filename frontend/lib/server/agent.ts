@@ -9,7 +9,7 @@ import {
   getAds, getAdsByAdSet, updateAd, duplicateAd, deleteAd, createAd,
   getPixels, getPixelStats, getCustomConversions,
   getCustomAudiences, createLookalikeAudience, createWebsiteAudience, createEngagementAudience,
-  getAccountInfo,
+  getAccountInfo, searchGeoLocation,
 } from "./meta-ads"
 
 // ─── Streaming chunk types ────────────────────────────────────────────────────
@@ -25,123 +25,128 @@ export type AgentChunk =
 
 // ─── System prompt ────────────────────────────────────────────────────────────
 
-const SYSTEM_PROMPT = `Você é o GTPRO, agente especializado em gestão de tráfego pago no Meta Ads.
-
-Você tem acesso COMPLETO à API do Meta Ads: criar, editar, duplicar e deletar campanhas, conjuntos de anúncios e anúncios; acessar pixel, conversões, públicos e insights detalhados.
+const SYSTEM_PROMPT = `Você é o GTPRO, especialista em Meta Ads com acesso completo à API. Cria, edita e otimiza campanhas de verdade — não apenas sugere.
 
 ────────────────────────────────────────
-REGRAS DE FORMATAÇÃO — OBRIGATÓRIAS
+FORMATAÇÃO
 ────────────────────────────────────────
-- Nunca use tabelas markdown (sem pipes |)
-- Nunca use emojis
-- Use listas com hífen quando necessário
-- Seja direto e conciso
-- SEMPRE escreva em português brasileiro com acentuação completa e correta
-- NUNCA omita acentos
+- Português brasileiro com acentuação completa. NUNCA omita acentos.
+- Sem tabelas markdown, sem emojis
+- Respostas diretas e curtas — sem introduções, sem "vou fazer X agora"
+- Listas com hífen quando necessário
 
 ────────────────────────────────────────
-FLUXO DE CRIAÇÃO DE CAMPANHA
+POSTURA — OBRIGATÓRIO
 ────────────────────────────────────────
-Quando o usuário pedir para criar uma campanha, SEMPRE apresente os dois modos antes de prosseguir:
-
-"Para criar sua campanha, prefere:
-
-1. Modo Inteligente — analiso seus dados históricos e identifico a melhor oportunidade, criando uma campanha com base em evidências reais da sua conta.
-
-2. Modo Manual — você me passa as informações e eu estruturo tudo com você passo a passo.
-
-Qual prefere?"
-
-MODO 1 — INTELIGENTE:
-- Use get_campaigns e get_account_insights para analisar a conta
-- Identifique a maior oportunidade (campanha com melhor CPL/ROAS que pode escalar, gargalo que pode ser corrigido, objetivo não explorado)
-- Apresente a análise com números reais: "A campanha X trouxe CPL de R$X. Criando uma campanha similar com ajuste Y, estimo redução de Z% no CPL com base no histórico"
-- NUNCA use achismo — só afirme o que os dados sustentam
-- Pergunte: "Posso implementar essa estrutura?" e só execute após aprovação
-
-MODO 2 — MANUAL (step by step):
-Conduza o usuário pelos seguintes passos em ordem, um de cada vez:
-1. Objetivo da campanha (LEADS, SALES, TRAFFIC, ENGAGEMENT, MESSAGES)
-2. Público-alvo (idade, gênero, localização, interesses)
-3. Budget diário ou total e período
-4. Formato do criativo (imagem, vídeo, carrossel)
-5. Copy do anúncio — neste passo, use sua skill de copywriter: crie 3 versões de headline e texto primary, seguindo boas práticas de tráfego pago para o objetivo escolhido
-6. URL de destino e UTM (use generate_utm para gerar os parâmetros)
-7. Nome da campanha (siga o template de nomenclatura configurado)
-8. Revisão final — liste tudo e pergunte "Confirma a criação?"
+- Quando recomendar algo com base em dados, MANTENHA a posição se contestado sem argumento técnico
+- Exemplo correto: "Entendo sua preferência, mas o CPL atual de R$63 é 4× o teto de R$15. Aumentar orçamento agora vai piorar. Recomendo otimizar primeiro."
+- Só recue se o usuário apresentar dado ou razão concreta
+- NUNCA se desculpe por recomendações corretas
 
 ────────────────────────────────────────
-SKILL: COPYWRITER DE ANÚNCIOS
+NOMENCLATURA — OBRIGATÓRIO
 ────────────────────────────────────────
-Quando chegar na etapa de copy (modo manual) ou quando o usuário pedir copy:
-- Crie 3 variações de headline (máx. 40 caracteres cada)
-- Crie 3 variações de texto primary (máx. 125 caracteres para feed, máx. 90 para stories)
-- Para LEADS: foque em dor/solução e CTA direto ("Fale agora", "Quero saber mais")
-- Para SALES: foque em benefício + prova social + urgência
-- Para MESSAGES/WHATSAPP: foque em conversa natural, convide para o WhatsApp
-- Para TRAFFIC: foque em curiosidade e benefício claro
-- Justifique cada escolha em uma linha
+- Se houver template configurado, SEMPRE aplique ao criar campanhas, conjuntos e anúncios
+- Substitua variáveis pelos valores reais: [OBJETIVO], [PÚBLICO], [DATA], [NICHO]
+- Sem template: use [OBJETIVO] - [PÚBLICO-ALVO] - [DATA] (ex: "LEAD - Mulheres SP 25-55 - Jun25")
 
 ────────────────────────────────────────
-SKILL: ESTRATEGISTA DE CAMPANHA
+GEOLOCALIZAÇÃO — REGRA CRÍTICA
 ────────────────────────────────────────
-Para cada objetivo, siga esta estrutura recomendada:
-
-LEADS:
-- Objetivo: OUTCOME_LEADS
-- Otimização: LEAD_GENERATION
-- Público: broad (25-55, interesses do nicho) + lookalike dos leads existentes
-- Budget inicial sugerido: R$30-50/dia por conjunto
-- Criativo: vídeo curto (15s) ou imagem com formulário nativo
-
-VENDAS/E-COMMERCE:
-- Objetivo: OUTCOME_SALES
-- Otimização: OFFSITE_CONVERSIONS (Purchase)
-- Pixel obrigatório — verificar se está ativo antes de criar
-- Público: retargeting visitantes + lookalike compradores
-- Budget: mínimo R$50/dia para sair da fase de aprendizado
-
-WHATSAPP/MENSAGENS:
-- Objetivo: OUTCOME_ENGAGEMENT ou MESSAGES
-- Otimização: CONVERSATIONS
-- SEMPRE verificar WhatsApp conectado antes de criar (use check_whatsapp_status)
-- Se não tiver WhatsApp conectado, perguntar: "Deseja usar WhatsApp Business ou uma URL de destino?"
-- Público: broad por localização + comportamentos de engajamento
-
-TRÁFEGO:
-- Objetivo: OUTCOME_TRAFFIC
-- Otimização: LINK_CLICKS ou LANDING_PAGE_VIEWS
-- Rastreamento UTM obrigatório
+- NUNCA monte targeting de localização sem antes chamar search_geo
+- Fluxo obrigatório: search_geo("São Paulo") → pega o key retornado → monta geo_locations
+- Formato correto para targeting:
+  geo_locations: { cities: [{ key: "KEY_RETORNADO", radius: 15, distance_unit: "kilometer" }] }
+- Para Brasil inteiro: geo_locations: { countries: ["BR"] }
+- NUNCA chute um key de cidade. Sempre busque primeiro.
 
 ────────────────────────────────────────
-NOMENCLATURA DE CAMPANHAS
+PARÂMETROS TÉCNICOS POR OBJETIVO
 ────────────────────────────────────────
-Se um template de nomenclatura estiver configurado, SEMPRE siga-o ao criar campanhas.
-Substitua as variáveis pelos valores reais da campanha sendo criada.
-Se não houver template, sugira um nome descritivo no formato: [Objetivo] - [Público] - [Data]
+
+OUTCOME_LEADS (Geração de Leads):
+- optimization_goal: LEAD_GENERATION
+- billing_event: IMPRESSIONS
+- promoted_object: { page_id: "<PAGE_ID>" }
+- destination_type: não obrigatório
+- Budget mínimo: R$30/dia por conjunto
+- Criativo: imagem ou vídeo com formulário nativo Meta
+
+OUTCOME_MESSAGES / WhatsApp:
+- optimization_goal: CONVERSATIONS
+- billing_event: IMPRESSIONS
+- promoted_object: { page_id: "<PAGE_ID>" }
+- destination_type: "WHATSAPP" (para WhatsApp Business) ou "MESSENGER"
+- NÃO use check_whatsapp_status — isso é para notificações do sistema, não para Meta Ads
+- O WhatsApp Business é vinculado à Página do Facebook no Meta Business Manager
+- Budget mínimo: R$30/dia por conjunto
+
+OUTCOME_TRAFFIC (Tráfego):
+- optimization_goal: LINK_CLICKS ou LANDING_PAGE_VIEWS
+- billing_event: IMPRESSIONS
+- promoted_object: não obrigatório
+- UTM obrigatório — use generate_utm antes de criar o anúncio
+
+OUTCOME_ENGAGEMENT (Engajamento):
+- optimization_goal: POST_ENGAGEMENT ou PAGE_LIKES
+- billing_event: IMPRESSIONS
+- promoted_object: { page_id: "<PAGE_ID>" }
+
+OUTCOME_AWARENESS (Reconhecimento):
+- optimization_goal: REACH ou IMPRESSIONS
+- billing_event: IMPRESSIONS
+- promoted_object: não obrigatório
+
+OUTCOME_SALES (Vendas / E-commerce):
+- optimization_goal: OFFSITE_CONVERSIONS ou VALUE
+- billing_event: IMPRESSIONS
+- promoted_object: { pixel_id: "<PIXEL_ID>", custom_event_type: "PURCHASE" }
+- Verificar pixel ativo com get_pixels antes de criar
+- Budget mínimo: R$50/dia (fase de aprendizado da Meta)
 
 ────────────────────────────────────────
-REGRAS GERAIS DE COMPORTAMENTO
+BID AMOUNT — REGRA ABSOLUTA
 ────────────────────────────────────────
-- Para saudações ou perguntas simples, responda brevemente sem buscar dados
-- Só use ferramentas quando o usuário pedir análise, métricas ou ações concretas
-- Em modo supervisionado: na PRIMEIRA menção de uma ação de escrita, descreva o que vai fazer e pergunte "Posso executar?" — execute imediatamente se o usuário confirmar
-- Em modo NÃO supervisionado: execute ações diretamente sem pedir confirmação
-- NUNCA pergunte "em qual conta?" — use sempre a conta informada no contexto
-- Nunca delete sem confirmação explícita
-- Justifique cada ação com dados reais
-- Ao criar campanhas, sempre crie com status PAUSED por padrão
+- NUNCA defina bid_amount a menos que o usuário peça explicitamente "lance manual" ou "bid cap"
+- O padrão é leilão automático da Meta (sem bid_amount)
+- Se o usuário pedir lance manual, informe os riscos antes de definir
 
 ────────────────────────────────────────
-TEMPLATE DE RELATÓRIO DE PERFORMANCE
+CRIAÇÃO DE CAMPANHA — FLUXO OBRIGATÓRIO
 ────────────────────────────────────────
-Quando o usuário pedir um relatório no chat, gere um resumo analítico direto com:
-- Principais KPIs do período
-- Destaques e campanhas com melhor/pior performance
-- 3 recomendações práticas baseadas nos dados
-- Finalize com: "Para o relatório completo em PDF, acesse a seção Relatórios."
+Antes de executar qualquer criação, confirme com o usuário:
 
-Não gere o relatório completo em formato .md no chat — esse é gerado automaticamente na seção Relatórios.`
+RESUMO DA ESTRUTURA:
+- Campanha: [nome] | [objetivo] | R$[budget]/dia
+- Conjunto 1: [público] | [localização] | [otimização]
+- Anúncio 1: [criativo] | [copy resumida]
+"Posso criar?" → só executa após confirmação
+
+Ao executar:
+1. create_campaign (PAUSED)
+2. Para cada conjunto: search_geo se tiver localização → create_adset com TODOS os campos obrigatórios do objetivo
+3. Para cada anúncio: create_ad com page_id obrigatório
+
+Se um passo falhar: tente abordagem alternativa. NUNCA diga "faça manualmente" — resolva ou explique o impedimento técnico real.
+
+────────────────────────────────────────
+COPYWRITER
+────────────────────────────────────────
+Quando pedir copy ou chegar nessa etapa:
+- 3 headlines (máx 40 caracteres)
+- 3 textos primary (máx 125 chars feed / 90 chars stories)
+- Por objetivo: LEADS → dor/solução + CTA direto | MESSAGES → conversa natural | SALES → benefício + urgência | TRAFFIC → curiosidade + benefício
+
+────────────────────────────────────────
+REGRAS GERAIS
+────────────────────────────────────────
+- Saudações e perguntas simples: responda sem chamar ferramentas
+- Modo supervisionado ATIVO: descreva o que vai fazer e pergunte "Posso executar?" antes de qualquer escrita
+- Modo supervisionado DESATIVADO: execute diretamente
+- NUNCA pergunte "em qual conta?" — use a conta do contexto
+- NUNCA delete sem confirmação explícita
+- Toda afirmação sobre performance deve ter o número que a justifica
+- Relatório no chat: resumo com KPIs + 3 recomendações. Para PDF completo: seção Relatórios`
 
 const o = { type: "object" as const }
 const s = { type: "string" as const }
@@ -171,7 +176,7 @@ const TOOLS: Anthropic.Tool[] = [
   { name: "get_adset_insights", description: "Métricas detalhadas de um conjunto de anúncios.", input_schema: { ...o, properties: { adset_id: s, date_preset: s }, required: ["adset_id"] } },
 
   // ── Ad Sets — Write
-  { name: "create_adset", description: "Cria um novo conjunto de anúncios.", input_schema: { ...o, properties: { campaign_id: s, name: s, optimization_goal: s, billing_event: s, daily_budget: n, lifetime_budget: n, targeting: { type: "object" as const }, start_time: s, end_time: s, bid_amount: n }, required: ["campaign_id", "name", "optimization_goal", "billing_event"] } },
+  { name: "create_adset", description: "Cria um novo conjunto de anúncios. OBRIGATÓRIO: para CONVERSATIONS incluir destination_type='WHATSAPP'. Para LEAD_GENERATION/CONVERSATIONS/POST_ENGAGEMENT incluir page_id. NUNCA incluir bid_amount salvo pedido explícito do usuário.", input_schema: { ...o, properties: { campaign_id: s, name: s, optimization_goal: s, billing_event: s, daily_budget: n, lifetime_budget: n, targeting: { type: "object" as const }, page_id: s, destination_type: s, promoted_object: { type: "object" as const }, start_time: s, end_time: s }, required: ["campaign_id", "name", "optimization_goal"] } },
   { name: "update_adset", description: "Atualiza campos de um conjunto de anúncios.", input_schema: { ...o, properties: { adset_id: s, name: s, status: s, daily_budget: n, lifetime_budget: n, targeting: { type: "object" as const }, bid_amount: n }, required: ["adset_id"] } },
   { name: "duplicate_adset", description: "Duplica um conjunto de anúncios.", input_schema: { ...o, properties: { adset_id: s, campaign_id: s }, required: ["adset_id"] } },
   { name: "delete_adset",    description: "Deleta um conjunto de anúncios.", input_schema: { ...o, properties: { adset_id: s }, required: ["adset_id"] } },
@@ -201,8 +206,11 @@ const TOOLS: Anthropic.Tool[] = [
   // ── UTM
   { name: "generate_utm", description: "Gera parâmetros UTM com tokens dinâmicos do Meta. Retorna a string para colar em Parâmetros de URL do criativo.", input_schema: { ...o, properties: { source: { type: "string", enum: ["facebook", "instagram", "meta"] }, medium: s, include_ad_name: b, include_placement: b, base_url: s }, required: [] } },
 
-  // ── WhatsApp check
-  { name: "check_whatsapp_status", description: "Verifica se o WhatsApp está configurado e conectado para esta conta. Use SEMPRE antes de criar campanha de Mensagens/WhatsApp.", input_schema: { ...o, properties: {} } },
+  // ── Geo search — OBRIGATÓRIO antes de criar targeting por cidade/região
+  { name: "search_geo", description: "Busca o key de localização para usar no targeting. SEMPRE chame antes de montar geo_locations com cidade ou região. Ex: search_geo('São Paulo') retorna o key correto.", input_schema: { ...o, properties: { query: s, type: { type: "string", enum: ["city", "region", "zip"], description: "Tipo de localização. Default: city" } }, required: ["query"] } },
+
+  // ── WhatsApp check (SOMENTE para verificar notificações do sistema GTPRO — NÃO usar para campanhas Meta)
+  { name: "check_whatsapp_status", description: "Verifica se o WhatsApp de notificações do GTPRO está configurado. NÃO use para verificar campanhas de WhatsApp do Meta Ads — isso é gerenciado pelo Meta Business Manager.", input_schema: { ...o, properties: {} } },
 
   // ── Internal
   { name: "create_alert", description: "Registra um alerta interno no sistema.", input_schema: { ...o, properties: { type: { type: "string", enum: ["roas_baixo", "cpl_alto", "budget_esgotado", "campanha_rejeitada", "queda_performance"] }, message: s, campaign_id: s }, required: ["type", "message"] } },
@@ -214,7 +222,7 @@ async function executeTool(name: string, input: Record<string, any>, tenantId: s
   const supabase = createServiceClient()
 
   if (name === "get_account_info")       return getAccountInfo(tenantId)
-  if (name === "get_campaigns")          return getCampaigns(tenantId)
+  if (name === "get_campaigns")          return getCampaigns(tenantId, input.date_preset ?? "last_7d")
   if (name === "get_account_insights")   return getInsights(tenantId, input.date_preset)
   if (name === "get_campaign_insights")  return getCampaignInsights(tenantId, input.campaign_id, input.date_preset)
   if (name === "get_insights_breakdown") return getInsightsByBreakdown(tenantId, input.breakdown, input.date_preset)
@@ -288,6 +296,13 @@ async function executeTool(name: string, input: Record<string, any>, tenantId: s
     return { params, full_url: full, instructions: "Cole o valor de `params` no campo Parâmetros de URL do criativo no gerenciador de anúncios." }
   }
 
+  if (name === "search_geo") {
+    const locType = (input.type ?? "city") as "city" | "region" | "zip"
+    const results = await searchGeoLocation(tenantId, input.query, locType)
+    if (!results.length) return { results: [], message: `Nenhum resultado para "${input.query}". Tente outro nome ou grafia.` }
+    return { results, usage: `Use o campo "key" do resultado desejado em geo_locations.cities[].key ou geo_locations.regions[].key` }
+  }
+
   if (name === "create_alert") {
     const { data } = await supabase.from("alerts").insert({ tenant_id: tenantId, ...input, status: "active" }).select().single()
     const { data: ac } = await supabase.from("agent_configs").select("whatsapp_number").eq("tenant_id", tenantId).single()
@@ -332,11 +347,14 @@ export async function runAgent(
     .filter(m => m.role === "user" || m.role === "assistant")
     .map(m => ({ role: m.role as "user" | "assistant", content: m.content }))
 
-  const userContent = prior.length === 0 ? `${configCtx}\n\n${message}` : message
+  // Inject configCtx always — naming template and account must be present in every turn
+  const userContent = `${configCtx}\n\n${message}`
   const messages: Anthropic.MessageParam[] = [...prior, { role: "user", content: userContent }]
 
   const actionsTaken: any[] = []
   const toolsUsed: { name: string; input: Record<string, any> }[] = []
+  let iterations = 0
+  const MAX_ITERATIONS = 20
 
   const supabase = createServiceClient()
   const period   = new Date().toISOString().slice(0, 7) // YYYY-MM
@@ -350,7 +368,8 @@ export async function runAgent(
     }).then(() => {})
   }
 
-  while (true) {
+  while (iterations < MAX_ITERATIONS) {
+    iterations++
     const stream = client.messages.stream({
       model, max_tokens: 4096, system: SYSTEM_PROMPT, tools: TOOLS, messages
     })

@@ -255,18 +255,38 @@ export async function getAdSetById(tenantId: string, adSetId: string) {
 export async function createAdSet(tenantId: string, params: Record<string, any>) {
   const { token, adAccountId } = await getTokenAndAccount(tenantId)
   const body: Record<string, unknown> = {
-    campaign_id: params.campaign_id,
-    name: params.name,
+    campaign_id:       params.campaign_id,
+    name:              params.name,
     optimization_goal: params.optimization_goal,
-    billing_event: params.billing_event,
-    targeting: params.targeting,
-    status: params.status ?? "PAUSED",
+    billing_event:     params.billing_event ?? "IMPRESSIONS",
+    targeting:         params.targeting,
+    status:            params.status ?? "PAUSED",
   }
+
+  // promoted_object — required per objective
+  if (params.promoted_object) {
+    body.promoted_object = params.promoted_object
+  } else if (params.page_id) {
+    // Auto-build promoted_object from page_id when objective requires it
+    const goal = (params.optimization_goal ?? "").toUpperCase()
+    const needsPage = ["LEAD_GENERATION", "CONVERSATIONS", "POST_ENGAGEMENT", "PAGE_LIKES", "OFFSITE_CONVERSIONS"].includes(goal)
+    if (needsPage) body.promoted_object = { page_id: params.page_id }
+  }
+
+  // destination_type — required for MESSAGES / WhatsApp campaigns
+  if (params.destination_type) {
+    body.destination_type = params.destination_type
+  } else if ((params.optimization_goal ?? "").toUpperCase() === "CONVERSATIONS") {
+    body.destination_type = "WHATSAPP"
+  }
+
   if (params.daily_budget)    body.daily_budget    = Math.round(params.daily_budget * 100)
   if (params.lifetime_budget) body.lifetime_budget = Math.round(params.lifetime_budget * 100)
   if (params.start_time) body.start_time = params.start_time
   if (params.end_time)   body.end_time   = params.end_time
-  if (params.bid_amount) body.bid_amount = Math.round(params.bid_amount * 100)
+  // bid_amount: only set if explicitly provided — Meta uses automatic bidding by default
+  if (params.bid_amount != null && params.bid_amount > 0) body.bid_amount = Math.round(params.bid_amount * 100)
+
   return graphPost(`/act_${adAccountId}/adsets`, token, body)
 }
 
@@ -360,31 +380,32 @@ export async function createAd(tenantId: string, params: Record<string, any>) {
   if (params.creative_id) {
     creative.creative_id = params.creative_id
   } else {
-    const spec: Record<string, any> = {}
-    if (params.page_id) {
+    if (!params.page_id) throw new Error("page_id é obrigatório para criar um anúncio. Solicite ao usuário o ID da Página do Facebook.")
+
+    const spec: Record<string, any> = { page_id: params.page_id }
+    if (params.instagram_actor_id) spec.instagram_actor_id = params.instagram_actor_id
+
+    // video_id takes priority — can't use both video and image in same creative
+    if (params.video_id) {
+      spec.video_data = {
+        video_id:       params.video_id,
+        title:          params.headline,
+        message:        params.body ?? params.message,
+        call_to_action: { type: params.cta ?? "LEARN_MORE", value: { link: params.link_url ?? params.website_url } },
+      }
+    } else {
       const linkData: Record<string, any> = {
-        message: params.body ?? params.message,
-        name:    params.headline,
-        link:    params.link_url ?? params.website_url ?? "https://facebook.com",
+        message:        params.body ?? params.message,
+        name:           params.headline,
+        link:           params.link_url ?? params.website_url ?? "https://facebook.com",
         call_to_action: { type: params.cta ?? "LEARN_MORE" },
       }
-      if (params.image_hash)  linkData.image_hash = params.image_hash
-      if (params.caption)     linkData.caption    = params.caption
+      if (params.image_hash)  linkData.image_hash  = params.image_hash
+      if (params.caption)     linkData.caption     = params.caption
       if (params.description) linkData.description = params.description
-
-      if (params.video_id) {
-        spec.video_data = {
-          video_id:    params.video_id,
-          title:       params.headline,
-          message:     params.body ?? params.message,
-          call_to_action: { type: params.cta ?? "LEARN_MORE", value: { link: params.link_url ?? params.website_url } },
-        }
-      } else {
-        spec.link_data = linkData
-      }
-      spec.page_id = params.page_id
-      if (params.instagram_actor_id) spec.instagram_actor_id = params.instagram_actor_id
+      spec.link_data = linkData
     }
+
     creative.name              = params.creative_name ?? params.name
     creative.object_story_spec = spec
   }
@@ -585,6 +606,27 @@ export async function getCampaignBreakdowns(tenantId: string, campaignId: string
     limit: "500",
   })
   return data.data ?? []
+}
+
+// ─── Geo Location Search ─────────────────────────────────────────────────────
+
+export async function searchGeoLocation(tenantId: string, query: string, locationType: "city" | "region" | "country" | "zip" = "city") {
+  const token = await getToken(tenantId)
+  const data = await graphGet("/search", {
+    access_token: token,
+    type: "adgeolocation",
+    q: query,
+    location_types: JSON.stringify([locationType]),
+    country_code: "BR",
+  })
+  return (data.data ?? []).slice(0, 8).map((r: any) => ({
+    key:          r.key,
+    name:         r.name,
+    type:         r.type,
+    country_code: r.country_code,
+    region:       r.region ?? null,
+    region_id:    r.region_id ?? null,
+  }))
 }
 
 // ─── Auth ─────────────────────────────────────────────────────────────────────
