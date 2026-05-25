@@ -648,6 +648,24 @@ export async function getInsightsByBreakdown(tenantId: string, breakdown: string
   return data.data ?? []
 }
 
+// ─── Pages ───────────────────────────────────────────────────────────────────
+
+export async function getPages(tenantId: string) {
+  const token = await getToken(tenantId)
+  const data = await graphGet("/me/accounts", {
+    access_token: token,
+    fields: "id,name,category,fan_count,picture{url}",
+    limit: "50",
+  })
+  return (data.data ?? []).map((p: any) => ({
+    id:        p.id,
+    name:      p.name,
+    category:  p.category ?? null,
+    fan_count: p.fan_count ?? null,
+    picture:   p.picture?.data?.url ?? null,
+  }))
+}
+
 // ─── Pixel ───────────────────────────────────────────────────────────────────
 
 export async function getPixels(tenantId: string) {

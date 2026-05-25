@@ -9,7 +9,7 @@ import {
   getAds, getAdsByAdSet, updateAd, duplicateAd, deleteAd, createAd,
   getPixels, getPixelStats, getCustomConversions,
   getCustomAudiences, createLookalikeAudience, createWebsiteAudience, createEngagementAudience,
-  getAccountInfo, searchGeoLocation,
+  getAccountInfo, searchGeoLocation, getPages,
 } from "./meta-ads"
 
 // ─── Streaming chunk types ────────────────────────────────────────────────────
@@ -60,6 +60,14 @@ NOMENCLATURA — OBRIGATÓRIO
 - Se houver template configurado, SEMPRE aplique ao criar campanhas, conjuntos e anúncios
 - Substitua variáveis pelos valores reais: [OBJETIVO], [PÚBLICO], [DATA], [NICHO]
 - Sem template: use [OBJETIVO] - [PÚBLICO-ALVO] - [DATA] (ex: "LEAD - Mulheres SP 25-55 - Jun25")
+
+────────────────────────────────────────
+PAGE_ID — REGRA CRÍTICA
+────────────────────────────────────────
+- NUNCA peça page_id ao usuário. Chame get_pages para buscar automaticamente.
+- Se retornar 1 página: use diretamente, sem perguntar.
+- Se retornar múltiplas: mostre a lista e pergunte qual usar (1 vez só).
+- Se retornar vazio: informe que nenhuma página está vinculada ao token e oriente a conectar no Meta Business Manager.
 
 ────────────────────────────────────────
 GEOLOCALIZAÇÃO — REGRA CRÍTICA
@@ -214,6 +222,9 @@ const TOOLS: Anthropic.Tool[] = [
   { name: "duplicate_ad", description: "Duplica um anúncio, opcionalmente para outro ad set.", input_schema: { ...o, properties: { ad_id: s, adset_id: s }, required: ["ad_id"] } },
   { name: "delete_ad",    description: "Deleta um anúncio.", input_schema: { ...o, properties: { ad_id: s }, required: ["ad_id"] } },
 
+  // ── Pages
+  { name: "get_pages", description: "Lista as Páginas do Facebook vinculadas ao token. SEMPRE chame antes de qualquer operação que precise de page_id — nunca peça o page_id ao usuário se ainda não chamou get_pages.", input_schema: { ...o, properties: {} } },
+
   // ── Pixel
   { name: "get_pixels",             description: "Lista os Pixels do Facebook da conta.", input_schema: { ...o, properties: {} } },
   { name: "get_pixel_stats",        description: "Estatísticas de eventos de um Pixel.", input_schema: { ...o, properties: { pixel_id: s, date_preset: s }, required: ["pixel_id"] } },
@@ -275,6 +286,7 @@ async function executeTool(name: string, input: Record<string, any>, tenantId: s
   }
   if (name === "duplicate_ad")           return duplicateAd(tenantId, input.ad_id, input.adset_id)
   if (name === "delete_ad")              return deleteAd(tenantId, input.ad_id)
+  if (name === "get_pages")              return getPages(tenantId)
   if (name === "get_pixels")             return getPixels(tenantId)
   if (name === "get_pixel_stats")        return getPixelStats(tenantId, input.pixel_id, input.date_preset)
   if (name === "get_custom_conversions") return getCustomConversions(tenantId)
