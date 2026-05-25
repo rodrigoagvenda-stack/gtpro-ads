@@ -401,6 +401,14 @@ export async function createAdSet(tenantId: string, params: Record<string, any>)
     }))
   }
 
+  // targeting_automation.advantage_audience obrigatório (erro 100/1870227 se omitido)
+  // 0 = público manual (respeita interesses/geo definidos); 1 = Advantage+ audience (Meta expande automaticamente)
+  if (!targeting.targeting_automation) {
+    targeting.targeting_automation = {
+      advantage_audience: params.advantage_audience ?? 0,
+    }
+  }
+
   const body: Record<string, unknown> = {
     campaign_id:       params.campaign_id,
     name:              params.name,
