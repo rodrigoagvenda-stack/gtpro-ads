@@ -360,6 +360,15 @@ export async function createAdSet(tenantId: string, params: Record<string, any>)
     )
   }
 
+  // Enforce minimum radius for city targeting — Meta rejects < 15km for most Brazilian cities
+  if (targeting.geo_locations?.cities?.length) {
+    targeting.geo_locations.cities = targeting.geo_locations.cities.map((city: any) => ({
+      ...city,
+      radius:        Math.max(Number(city.radius ?? 25), 15),
+      distance_unit: city.distance_unit ?? "kilometer",
+    }))
+  }
+
   const body: Record<string, unknown> = {
     campaign_id:       params.campaign_id,
     name:              params.name,
@@ -646,6 +655,26 @@ export async function getInsightsByBreakdown(tenantId: string, breakdown: string
     level: "account",
   })
   return data.data ?? []
+}
+
+// ─── Interests ───────────────────────────────────────────────────────────────
+
+export async function searchInterests(tenantId: string, query: string) {
+  const token = await getToken(tenantId)
+  const data = await graphGet("/search", {
+    access_token: token,
+    type: "adinterest",
+    q: query,
+    limit: "10",
+  })
+  return (data.data ?? []).map((r: any) => ({
+    id:               r.id,
+    name:             r.name,
+    audience_size:    r.audience_size_lower_bound ?? null,
+    topic:            r.topic ?? null,
+    description:      r.description ?? null,
+    disambiguation_category: r.disambiguation_category ?? null,
+  }))
 }
 
 // ─── Pages ───────────────────────────────────────────────────────────────────

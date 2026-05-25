@@ -9,7 +9,7 @@ import {
   getAds, getAdsByAdSet, updateAd, duplicateAd, deleteAd, createAd,
   getPixels, getPixelStats, getCustomConversions,
   getCustomAudiences, createLookalikeAudience, createWebsiteAudience, createEngagementAudience,
-  getAccountInfo, searchGeoLocation, getPages,
+  getAccountInfo, searchGeoLocation, getPages, searchInterests,
 } from "./meta-ads"
 
 // ─── Streaming chunk types ────────────────────────────────────────────────────
@@ -75,9 +75,18 @@ GEOLOCALIZAÇÃO — REGRA CRÍTICA
 - NUNCA monte targeting de localização sem antes chamar search_geo
 - Fluxo obrigatório: search_geo("São Paulo") → pega o key retornado → monta geo_locations
 - Formato correto para targeting:
-  geo_locations: { cities: [{ key: "KEY_RETORNADO", radius: 15, distance_unit: "kilometer" }] }
+  geo_locations: { cities: [{ key: "KEY_RETORNADO", radius: 25, distance_unit: "kilometer" }] }
 - Para Brasil inteiro: geo_locations: { countries: ["BR"] }
 - NUNCA chute um key de cidade. Sempre busque primeiro.
+- Raio mínimo para cidades brasileiras: 15km. Padrão recomendado: 25km.
+
+────────────────────────────────────────
+INTERESSES — REGRA CRÍTICA
+────────────────────────────────────────
+- NUNCA use IDs de interesse de memória, treinamento ou exemplos anteriores — todos são inválidos.
+- SEMPRE chame search_interests antes de incluir qualquer interesse no targeting.
+- Fluxo obrigatório: search_interests("empreendedorismo") → usa os IDs retornados pela API.
+- Se o usuário pedir interesses, pesquise, confirme os nomes encontrados e use os IDs reais.
 
 ────────────────────────────────────────
 PARÂMETROS TÉCNICOS POR OBJETIVO
@@ -242,6 +251,9 @@ const TOOLS: Anthropic.Tool[] = [
   // ── Geo search — OBRIGATÓRIO antes de criar targeting por cidade/região
   { name: "search_geo", description: "Busca o key de localização para usar no targeting. SEMPRE chame antes de montar geo_locations com cidade ou região. Ex: search_geo('São Paulo') retorna o key correto.", input_schema: { ...o, properties: { query: s, type: { type: "string", enum: ["city", "region", "zip"], description: "Tipo de localização. Default: city" } }, required: ["query"] } },
 
+  // ── Interest search — OBRIGATÓRIO antes de incluir interesses no targeting
+  { name: "search_interests", description: "Busca interesses válidos da Meta para usar no targeting. SEMPRE chame antes de incluir qualquer interesse — NUNCA use IDs de memória ou inventados. Ex: search_interests('empreendedorismo') retorna id e name reais.", input_schema: { ...o, properties: { query: s }, required: ["query"] } },
+
   // ── WhatsApp check (SOMENTE para verificar notificações do sistema GTPRO — NÃO usar para campanhas Meta)
   { name: "check_whatsapp_status", description: "Verifica se o WhatsApp de notificações do GTPRO está configurado. NÃO use para verificar campanhas de WhatsApp do Meta Ads — isso é gerenciado pelo Meta Business Manager.", input_schema: { ...o, properties: {} } },
 
@@ -334,7 +346,13 @@ async function executeTool(name: string, input: Record<string, any>, tenantId: s
     const locType = (input.type ?? "city") as "city" | "region" | "zip"
     const results = await searchGeoLocation(tenantId, input.query, locType)
     if (!results.length) return { results: [], message: `Nenhum resultado para "${input.query}". Tente outro nome ou grafia.` }
-    return { results, usage: `Use o campo "key" do resultado desejado em geo_locations.cities[].key ou geo_locations.regions[].key` }
+    return { results, usage: `Use o campo "key" do resultado desejado em geo_locations.cities[].key. Raio mínimo: 15km, recomendado: 25km.` }
+  }
+
+  if (name === "search_interests") {
+    const results = await searchInterests(tenantId, input.query)
+    if (!results.length) return { results: [], message: `Nenhum interesse encontrado para "${input.query}". Tente outro termo.` }
+    return { results, usage: `Use o campo "id" e "name" em targeting.interests[]. Estes são os únicos IDs válidos — nunca use IDs de outra fonte.` }
   }
 
   if (name === "create_alert") {
