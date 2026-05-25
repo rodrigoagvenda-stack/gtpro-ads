@@ -36,6 +36,16 @@ async function getTokenAndAccount(tenantId: string, connectionId?: string) {
   return { token: decrypt(data.access_token_encrypted), adAccountId: data.ad_account_id }
 }
 
+class MetaError extends Error {
+  code: number
+  subcode?: number
+  constructor(message: string, code: number, subcode?: number) {
+    super(message)
+    this.code = code
+    this.subcode = subcode
+  }
+}
+
 function parseMetaError(raw: string): string {
   try {
     const json = JSON.parse(raw)
@@ -89,7 +99,13 @@ async function graphPost(path: string, token: string, body: Record<string, unkno
   if (!res.ok) {
     const raw = await res.text()
     console.error(`[meta-ads] POST ${path} FAILED status=${res.status} response=${raw}`)
-    throw new Error(parseMetaError(raw))
+    try {
+      const json = JSON.parse(raw)
+      throw new MetaError(parseMetaError(raw), json?.error?.code ?? 0, json?.error?.error_subcode)
+    } catch (e) {
+      if (e instanceof MetaError) throw e
+      throw new Error(parseMetaError(raw))
+    }
   }
   return res.json()
 }
@@ -490,7 +506,22 @@ export async function createAdSet(tenantId: string, params: Record<string, any>)
   // bid_amount: only set if explicitly provided
   if (params.bid_amount != null && params.bid_amount > 0) body.bid_amount = Math.round(params.bid_amount * 100)
 
-  return graphPost(`/act_${adAccountId}/adsets`, token, body)
+  try {
+    return await graphPost(`/act_${adAccountId}/adsets`, token, body)
+  } catch (err) {
+    // 1815857 = conta ignora LOWEST_COST_WITHOUT_CAP e exige bid_amount com cap
+    // Retry com LOWEST_COST_WITH_BID_CAP e bid_amount = 10% do orçamento diário (mín R$1)
+    if (err instanceof MetaError && err.subcode === 1815857) {
+      const dailyBudgetCentavos = body.daily_budget as number | undefined
+      const bidAmount = dailyBudgetCentavos
+        ? Math.max(100, Math.round(dailyBudgetCentavos * 0.1))
+        : 500
+      console.log(`[meta-ads] retry adset com LOWEST_COST_WITH_BID_CAP bid_amount=${bidAmount}`)
+      const retryBody = { ...body, bid_strategy: "LOWEST_COST_WITH_BID_CAP", bid_amount: bidAmount }
+      return await graphPost(`/act_${adAccountId}/adsets`, token, retryBody)
+    }
+    throw err
+  }
 }
 
 export async function updateAdSet(tenantId: string, adSetId: string, params: Record<string, unknown>) {
