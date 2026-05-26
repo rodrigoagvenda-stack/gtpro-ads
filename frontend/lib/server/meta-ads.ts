@@ -503,7 +503,7 @@ export async function createAdSet(tenantId: string, params: Record<string, any>)
     // Força lance automático puro — sobrescreve qualquer padrão da conta
     body.bid_strategy = "LOWEST_COST_WITHOUT_CAP"
   }
-  // bid_amount: only set if explicitly provided
+  // bid_amount: only set if explicitly provided by user
   if (params.bid_amount != null && params.bid_amount > 0) body.bid_amount = Math.round(params.bid_amount * 100)
 
   try {

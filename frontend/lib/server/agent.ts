@@ -71,6 +71,50 @@ PAGE_ID — REGRA CRÍTICA
 - Se retornar vazio: informe que nenhuma página está vinculada ao token e oriente a conectar no Meta Business Manager.
 
 ────────────────────────────────────────
+REGRAS DE ORÇAMENTO — CBO vs ABO
+────────────────────────────────────────
+CBO (Campaign Budget Optimization — orçamento na campanha):
+- Passe daily_budget ou lifetime_budget SOMENTE no create_campaign
+- NO create_adset: NÃO passe daily_budget nem lifetime_budget — o campo deve ficar vazio
+- NUNCA defina bid_amount em nenhum conjunto — a Meta usa "menor custo" por padrão
+
+ABO (Ad Set Budget Optimization — orçamento no conjunto):
+- NÃO passe orçamento no create_campaign
+- Passe daily_budget ou lifetime_budget no create_adset
+- NUNCA defina bid_amount
+
+────────────────────────────────────────
+ANÁLISE DE CRIATIVOS — REGRAS OBRIGATÓRIAS
+────────────────────────────────────────
+Ao analisar criativos, SEMPRE:
+1. Busque dados em DOIS períodos: today E last_7d para cada anúncio (use get_ad_insights)
+2. Analise também o nível do conjunto (get_adset_insights) e da campanha (get_campaign_insights)
+3. NUNCA recomende pausar um criativo com menos de 48h de veiculação OU menos de R$15 gastos
+4. Compare criativos DENTRO do mesmo conjunto — não compare criativos de conjuntos diferentes
+5. Um criativo com 1 conversão a R$1,65 é MELHOR do que um criativo com R$5,86 gastos e 0 conversões
+6. Critério mínimo para recomendar pausa: gasto > 2x o CPL máximo configurado E zero conversões
+7. Sempre mostre os dados de todos os criativos antes de recomendar qualquer ação
+
+────────────────────────────────────────
+CRIAÇÃO SEM MÍDIA (imagem/vídeo)
+────────────────────────────────────────
+Quando o usuário não tiver a mídia disponível para upload:
+1. Crie a campanha e o conjunto normalmente no Meta (create_campaign + create_adset)
+2. NÃO chame create_ad — a API exige mídia aprovada
+3. Apresente um "Brief do Criativo" formatado com todos os dados prontos para o usuário copiar e colar no Gerenciador de Anúncios:
+
+--- BRIEF DO CRIATIVO ---
+Conjunto: [nome do conjunto criado]
+Texto principal: [copy escolhida]
+Título: [headline escolhida]
+Descrição: [descrição se houver]
+CTA: [call to action]
+URL de destino: [url com UTMs]
+--- FIM DO BRIEF ---
+
+Instrução: "Campanha e conjunto criados no Meta (status: PAUSADO). Acesse o Gerenciador de Anúncios, abra o conjunto '[nome]' e crie o anúncio usando o brief acima. Quando subir a mídia, o anúncio estará pronto para ativar."
+
+────────────────────────────────────────
 GEOLOCALIZAÇÃO — REGRA CRÍTICA
 ────────────────────────────────────────
 - NUNCA monte targeting de localização sem antes chamar search_geo
@@ -224,8 +268,8 @@ const TOOLS: Anthropic.Tool[] = [
   { name: "get_adset_insights", description: "Métricas detalhadas de um conjunto de anúncios.", input_schema: { ...o, properties: { adset_id: s, date_preset: s }, required: ["adset_id"] } },
 
   // ── Ad Sets — Write
-  { name: "create_adset", description: "Cria um novo conjunto de anúncios. OBRIGATÓRIO: targeting com geo_locations (use search_geo para obter o key de cidades) e advantage_audience (0 = público manual, 1 = Advantage+ automático — SEMPRE perguntar ao usuário). Para LEAD_GENERATION/CONVERSATIONS/POST_ENGAGEMENT incluir page_id. Para OFFSITE_CONVERSIONS incluir pixel_id. Para CONVERSATIONS incluir destination_type='WHATSAPP'. campaign_objective ajuda a inferir optimization_goal automaticamente. NUNCA incluir bid_amount salvo pedido explícito do usuário.", input_schema: { ...o, properties: { campaign_id: s, name: s, campaign_objective: s, optimization_goal: s, billing_event: s, daily_budget: n, lifetime_budget: n, targeting: { type: "object" as const }, advantage_audience: { type: "number" as const, enum: [0, 1], description: "0 = público manual (respeita interesses/geo), 1 = Advantage+ (Meta expande automaticamente)" }, page_id: s, pixel_id: s, custom_event_type: s, destination_type: s, promoted_object: { type: "object" as const }, start_time: s, end_time: s }, required: ["campaign_id", "name", "targeting", "advantage_audience"] } },
-  { name: "update_adset", description: "Atualiza campos de um conjunto de anúncios.", input_schema: { ...o, properties: { adset_id: s, name: s, status: s, daily_budget: n, lifetime_budget: n, targeting: { type: "object" as const }, bid_amount: n }, required: ["adset_id"] } },
+  { name: "create_adset", description: "Cria um novo conjunto de anúncios. OBRIGATÓRIO: targeting com geo_locations (use search_geo para obter o key de cidades) e advantage_audience (0 = público manual, 1 = Advantage+ automático — SEMPRE perguntar ao usuário). Para LEAD_GENERATION/CONVERSATIONS/POST_ENGAGEMENT incluir page_id. Para OFFSITE_CONVERSIONS incluir pixel_id. Para CONVERSATIONS incluir destination_type='WHATSAPP'. campaign_objective ajuda a inferir optimization_goal automaticamente. CBO: NÃO passe daily_budget nem lifetime_budget (orçamento já está na campanha). ABO: passe daily_budget ou lifetime_budget. NUNCA defina bid_amount.", input_schema: { ...o, properties: { campaign_id: s, name: s, campaign_objective: s, optimization_goal: s, billing_event: s, daily_budget: n, lifetime_budget: n, targeting: { type: "object" as const }, advantage_audience: { type: "number" as const, enum: [0, 1], description: "0 = público manual (respeita interesses/geo), 1 = Advantage+ (Meta expande automaticamente)" }, page_id: s, pixel_id: s, custom_event_type: s, destination_type: s, promoted_object: { type: "object" as const }, start_time: s, end_time: s }, required: ["campaign_id", "name", "targeting", "advantage_audience"] } },
+  { name: "update_adset", description: "Atualiza campos de um conjunto de anúncios. NUNCA defina bid_amount.", input_schema: { ...o, properties: { adset_id: s, name: s, status: s, daily_budget: n, lifetime_budget: n, targeting: { type: "object" as const } }, required: ["adset_id"] } },
   { name: "duplicate_adset", description: "Duplica um conjunto de anúncios.", input_schema: { ...o, properties: { adset_id: s, campaign_id: s }, required: ["adset_id"] } },
   { name: "delete_adset",    description: "Deleta um conjunto de anúncios.", input_schema: { ...o, properties: { adset_id: s }, required: ["adset_id"] } },
 
