@@ -54,15 +54,16 @@ export async function POST(req: NextRequest) {
     const supabase = createServiceClient()
 
     // Registra a solicitação de exclusão para auditoria e acompanhamento
-    await supabase.from("data_deletion_requests").insert({
-      facebook_user_id: userId,
-      confirmation_code: confirmationCode,
-      status: "pending",
-      requested_at: new Date().toISOString(),
-    }).throwOnError().catch(() => {
-      // Tabela pode não existir em todos os ambientes — log e continua
+    try {
+      await supabase.from("data_deletion_requests").insert({
+        facebook_user_id: userId,
+        confirmation_code: confirmationCode,
+        status: "pending",
+        requested_at: new Date().toISOString(),
+      }).throwOnError()
+    } catch {
       console.warn("[meta/data-deletion] tabela data_deletion_requests não encontrada, prosseguindo sem registro")
-    })
+    }
 
     // Remove conexões Meta cujo facebook_user_id corresponde
     // (campo opcional — depende de como o tenant armazena o vínculo com o usuário Meta)
