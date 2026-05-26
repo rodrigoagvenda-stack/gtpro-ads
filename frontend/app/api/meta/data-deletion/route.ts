@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createHmac, timingSafeEqual } from "crypto"
 import { createServiceClient } from "@/lib/server/supabase"
+import { getMetaAppSecret } from "@/lib/server/platform"
 
 function verifySignedRequest(signedRequest: string, appSecret: string): Record<string, any> | null {
   const [encodedSig, payload] = signedRequest.split(".")
@@ -19,9 +20,9 @@ function verifySignedRequest(signedRequest: string, appSecret: string): Record<s
 
 export async function POST(req: NextRequest) {
   try {
-    const appSecret = process.env.META_APP_SECRET
+    const appSecret = await getMetaAppSecret()
     if (!appSecret) {
-      console.error("[meta/data-deletion] META_APP_SECRET não configurado")
+      console.error("[meta/data-deletion] meta_app_secret não configurado em Configurações")
       return NextResponse.json({ error: "misconfiguration" }, { status: 500 })
     }
 
