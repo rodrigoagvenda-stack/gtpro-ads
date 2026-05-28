@@ -357,6 +357,26 @@ export async function POST(req: NextRequest) {
     const dailySpend = totalSpend / days
     const dailyReach = totalReach / days
 
+    // Chart data — pre-computed, injected verbatim (AI does not generate this)
+    const totalResultado = ({
+      OUTCOME_LEADS:      totalLeads,
+      OUTCOME_MESSAGES:   totalConversas,
+      OUTCOME_SALES:      totalCompras,
+      OUTCOME_ENGAGEMENT: totalEngaj,
+      OUTCOME_AWARENESS:  totalReach,
+      OUTCOME_TRAFFIC:    totalClicks,
+    } as Record<string, number>)[objective] ?? (totalLeads + totalConversas + totalCompras)
+
+    const chartJson = JSON.stringify({
+      type: "bar",
+      items: [
+        { label: "Impressões",          value: totalImpressions,              fmt: "" },
+        { label: "Cliques/interações",  value: totalClicks,                   fmt: "" },
+        { label: resultLabel,           value: totalResultado,                fmt: "" },
+        { label: "Investimento (R$)",   value: parseFloat(totalSpend.toFixed(2)), fmt: "R$" },
+      ],
+    })
+
     const agencyName    = config.agency_name    ?? config.tenant_name ?? "GTPRO"
     const agencyEmail   = config.agency_email   ?? ""
     const agencyWebsite = config.agency_website ?? ""
@@ -428,14 +448,10 @@ ${headerLines}
 
 ### Volume de resultados gerados
 
-[Crie um gráfico ASCII de barras proporcional com os 4 indicadores mais relevantes, no formato exato:]
+Copie EXATAMENTE este bloco abaixo, sem modificar nenhum caractere:
+\`\`\`chart
+${chartJson}
 \`\`\`
-Impressões          ████████████████████  [valor]
-Cliques/interações  ████████████████████  [valor]
-[Resultado]         ████████████████████  [valor]
-Investimento (R$)   ████████████████████  [valor]
-\`\`\`
-[As barras devem ser proporcionais entre si — use mais ████ para valores maiores]
 
 ### CTR — Taxa de interesse
 

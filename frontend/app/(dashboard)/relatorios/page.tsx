@@ -42,14 +42,34 @@ function isTableLine(line: string) { const t = line.trim(); return t.startsWith(
 function isSepLine(line: string)   { return /^\|[\s\-:|]+\|$/.test(line.trim()) }
 function splitRow(line: string)    { return line.trim().split("|").slice(1, -1).map(c => c.trim()) }
 
-type Seg = { type: "lines"; lines: string[] } | { type: "table"; rows: string[][] } | { type: "code"; lines: string[] }
+type ChartItem = { label: string; value: number; fmt: string }
+type Seg =
+  | { type: "lines"; lines: string[] }
+  | { type: "table"; rows: string[][] }
+  | { type: "code"; lines: string[] }
+  | { type: "chart"; items: ChartItem[] }
 
 function segmentMd(md: string): Seg[] {
   const lines = md.split("\n")
   const segs: Seg[] = []
   let i = 0
   while (i < lines.length) {
-    if (lines[i].trimStart().startsWith("```")) {
+    if (lines[i].trimStart().startsWith("```chart")) {
+      const chartLines: string[] = []
+      i++
+      while (i < lines.length && !lines[i].trimStart().startsWith("```")) {
+        chartLines.push(lines[i])
+        i++
+      }
+      i++
+      try {
+        const data = JSON.parse(chartLines.join("").trim())
+        const items: ChartItem[] = Array.isArray(data.items) ? data.items : []
+        if (items.length > 0) segs.push({ type: "chart", items })
+      } catch {
+        if (chartLines.length > 0) segs.push({ type: "code", lines: chartLines })
+      }
+    } else if (lines[i].trimStart().startsWith("```")) {
       const codeLines: string[] = []
       i++ // skip opening ```
       while (i < lines.length && !lines[i].trimStart().startsWith("```")) {
@@ -80,6 +100,16 @@ function mdToHtml(md: string): string {
   const result: string[] = []
 
   for (const seg of segs) {
+    if (seg.type === "chart") {
+      const rows = seg.items.map(item => {
+        const display = item.fmt === "R$"
+          ? `R$ ${Number(item.value).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`
+          : Number(item.value).toLocaleString("pt-BR")
+        return `<tr><td style="padding:6px 10px;color:#374151;">${inlineHtml(item.label)}</td><td style="padding:6px 10px;font-weight:600;color:#111827;">${display}</td></tr>`
+      }).join("")
+      result.push(`<table><thead><tr><th style="text-align:left;padding:8px 10px;background:#F3F4F6;border-bottom:2px solid #E5E7EB;">Indicador</th><th style="text-align:left;padding:8px 10px;background:#F3F4F6;border-bottom:2px solid #E5E7EB;">Valor</th></tr></thead><tbody>${rows}</tbody></table>`)
+      continue
+    }
     if (seg.type === "code") {
       result.push(`<pre style="background:#F3F4F6;padding:12px 16px;border-radius:8px;font-family:monospace;font-size:11px;line-height:1.6;overflow-x:auto;margin:12px 0;">${seg.lines.map(l => inlineHtml(l)).join("\n")}</pre>`)
       continue
@@ -187,6 +217,32 @@ function RenderMd({ content }: { content: string }) {
   let key = 0
 
   for (const seg of segs) {
+    if (seg.type === "chart") {
+      const maxVal = Math.max(...seg.items.map(it => Number(it.value) || 0), 1)
+      nodes.push(
+        <div key={key++} className="my-4 p-5 bg-white/[0.03] rounded-xl border border-white/[0.06] space-y-4">
+          {seg.items.map((item, idx) => {
+            const pct = Math.round((Number(item.value) / maxVal) * 100)
+            const display = item.fmt === "R$"
+              ? `R$ ${Number(item.value).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`
+              : Number(item.value).toLocaleString("pt-BR")
+            return (
+              <div key={idx} className="flex items-center gap-3">
+                <span className="w-40 text-[11px] text-zinc-400 text-right shrink-0 leading-tight">{item.label}</span>
+                <div className="flex-1 bg-white/[0.06] rounded-full h-2.5 overflow-hidden">
+                  <div
+                    className="h-full rounded-full bg-gradient-to-r from-violet-600 to-violet-400"
+                    style={{ width: `${Math.max(pct, 1)}%` }}
+                  />
+                </div>
+                <span className="w-28 text-[11px] text-zinc-200 font-mono shrink-0">{display}</span>
+              </div>
+            )
+          })}
+        </div>
+      )
+      continue
+    }
     if (seg.type === "code") {
       nodes.push(
         <pre key={key++} className="bg-white/[0.03] rounded-lg border border-white/[0.06] p-4 my-3 font-mono text-[11px] text-zinc-300 whitespace-pre overflow-x-auto leading-relaxed">
