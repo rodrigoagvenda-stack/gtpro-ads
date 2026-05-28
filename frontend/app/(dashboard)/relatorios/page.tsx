@@ -42,14 +42,23 @@ function isTableLine(line: string) { const t = line.trim(); return t.startsWith(
 function isSepLine(line: string)   { return /^\|[\s\-:|]+\|$/.test(line.trim()) }
 function splitRow(line: string)    { return line.trim().split("|").slice(1, -1).map(c => c.trim()) }
 
-type Seg = { type: "lines"; lines: string[] } | { type: "table"; rows: string[][] }
+type Seg = { type: "lines"; lines: string[] } | { type: "table"; rows: string[][] } | { type: "code"; lines: string[] }
 
 function segmentMd(md: string): Seg[] {
   const lines = md.split("\n")
   const segs: Seg[] = []
   let i = 0
   while (i < lines.length) {
-    if (isTableLine(lines[i])) {
+    if (lines[i].trimStart().startsWith("```")) {
+      const codeLines: string[] = []
+      i++ // skip opening ```
+      while (i < lines.length && !lines[i].trimStart().startsWith("```")) {
+        codeLines.push(lines[i])
+        i++
+      }
+      i++ // skip closing ```
+      if (codeLines.length > 0) segs.push({ type: "code", lines: codeLines })
+    } else if (isTableLine(lines[i])) {
       const rows: string[][] = []
       while (i < lines.length && isTableLine(lines[i])) {
         if (!isSepLine(lines[i])) rows.push(splitRow(lines[i]))
@@ -71,6 +80,10 @@ function mdToHtml(md: string): string {
   const result: string[] = []
 
   for (const seg of segs) {
+    if (seg.type === "code") {
+      result.push(`<pre style="background:#F3F4F6;padding:12px 16px;border-radius:8px;font-family:monospace;font-size:11px;line-height:1.6;overflow-x:auto;margin:12px 0;">${seg.lines.map(l => inlineHtml(l)).join("\n")}</pre>`)
+      continue
+    }
     if (seg.type === "table") {
       const [head, ...body] = seg.rows
       result.push(`<table><thead><tr>${head.map(c => `<th>${inlineHtml(c)}</th>`).join("")}</tr></thead><tbody>${body.map(r => `<tr>${r.map(c => `<td>${inlineHtml(c)}</td>`).join("")}</tr>`).join("")}</tbody></table>`)
@@ -174,6 +187,14 @@ function RenderMd({ content }: { content: string }) {
   let key = 0
 
   for (const seg of segs) {
+    if (seg.type === "code") {
+      nodes.push(
+        <pre key={key++} className="bg-white/[0.03] rounded-lg border border-white/[0.06] p-4 my-3 font-mono text-[11px] text-zinc-300 whitespace-pre overflow-x-auto leading-relaxed">
+          {seg.lines.join("\n")}
+        </pre>
+      )
+      continue
+    }
     if (seg.type === "table") {
       const [head, ...body] = seg.rows
       nodes.push(
@@ -242,23 +263,28 @@ const DATE_PRESETS = [
   { id: "last_90d",    label: "Últimos 90 dias" },
   { id: "this_month",  label: "Este mês" },
   { id: "last_month",  label: "Mês passado" },
+  { id: "custom",      label: "Personalizado" },
 ]
 
 const STEPS = ["Objetivo", "Filtros", "Análises"]
 
 function GenerateModal({ onClose, onGenerate }: {
   onClose: () => void
-  onGenerate: (skills: string[], objective: string, datePreset: string, connectionId: string, campaignIds: string[]) => void
+  onGenerate: (skills: string[], objective: string, datePreset: string, connectionId: string, campaignIds: string[], since?: string, until?: string) => void
 }) {
   const [step,         setStep]         = useState<1 | 2 | 3>(1)
   const [objective,    setObjective]    = useState("all")
   const [datePreset,   setDatePreset]   = useState("last_30d")
+  const [since,        setSince]        = useState("")
+  const [until,        setUntil]        = useState("")
   const [connectionId, setConnectionId] = useState("")
   const [accounts,     setAccounts]     = useState<any[]>([])
   const [campaigns,    setCampaigns]    = useState<any[]>([])
   const [campaignIds,  setCampaignIds]  = useState<string[]>([]) // vazio = todas
   const [loadingData,  setLoadingData]  = useState(false)
   const [selected,     setSelected]     = useState<string[]>(["gargalos"])
+  const isCustom    = datePreset === "custom"
+  const customReady = isCustom && since && until && since <= until
 
   // Carrega contas ao abrir passo 2
   useEffect(() => {
@@ -276,10 +302,17 @@ function GenerateModal({ onClose, onGenerate }: {
     if (step !== 2 || !connectionId) return
     setCampaigns([])
     setCampaignIds([])
-    api.campaigns.list(datePreset).then((cps: any[]) => {
-      setCampaigns(cps?.filter((c: any) => c.status === "ACTIVE") ?? [])
+    api.campaigns.list("last_30d").then((cps: any[]) => {
+      let active = cps?.filter((c: any) => c.status === "ACTIVE") ?? []
+      // Filtra por objetivo selecionado na etapa 1
+      if (objective !== "all") {
+        active = active.filter((c: any) =>
+          (c.objective ?? "").toUpperCase().includes(objective.replace("OUTCOME_", ""))
+        )
+      }
+      setCampaigns(active)
     }).catch(() => {})
-  }, [connectionId, datePreset, step])
+  }, [connectionId, step, objective])
 
   function toggleCampaign(id: string) {
     setCampaignIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id])
@@ -290,7 +323,7 @@ function GenerateModal({ onClose, onGenerate }: {
   }
 
   const objLabel  = OBJECTIVES.find(o => o.id === objective)?.label ?? ""
-  const dateLabel = DATE_PRESETS.find(d => d.id === datePreset)?.label ?? ""
+  const dateLabel = isCustom && since && until ? `${since} → ${until}` : (DATE_PRESETS.find(d => d.id === datePreset)?.label ?? "")
   const accLabel  = accounts.find(a => a.id === connectionId)?.ad_account_id ?? ""
 
   return (
@@ -365,6 +398,15 @@ function GenerateModal({ onClose, onGenerate }: {
                     </button>
                   ))}
                 </div>
+                {isCustom && (
+                  <div className="mt-2 flex items-center gap-2">
+                    <input type="date" value={since} onChange={e => setSince(e.target.value)}
+                      className="flex-1 bg-white/[0.04] ring-1 ring-white/[0.07] rounded-lg px-3 py-1.5 text-[11px] text-white focus:outline-none focus:ring-violet-500/50 [color-scheme:dark]" />
+                    <span className="text-zinc-600 text-[11px] shrink-0">até</span>
+                    <input type="date" value={until} onChange={e => setUntil(e.target.value)} min={since}
+                      className="flex-1 bg-white/[0.04] ring-1 ring-white/[0.07] rounded-lg px-3 py-1.5 text-[11px] text-white focus:outline-none focus:ring-violet-500/50 [color-scheme:dark]" />
+                  </div>
+                )}
               </div>
 
               {/* Conta de anúncio */}
@@ -481,8 +523,9 @@ function GenerateModal({ onClose, onGenerate }: {
               Próximo →
             </button>
           ) : (
-            <button type="button" onClick={() => onGenerate(selected, objective, datePreset, connectionId, campaignIds)}
-              disabled={selected.length === 0}
+            <button type="button"
+              onClick={() => onGenerate(selected, objective, datePreset, connectionId, campaignIds, isCustom ? since : undefined, isCustom ? until : undefined)}
+              disabled={selected.length === 0 || (isCustom && !customReady)}
               className="flex-1 py-2 text-[13px] text-white bg-violet-600 hover:bg-violet-500 rounded-xl transition-colors disabled:opacity-40 font-medium flex items-center justify-center gap-2">
               <Sparkles size={13} /> Gerar relatório
             </button>
@@ -525,11 +568,11 @@ export default function RelatoriosPage() {
     } catch (e: any) { alert(e.message) } finally { setSavingSchedule(false) }
   }
 
-  async function generateReport(skills: string[], objective: string, datePreset: string, connectionId: string, campaignIds: string[]) {
+  async function generateReport(skills: string[], objective: string, datePreset: string, connectionId: string, campaignIds: string[], since?: string, until?: string) {
     setShowModal(false)
     setGenerating(true)
     try {
-      const report = await api.reports.generate(skills, objective, datePreset, connectionId || undefined, campaignIds)
+      const report = await api.reports.generate(skills, objective, datePreset, connectionId || undefined, campaignIds, since, until)
       setReports(p => [report, ...p])
       setExpanded(report.id)
     } catch (e: any) {

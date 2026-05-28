@@ -143,7 +143,7 @@ const OBJECTIVE_META_MAP: Record<ObjectiveId, string[]> = {
   geral:       [],
   ecommerce:   ["OUTCOME_SALES", "PRODUCT_CATALOG_SALES", "CONVERSIONS"],
   leads:       ["OUTCOME_LEADS", "LEAD_GENERATION"],
-  whatsapp:    ["MESSAGES"],
+  whatsapp:    ["OUTCOME_MESSAGES", "MESSAGES"],
   engajamento: ["OUTCOME_ENGAGEMENT", "POST_ENGAGEMENT", "PAGE_ENGAGEMENT", "VIDEO_VIEWS"],
   trafego:     ["OUTCOME_TRAFFIC", "LINK_CLICKS", "WEBSITE_CONVERSIONS"],
   seguidores:  ["OUTCOME_AWARENESS", "PAGE_LIKES"],
@@ -154,7 +154,7 @@ const OBJECTIVE_META_MAP: Record<ObjectiveId, string[]> = {
 function objectiveInsights(campaigns: Campaign[], obj: ObjectiveId, fallback: Record<string, any>): Record<string, any> {
   if (obj === "geral") return fallback
   const wanted  = OBJECTIVE_META_MAP[obj]
-  const subset  = campaigns.filter(c => wanted.some(w => c.objective?.includes(w)))
+  const subset  = campaigns.filter(c => wanted.some(w => (c.objective ?? "").toUpperCase().includes(w.toUpperCase())))
   if (subset.length === 0) return fallback
 
   const sumF = (key: string) => subset.reduce((a, c) => a + (Number((c.metrics as any)[key]) || 0), 0)

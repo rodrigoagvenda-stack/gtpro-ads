@@ -134,10 +134,13 @@ export async function getAccountInfo(tenantId: string) {
 
 // ─── Campaigns ──────────────────────────────────────────────────────────────
 
-export async function getCampaigns(tenantId: string, datePreset = "last_7d", connectionId?: string) {
+export async function getCampaigns(tenantId: string, datePreset = "last_7d", connectionId?: string, since?: string, until?: string) {
   const { token, adAccountId } = await getTokenAndAccount(tenantId, connectionId)
   const insightFields = "spend,impressions,clicks,reach,ctr,cpc,cpm,frequency,actions,action_values,purchase_roas"
-  const fields = `id,name,status,objective,daily_budget,lifetime_budget,start_time,stop_time,budget_remaining,buying_type,insights.date_preset(${datePreset}){${insightFields}}`
+  const insightParam = since && until
+    ? `insights.time_range({"since":"${since}","until":"${until}"}){${insightFields}}`
+    : `insights.date_preset(${datePreset}){${insightFields}}`
+  const fields = `id,name,status,objective,daily_budget,lifetime_budget,start_time,stop_time,budget_remaining,buying_type,${insightParam}`
 
   // Paginação completa — contas com mais de 100 campanhas
   let all: any[] = []

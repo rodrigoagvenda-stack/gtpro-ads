@@ -249,6 +249,9 @@ export async function POST(req: NextRequest) {
     const datePreset: string    = typeof body.datePreset === "string" && body.datePreset ? body.datePreset : "last_30d"
     const connectionId: string | undefined = typeof body.connectionId === "string" && body.connectionId ? body.connectionId : undefined
     const campaignIds: string[] = Array.isArray(body.campaignIds) ? body.campaignIds : []
+    const since: string | undefined = typeof body.since === "string" && body.since ? body.since : undefined
+    const until: string | undefined = typeof body.until === "string" && body.until ? body.until : undefined
+    const isCustomDate = !!(since && until)
 
     const DATE_LABELS: Record<string, string> = {
       last_7d: "últimos 7 dias", last_14d: "últimos 14 dias", last_30d: "últimos 30 dias",
@@ -258,8 +261,8 @@ export async function POST(req: NextRequest) {
     const supabase = createServiceClient()
     const [configResult, campaigns, accountInsights] = await Promise.all([
       supabase.from("agent_configs").select("*").eq("tenant_id", tenant.tenant_id).single(),
-      getCampaigns(tenant.tenant_id, datePreset, connectionId),
-      getInsights(tenant.tenant_id, datePreset).catch(() => ({})),
+      getCampaigns(tenant.tenant_id, datePreset, connectionId, since, until),
+      getInsights(tenant.tenant_id, datePreset, since, until).catch(() => ({})),
     ])
 
     let allActive = campaigns.filter((c: any) => c.status === "ACTIVE")
@@ -270,11 +273,22 @@ export async function POST(req: NextRequest) {
 
     const now    = new Date()
     const presetDays: Record<string, number> = { last_7d: 7, last_14d: 14, last_30d: 30, last_90d: 90, this_month: 30, last_month: 30 }
-    const days   = presetDays[datePreset] ?? 30
-    const startD = new Date(now.getTime() - days * 86400_000)
     const fmtDate = (d: Date) => d.toLocaleDateString("pt-BR", { day: "numeric", month: "long", year: "numeric" })
-    const periodLabel = `${fmtDate(startD)} a ${fmtDate(now)}`
-    const period = `${DATE_LABELS[datePreset] ?? datePreset} — ${now.toLocaleDateString("pt-BR", { month: "long", year: "numeric" })}`
+    let days: number
+    let periodLabel: string
+    let period: string
+    if (isCustomDate) {
+      const sinceD = new Date(since!)
+      const untilD = new Date(until!)
+      days = Math.max(1, Math.round((untilD.getTime() - sinceD.getTime()) / 86400_000))
+      periodLabel = `${sinceD.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric" })} a ${untilD.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric" })}`
+      period = `${periodLabel} — personalizado`
+    } else {
+      days = presetDays[datePreset] ?? 30
+      const startD = new Date(now.getTime() - days * 86400_000)
+      periodLabel = `${fmtDate(startD)} a ${fmtDate(now)}`
+      period = `${DATE_LABELS[datePreset] ?? datePreset} — ${now.toLocaleDateString("pt-BR", { month: "long", year: "numeric" })}`
+    }
     const objConfig = OBJECTIVE_CONFIG[objective] ?? OBJECTIVE_CONFIG.all
     const objLabel  = objConfig.label
 
