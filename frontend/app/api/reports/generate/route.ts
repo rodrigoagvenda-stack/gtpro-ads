@@ -91,27 +91,65 @@ const KPI_PRINCIPAL: Record<string, string> = {
 
 const SKILL_SECTIONS: Record<string, string> = {
   gargalos: `
-## GARGALOS
-Tabela: Campanha | Etapa | Taxa | Perda absoluta | Diagnóstico
-Calcule Impressões→Alcance→Cliques→{{RESULT_LABEL}}. Uma linha por campanha, mostre só a etapa com maior queda. Diagnóstico em 5 palavras.`,
+## Análise de Gargalos
+
+Tabela obrigatória: Campanha | Impressões | Alcance | Cliques | {{RESULT_LABEL}} | Etapa com maior perda | % de queda | Diagnóstico
+
+Para cada campanha calcule o funil completo: Impressões → Alcance (perda por frequência/sobreposição) → Cliques (perda por criativo/copy) → {{RESULT_LABEL}} (perda por landing page/oferta). Destaque a etapa com MAIOR queda percentual.
+Depois: 2-3 bullets com ações concretas para cada gargalo identificado.`,
 
   criativo: `
-## CRIATIVO
-Tabela: Campanha | CTR | Frequência | Diagnóstico | Ação
-Frequência > 3 = saturado. CTR < 0.8% = não engaja. Ação = pausar / A/B / novo formato.`,
+## Análise de Criativo
+
+Tabela obrigatória: Campanha | CTR | Frequência | Impressões | CPM | Diagnóstico | Ação recomendada
+
+Regras de diagnóstico:
+- CTR < 0.8% = criativo não ressoa → testar novo hook/formato
+- CTR > 2% = criativo forte → escalar budget
+- Frequência > 3 = saturação → excluir quem já viu 3x ou criar novos criativos
+- Frequência > 5 = urgente renovar criativos
+- CPM alto + CTR baixo = público errado, não criativo ruim
+
+Depois: lista de 3 ações prioritárias de criativo ordenadas por impacto.`,
 
   copy: `
-## COPY
-CTR alto + baixo {{RESULT_LABEL_LOWER}} = promessa errada. CTR baixo + boa conversão = copy específica demais. Uma linha por campanha com diagnóstico e ajuste recomendado.`,
+## Análise de Copy
+
+Para cada campanha analise a relação CTR vs taxa de conversão:
+- CTR alto + poucos {{RESULT_LABEL_LOWER}} = promessa do anúncio não bate com a landing page
+- CTR baixo + boa conversão = copy muito específica, público qualificado mas limitado
+- CTR baixo + zero {{RESULT_LABEL_LOWER}} = problema na copy E na oferta
+
+Tabela: Campanha | CTR | {{RESULT_LABEL}} | Taxa clique→resultado | Diagnóstico | Ajuste recomendado
+
+Feche com 2 sugestões concretas de headline/copy baseadas nos dados.`,
 
   publico: `
-## PÚBLICO
-Compare {{KPI_PRINCIPAL}} entre campanhas. Variação > 50% = públicos diferentes. Menor KPI = público mais qualificado → recomendar Lookalike. CPM > R$30 = sobreposição ou mercado saturado.`,
+## Análise de Público
+
+Tabela obrigatória: Campanha | CPM | Frequência | Alcance | {{KPI_PRINCIPAL}} | Custo por {{RESULT_LABEL}} | Status do público
+
+Regras de análise:
+- CPM > R$30 = mercado saturado ou público muito pequeno → expandir audiência ou adicionar exclusões
+- CPM < R$15 = público amplo, potencial de escala
+- Frequência > 4 = público esgotado → criar exclusão de quem já converteu + LAL
+- Frequência < 1.5 com gasto alto = público grande mas sub-alcançado → verificar segmentação
+- Se variação de CPM > 50% entre campanhas = públicos com qualidades muito distintas → pausar o mais caro e escalar o mais barato
+- Menor custo/resultado = público mais qualificado → criar Lookalike 1%, 2% e 3% baseado nesse público
+
+Conclua com recomendação clara: qual público escalar, qual pausar e por quê.`,
 
   budget: `
-## BUDGET
-Tabela: Campanha | Gasto | % do Total | {{RESULT_LABEL}} | % do Total | Diagnóstico
-Sorvedoura = > 30% do gasto, < 10% dos resultados. Feche com redistribuição em R$.`,
+## Análise de Budget
+
+Tabela obrigatória: Campanha | Gasto (R$) | % do gasto total | {{RESULT_LABEL}} | % dos resultados | ROI relativo | Diagnóstico
+
+Calcule ROI relativo = (% resultados) / (% gasto). ROI > 1 = eficiente. ROI < 0.5 = sorvedoura.
+- Sorvedoura (> 30% gasto, < 10% resultados): corte imediato ou teste com 50% menos budget
+- Subcapitalizada (< 10% gasto, > 20% resultados): aumentar budget 30-50%
+- Equilibrada: manter e monitorar
+
+Feche com redistribuição concreta: ex. "Mover R$X da [campanha A] para [campanha B] = ganho estimado de Y {{RESULT_LABEL_LOWER}}".`,
 }
 
 // ─── Build campaign row with objective-specific metrics ───────────────────────
@@ -464,33 +502,25 @@ ${chartJson}
 
 ---
 
-## 03 · Destaques da Campanha
-
-[Escreva 6 destaques numerados usando dados reais das campanhas. Cada destaque: **título em negrito** — descrição com números reais e contexto estratégico. Destaque campanhas pelo nome real.]
+${skillSections}
 
 ---
 
-## 04 · O que Esses Números Significam
-
-[4 parágrafos curtos com títulos em negrito: Alcance eficiente | [formato/criativo principal] | Anúncios relevantes | Base para conversões futuras. Cada parágrafo: 2-3 linhas, dados reais, sem repetir a seção 03.]
-
----
-
-## 05 · Próximos Passos
+## Próximos Passos
 
 ### Curto prazo — Ações imediatas
 
-[3 bullets com ações imediatas baseadas nos dados — o que fazer esta semana]
+[3 bullets ESPECÍFICOS com ações desta semana baseadas nas análises acima — cite campanhas pelo nome real, valores reais e o impacto esperado de cada ação]
 
 ### Médio prazo — Próxima fase
 
-[3 bullets com ações estratégicas — o que planejar para o próximo mês]
+[3 bullets com ações estratégicas para o próximo mês — escala, novos públicos, testes de criativo]
 
 ---
 
-## 06 · Conclusão
+## Conclusão
 
-[1 parágrafo executivo. Mencione em negrito os 4-5 números mais importantes. Finalize com direcionamento: o que a próxima fase deve focar para transformar os resultados em negócio concreto.]
+[1 parágrafo executivo. Mencione em negrito os 4-5 números mais importantes das análises acima. Finalize com direcionamento claro: qual alavanca mover primeiro para transformar os resultados em negócio concreto.]
 
 ---
 
