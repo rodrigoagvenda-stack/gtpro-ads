@@ -549,10 +549,13 @@ export async function deleteAdSet(tenantId: string, adSetId: string) {
 
 // ─── Ads ─────────────────────────────────────────────────────────────────────
 
-export async function getAds(tenantId: string, campaignId: string, datePreset = "last_7d") {
+export async function getAds(tenantId: string, campaignId: string, datePreset = "last_7d", since?: string, until?: string) {
   const token = await getToken(tenantId)
-  const adInsightFields = "impressions,reach,clicks,spend,ctr,cpc,cpm,actions,video_avg_time_watched_actions,video_p25_watched_actions,video_p50_watched_actions,video_p75_watched_actions,video_p100_watched_actions"
-  const fields = `id,name,status,creative{id,name,thumbnail_url,body,title,image_url,object_story_spec},insights.date_preset(${datePreset}){${adInsightFields}}`
+  const adInsightFields = "impressions,reach,clicks,spend,ctr,cpc,cpm,actions,action_values,purchase_roas,video_avg_time_watched_actions,video_p25_watched_actions,video_p50_watched_actions,video_p75_watched_actions,video_p100_watched_actions,frequency"
+  const insightParam = since && until
+    ? `insights.time_range({"since":"${since}","until":"${until}"}){${adInsightFields}}`
+    : `insights.date_preset(${datePreset}){${adInsightFields}}`
+  const fields = `id,name,status,creative{id,name,thumbnail_url,body,title,image_url,object_story_spec},${insightParam}`
   const data = await graphGet(`/${campaignId}/ads`, { access_token: token, fields, limit: "50" })
   return (data.data ?? []).map((ad: any) => {
     const c = ad.creative

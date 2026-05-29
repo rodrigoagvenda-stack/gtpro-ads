@@ -1,7 +1,7 @@
 import { NextRequest } from "next/server"
 import { getTenant, unauthorized } from "@/lib/server/auth"
 import { createServiceClient } from "@/lib/server/supabase"
-import { getCampaigns, getInsights } from "@/lib/server/meta-ads"
+import { getCampaigns, getInsights, getAds } from "@/lib/server/meta-ads"
 import { getAnthropicKey } from "@/lib/server/platform"
 import Anthropic from "@anthropic-ai/sdk"
 
@@ -274,6 +274,56 @@ function buildCampaignRow(c: any, objective: string): string {
   return [...base, ...extra].filter(Boolean).join(" | ")
 }
 
+// ─── Build individual ad (creative) row ─────────────────────────────────────
+
+function buildAdRow(ad: any, campaignName: string, objective: string): string {
+  const ins     = ad.insights?.data?.[0] ?? {}
+  const actions = ins.actions ?? []
+  const spend   = Number(ins.spend ?? 0)
+  const n   = (v: any, d = 2) => Number(v ?? 0).toFixed(d)
+  const loc = (v: any) => Number(v ?? 0).toLocaleString("pt-BR")
+
+  const pick = (...types: string[]) => {
+    const a = actions.find((x: any) => types.includes(x.action_type) && Number(x.value) > 0)
+    return a ? Number(a.value) : null
+  }
+
+  const leads         = pick("lead", "onsite_conversion.lead_grouped", "offsite_conversion.fb_pixel_lead")
+  const conversations = pick("onsite_conversion.messaging_conversation_started_7d", "onsite_conversion.messaging_first_reply")
+  const purchases     = pick("omni_purchase", "offsite_conversion.fb_pixel_purchase")
+  const engagements   = pick("post_engagement", "page_engagement")
+
+  const creative    = ad.creative ?? {}
+  const copyText    = (creative.body || creative.title || "").slice(0, 80)
+  const copyPreview = copyText ? ` | Copy: "${copyText}${copyText.length === 80 ? "..." : ""}"` : ""
+
+  const v25  = ins.video_p25_watched_actions?.[0]?.value
+  const v50  = ins.video_p50_watched_actions?.[0]?.value
+  const v75  = ins.video_p75_watched_actions?.[0]?.value
+  const v100 = ins.video_p100_watched_actions?.[0]?.value
+  const videoStr = v25 != null
+    ? ` | Vídeo: 25%=${v25} 50%=${v50 ?? "—"} 75%=${v75 ?? "—"} 100%=${v100 ?? "—"}`
+    : ""
+
+  const parts: (string | null)[] = [
+    `**Criativo: ${ad.name}** | Campanha: ${campaignName}${copyPreview}`,
+    `Status: ${ad.status}`,
+    `Gasto: R$${n(spend)}`,
+    `Impressões: ${loc(ins.impressions)}`,
+    `CTR: ${n(ins.ctr)}%`,
+    `CPC: R$${n(ins.cpc)}`,
+    `CPM: R$${n(ins.cpm)}`,
+    `Frequência: ${n(ins.frequency, 1)}`,
+    `Cliques: ${loc(ins.clicks)}`,
+    leads         != null ? `Leads: ${leads} | CPL: ${leads > 0 ? `R$${(spend / leads).toFixed(2)}` : "—"}` : null,
+    conversations != null ? `Conversas: ${conversations} | Custo/Conversa: ${conversations > 0 ? `R$${(spend / conversations).toFixed(2)}` : "—"}` : null,
+    purchases     != null ? `Compras: ${purchases} | CPP: ${purchases > 0 ? `R$${(spend / purchases).toFixed(2)}` : "—"}` : null,
+    engagements   != null ? `Engajamentos: ${loc(engagements)}` : null,
+  ]
+
+  return parts.filter(Boolean).join(" | ") + videoStr
+}
+
 // ─── Route ─────────────────────────────────────────────────────────────────────
 
 export async function POST(req: NextRequest) {
@@ -308,6 +358,20 @@ export async function POST(req: NextRequest) {
     const active = objective === "all"
       ? allActive
       : allActive.filter((c: any) => c.objective === objective)
+
+    // Fetch individual ads (creatives) for each active campaign in parallel
+    const adResults = await Promise.allSettled(
+      active.slice(0, 10).map((c: any) =>
+        getAds(tenant.tenant_id, c.id, datePreset, since, until)
+          .then(ads => ({ campaignId: c.id, campaignName: c.name, ads }))
+      )
+    )
+    const allAdGroups = adResults.filter(r => r.status === "fulfilled").map((r: any) => r.value)
+    const allAds      = allAdGroups.flatMap(g => g.ads.map((ad: any) => ({ ...ad, campaignName: g.campaignName })))
+    const hasMultiCreatives = allAdGroups.some(g => g.ads.length > 1)
+    const adRows = allAds.length > 0
+      ? allAds.map((ad: any) => buildAdRow(ad, ad.campaignName, objective)).join("\n")
+      : ""
 
     const now    = new Date()
     const presetDays: Record<string, number> = { last_7d: 7, last_14d: 14, last_30d: 30, last_90d: 90, this_month: 30, last_month: 30 }
@@ -354,8 +418,64 @@ export async function POST(req: NextRequest) {
     const config    = configResult.data ?? {}
     const configStr = `Objetivo: ${config.objetivo_principal ?? "não definido"} | ROAS mín: ${config.roas_minimo ?? "—"} | CPL máx: R$${config.cpl_maximo ?? "—"} | Budget mensal: R$${config.budget_mensal ?? "—"}`
 
+    // Dynamic skill sections — criativo/copy use per-ad data when available
+    const criativoSection = hasMultiCreatives ? `
+## Análise de Criativo
+
+USE OS DADOS DE "CRIATIVOS — dados individuais por anúncio" fornecidos abaixo. Analise CADA CRIATIVO SEPARADAMENTE com seu próprio nome real.
+
+Tabela obrigatória (uma linha por criativo): Criativo | Campanha | Gasto (R$) | Impressões | CTR | CPM | Frequência | ${resultLabel} | Custo/${resultLabel} | Diagnóstico
+
+Compare os criativos entre si:
+- Qual tem melhor CTR? Qual tem menor custo por resultado? Qual tem melhor eficiência de gasto?
+- Recomende qual escalar (mais eficiente) e qual pausar ou recriar (pior desempenho)
+- Se houver texto de copy disponível nos dados (campo Copy:), cite trechos específicos no diagnóstico
+- Para vídeo: analise retenção (25%/50%/75%/100%) — queda brusca antes de 25% = hook fraco; boa retenção até 75% = mensagem relevante
+
+Regras de diagnóstico:
+- CTR < 0.8% = hook fraco → reformular os primeiros 3s
+- CTR > 2% = criativo forte → escalar budget
+- Frequência > 3 = saturação → novo criativo urgente
+- CPM alto + CTR baixo = problema no público, não no criativo
+
+3 ações prioritárias por impacto, com o nome exato do criativo em cada ação.
+` : `
+## Análise de Criativo
+
+Tabela obrigatória: Campanha | CTR | Frequência | Impressões | CPM | Diagnóstico | Ação recomendada
+
+Regras de diagnóstico:
+- CTR < 0.8% = hook fraco → reformular os primeiros 3s do vídeo / headline da imagem
+- CTR > 2% = criativo forte → escalar budget
+- Frequência > 3 = saturação → criar variações urgente
+- CPM alto + CTR baixo = problema no público, não no criativo
+
+3 ações prioritárias por impacto.
+`
+
+    const copySection = hasMultiCreatives ? `
+## Análise de Copy
+
+USE OS DADOS DE "CRIATIVOS — dados individuais por anúncio". Analise o texto de cada criativo separadamente (campo Copy:).
+
+Para cada criativo com copy disponível:
+- CTR alto + poucos ${resultLabel.toLowerCase()} = promessa do anúncio não bate com a página/formulário
+- CTR baixo + boa conversão = copy muito específica, público qualificado mas pequeno
+- CTR baixo + zero ${resultLabel.toLowerCase()} = problema na copy E na oferta
+
+Tabela: Criativo | Copy (trecho) | CTR | ${resultLabel} | Taxa clique→resultado | Diagnóstico | Ajuste recomendado
+
+2 sugestões concretas de headline ou chamada para ação baseadas nos dados e textos reais dos criativos.
+` : SKILL_SECTIONS.copy
+
+    const dynamicSections: Record<string, string> = {
+      ...SKILL_SECTIONS,
+      criativo: criativoSection,
+      copy:     copySection,
+    }
+
     const skillSections = skills
-      .map(s => (SKILL_SECTIONS[s] ?? "")
+      .map(s => (dynamicSections[s] ?? "")
         .replace(/\{\{RESULT_LABEL\}\}/g,       resultLabel)
         .replace(/\{\{RESULT_LABEL_LOWER\}\}/g, resultLabel.toLowerCase())
         .replace(/\{\{KPI_PRINCIPAL\}\}/g,      kpiPrincipal)
@@ -455,7 +575,10 @@ TOTAIS PRÉ-CALCULADOS:
 
 CAMPANHAS (dados individuais):
 ${campaignRows}
-
+${adRows ? `
+CRIATIVOS — dados individuais por anúncio (use nas análises de Criativo e Copy):
+${adRows}
+` : ""}
 GERE o relatório com EXATAMENTE esta estrutura — substitua os placeholders pelos dados reais acima:
 
 # Relatório de Performance Digital
