@@ -20,7 +20,7 @@ export async function GET(req: NextRequest) {
   })
 
   const redirectUri = `${req.nextUrl.origin}/api/meta/callback`
-  const scope = "ads_management,ads_read,business_management,read_insights"
+  const scope = "ads_management,ads_read,business_management,read_insights,pages_show_list,pages_read_engagement,instagram_basic"
   const url = `https://www.facebook.com/dialog/oauth?client_id=${appId}&redirect_uri=${encodeURIComponent(redirectUri)}&scope=${scope}&state=${state}&response_type=code`
 
   return Response.json({ url })

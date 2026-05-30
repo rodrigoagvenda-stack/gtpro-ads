@@ -311,7 +311,7 @@ function MetaTab() {
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
   const [error, setError] = useState("")
-  const [metaStatus, setMetaStatus] = useState<{ connected: boolean; ad_account_id?: string; connected_at?: string } | null>(null)
+  const [metaStatus, setMetaStatus] = useState<{ connected: boolean; ad_account_id?: string; connected_at?: string; token_expires_soon?: boolean; token_days_remaining?: number | null } | null>(null)
   const [connecting, setConnecting] = useState(false)
   const [metaMsg, setMetaMsg] = useState<{ type: "ok"|"err"|"info"; text: string } | null>(null)
   const [manualToken, setManualToken] = useState("")
@@ -421,12 +421,17 @@ function MetaTab() {
           <div className="flex items-center gap-2 text-zinc-600 text-[13px]"><Loader2 size={13} className="animate-spin" /> Verificando...</div>
         ) : metaStatus.connected ? (
           <div className="space-y-3">
+            {metaStatus.token_expires_soon && (
+              <div className="flex items-center gap-2 text-[12px] text-amber-400 bg-amber-500/10 ring-1 ring-amber-500/20 rounded-lg px-3 py-2">
+                ⚠️ Token expira em {metaStatus.token_days_remaining ?? "?"} dias — reconecte a conta para não perder acesso.
+              </div>
+            )}
             <div className="flex items-center justify-between bg-white/[0.03] ring-1 ring-white/[0.07] rounded-lg px-4 py-3">
               <div className="flex items-center gap-3">
                 <div className="w-7 h-7 rounded-lg bg-blue-500/15 flex items-center justify-center"><LayoutGrid size={13} className="text-blue-400" /></div>
                 <div>
                   <p className="text-[13px] font-medium text-zinc-200">Meta Ads conectado</p>
-                  <p className="text-[11px] text-zinc-600 mt-0.5">Conta {metaStatus.ad_account_id}{metaStatus.connected_at ? ` · desde ${new Date(metaStatus.connected_at).toLocaleDateString("pt-BR")}` : ""}</p>
+                  <p className="text-[11px] text-zinc-600 mt-0.5">Conta {metaStatus.ad_account_id}{metaStatus.connected_at ? ` · desde ${new Date(metaStatus.connected_at).toLocaleDateString("pt-BR")}` : ""}{metaStatus.token_days_remaining != null && !metaStatus.token_expires_soon ? ` · token expira em ${metaStatus.token_days_remaining}d` : ""}</p>
                 </div>
               </div>
               <button onClick={async () => { if (!confirm("Desconectar?")) return; await api.meta.disconnect(); setMetaStatus({ connected: false }); setMetaMsg({ type: "info", text: "Conta desconectada." }) }} className="flex items-center gap-1.5 px-2.5 py-1.5 text-[12px] text-red-400 hover:bg-red-500/10 rounded-lg transition-colors"><Unlink size={11} /> Desconectar</button>

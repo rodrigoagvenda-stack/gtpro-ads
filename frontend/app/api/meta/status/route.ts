@@ -15,10 +15,23 @@ export async function GET(req: NextRequest) {
     .eq("is_active", true)
     .single()
 
+  // Token long-lived expira em ~60 dias — avisar quando restam ≤ 10 dias
+  let token_expires_soon = false
+  let token_days_remaining: number | null = null
+  if (data?.created_at) {
+    const connectedAt = new Date(data.created_at)
+    const expiresAt   = new Date(connectedAt.getTime() + 60 * 24 * 60 * 60 * 1000)
+    const remaining   = Math.ceil((expiresAt.getTime() - Date.now()) / (24 * 60 * 60 * 1000))
+    token_days_remaining = remaining
+    token_expires_soon   = remaining <= 10
+  }
+
   return Response.json({
     connected: !!data,
     ad_account_id: data?.ad_account_id ?? null,
     connected_at: data?.created_at ?? null,
+    token_expires_soon,
+    token_days_remaining,
   })
 }
 
