@@ -311,12 +311,12 @@ export default function AgentePage() {
     setLoading(false); setIsStreaming(false); setActiveTools([])
   }
 
-  const send = useCallback(async (text: string) => {
+  const send = useCallback(async (text: string, extraMsgProps?: Partial<Message>) => {
     if (!text.trim() || loading) return
     setInput("")
     if (textareaRef.current) textareaRef.current.style.height = "auto"
 
-    const userMsg: Message = { role: "user", content: text }
+    const userMsg: Message = { role: "user", content: text, ...extraMsgProps }
     setMessages(p => [...p, userMsg, { role: "assistant", content: "", tools_used: [], actions: [] }])
     setLoading(true); setIsStreaming(false); setActiveTools([])
 
@@ -597,18 +597,7 @@ export default function AgentePage() {
                     lifetimeBudget: draft.lifetimeBudget, geo: draft.geo,
                     creativeHash: draft.creativeHash, creativeVideoId: draft.creativeVideoId, creativeName: draft.creativeName,
                   }
-                  setMessages(p => [...p,
-                    { role: "user", content: msg, campaignBrief: brief },
-                    { role: "assistant", content: "", tools_used: [], actions: [] },
-                  ])
-                  setLoading(true); setIsStreaming(false); setActiveTools([])
-                  const ctrl = new AbortController()
-                  abortRef.current = ctrl
-                  api.agent.queryStream(msg, selectedModel, buildHistory([...messages, { role: "user", content: msg }]),
-                    chunk => handleChunk(chunk),
-                    ctrl.signal
-                  ).catch(e => { if (e?.name !== "AbortError") setMessages(p => { const n = [...p]; n[n.length-1] = { role: "assistant", content: e.message ?? "Erro", isError: true }; return n }) })
-                    .finally(() => { setLoading(false); setIsStreaming(false); setActiveTools([]) })
+                  send(msg, { campaignBrief: brief })
                 }}
                 onClose={() => setWizardOpen(false)}
               />
