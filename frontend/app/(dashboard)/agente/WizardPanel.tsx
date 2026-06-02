@@ -24,10 +24,10 @@ export interface CampaignDraft {
   ads?: number
   budgetType?: "ABO" | "CBO"
   name?: string
-  geo?: { city: string; radius: number }[]
+  geo?: { key: string; name: string; region?: string; radius: number }[]
   includeAudiences?: string[]
   excludeAudiences?: string[]
-  interests?: string[]
+  interests?: { id: string; name: string; audience_size?: number | null }[]
   advantagePlus?: boolean
   placement?: "advantage_plus" | "manual"
   customPlacements?: string[]
@@ -289,13 +289,30 @@ function StepNaming({ draft, setDraft, onNext }: StepProps) {
 }
 
 function StepGeo({ draft, setDraft, onNext }: StepProps) {
-  const [cityInput, setCityInput] = useState("")
+  const [query,    setQuery]    = useState("")
+  const [results,  setResults]  = useState<any[]>([])
+  const [searching, setSearching] = useState(false)
   const geo = draft.geo ?? []
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  function addCity() {
-    if (!cityInput.trim()) return
-    setDraft({ ...draft, geo: [...geo, { city: cityInput.trim(), radius: 25 }] })
-    setCityInput("")
+  function onQueryChange(v: string) {
+    setQuery(v)
+    if (timerRef.current) clearTimeout(timerRef.current)
+    if (!v.trim()) { setResults([]); return }
+    setSearching(true)
+    timerRef.current = setTimeout(async () => {
+      try {
+        const data = await api.meta.searchGeo(v)
+        setResults(Array.isArray(data) ? data : [])
+      } catch { setResults([]) }
+      finally { setSearching(false) }
+    }, 400)
+  }
+
+  function addLocation(loc: any) {
+    if (geo.some(g => g.key === loc.key)) return
+    setDraft({ ...draft, geo: [...geo, { key: loc.key, name: loc.name, region: loc.region ?? undefined, radius: 25 }] })
+    setQuery(""); setResults([])
   }
 
   return (
@@ -304,31 +321,40 @@ function StepGeo({ draft, setDraft, onNext }: StepProps) {
         <h3 className="text-[16px] font-semibold text-white">Geolocalização</h3>
         <p className="text-[13px] text-zinc-500 mt-1">Cidades onde os anúncios serão exibidos.</p>
       </div>
-      <div className="flex gap-2">
-        <input type="text" value={cityInput} onChange={e => setCityInput(e.target.value)}
-          onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); addCity() } }}
-          placeholder="Ex: São Paulo, SP"
-          className={cn(inputCls, "flex-1")} />
-        <button onClick={addCity} disabled={!cityInput.trim()}
-          className="px-4 py-3 bg-violet-600 hover:bg-violet-500 disabled:opacity-40 text-white rounded-xl transition-colors">
-          <Plus size={15} />
-        </button>
+      <div className="relative">
+        <div className="flex items-center gap-2 px-4 py-3 bg-white/[0.04] ring-1 ring-white/[0.08] rounded-xl focus-within:ring-violet-500/50 transition-all">
+          <MapPin size={13} className="text-zinc-600 shrink-0" />
+          <input value={query} onChange={e => onQueryChange(e.target.value)}
+            placeholder="Buscar cidade — ex: São Paulo"
+            className="flex-1 bg-transparent text-[13px] text-white placeholder-zinc-600 focus:outline-none" />
+          {searching && <Loader2 size={13} className="text-zinc-600 animate-spin shrink-0" />}
+        </div>
+        {results.length > 0 && (
+          <div className="absolute z-10 top-full left-0 right-0 mt-1 bg-zinc-900 ring-1 ring-white/[0.1] rounded-xl overflow-hidden shadow-xl">
+            {results.slice(0, 6).map(r => (
+              <button key={r.key} onClick={() => addLocation(r)}
+                className="w-full flex items-center gap-3 px-4 py-2.5 text-left hover:bg-white/[0.06] transition-colors">
+                <MapPin size={11} className="text-violet-400 shrink-0" />
+                <div>
+                  <p className="text-[13px] text-zinc-200">{r.name}</p>
+                  {r.region && <p className="text-[11px] text-zinc-600">{r.region} · {r.country_code}</p>}
+                </div>
+              </button>
+            ))}
+          </div>
+        )}
       </div>
-      {geo.length === 0 && (
-        <p className="text-[12px] text-zinc-600 text-center py-2">Nenhuma cidade adicionada.</p>
-      )}
+      {geo.length === 0 && <p className="text-[12px] text-zinc-600 text-center py-2">Nenhuma cidade adicionada.</p>}
       <div className="space-y-2">
         {geo.map((loc, i) => (
           <div key={i} className="px-4 py-3 bg-white/[0.03] ring-1 ring-white/[0.07] rounded-xl">
             <div className="flex items-center justify-between mb-2.5">
               <div className="flex items-center gap-2">
                 <MapPin size={12} className="text-violet-400" />
-                <span className="text-[13px] text-zinc-200 font-medium">{loc.city}</span>
+                <span className="text-[13px] text-zinc-200 font-medium">{loc.name}</span>
+                {loc.region && <span className="text-[11px] text-zinc-600">{loc.region}</span>}
               </div>
-              <button onClick={() => setDraft({ ...draft, geo: geo.filter((_, j) => j !== i) })}
-                className="text-zinc-600 hover:text-red-400 transition-colors">
-                <X size={13} />
-              </button>
+              <button onClick={() => setDraft({ ...draft, geo: geo.filter((_, j) => j !== i) })} className="text-zinc-600 hover:text-red-400 transition-colors"><X size={13} /></button>
             </div>
             <div className="flex items-center gap-2">
               <span className="text-[11px] text-zinc-600 w-10">Raio:</span>
@@ -354,11 +380,41 @@ function StepGeo({ draft, setDraft, onNext }: StepProps) {
 }
 
 function StepAudience({ draft, setDraft, onNext }: StepProps) {
-  const [interestInput, setInterestInput] = useState("")
+  const [query,     setQuery]     = useState("")
+  const [results,   setResults]   = useState<any[]>([])
+  const [searching, setSearching] = useState(false)
   const interests        = draft.interests        ?? []
   const includeAudiences = draft.includeAudiences ?? []
   const excludeAudiences = draft.excludeAudiences ?? []
   const advantagePlus    = draft.advantagePlus    ?? false
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  function onQueryChange(v: string) {
+    setQuery(v)
+    if (timerRef.current) clearTimeout(timerRef.current)
+    if (!v.trim()) { setResults([]); return }
+    setSearching(true)
+    timerRef.current = setTimeout(async () => {
+      try {
+        const data = await api.meta.searchInterests(v)
+        setResults(Array.isArray(data) ? data : [])
+      } catch { setResults([]) }
+      finally { setSearching(false) }
+    }, 400)
+  }
+
+  function addInterest(int: any) {
+    if (interests.some(i => i.id === int.id)) return
+    setDraft({ ...draft, interests: [...interests, { id: int.id, name: int.name, audience_size: int.audience_size ?? null }] })
+    setQuery(""); setResults([])
+  }
+
+  function fmtSize(n: number | null | undefined) {
+    if (!n) return null
+    if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(0)}M`
+    if (n >= 1_000)     return `${(n / 1_000).toFixed(0)}K`
+    return String(n)
+  }
 
   return (
     <div className="space-y-4">
@@ -377,22 +433,34 @@ function StepAudience({ draft, setDraft, onNext }: StepProps) {
       </div>
       <div className="space-y-2">
         <p className="text-[11px] font-semibold text-zinc-500 uppercase tracking-wider">Interesses</p>
-        <div className="flex gap-2">
-          <input type="text" value={interestInput} onChange={e => setInterestInput(e.target.value)}
-            onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); if (interestInput.trim()) { setDraft({ ...draft, interests: [...interests, interestInput.trim()] }); setInterestInput("") } } }}
-            placeholder="Ex: Marketing digital, E-commerce"
-            className={cn(inputCls, "flex-1")} />
-          <button onClick={() => { if (interestInput.trim()) { setDraft({ ...draft, interests: [...interests, interestInput.trim()] }); setInterestInput("") } }}
-            disabled={!interestInput.trim()}
-            className="px-3 py-3 bg-violet-600 hover:bg-violet-500 disabled:opacity-40 text-white rounded-xl transition-colors">
-            <Plus size={14} />
-          </button>
+        <div className="relative">
+          <div className="flex items-center gap-2 px-4 py-3 bg-white/[0.04] ring-1 ring-white/[0.08] rounded-xl focus-within:ring-violet-500/50 transition-all">
+            <input value={query} onChange={e => onQueryChange(e.target.value)}
+              placeholder="Buscar interesse — ex: Marketing digital"
+              className="flex-1 bg-transparent text-[13px] text-white placeholder-zinc-600 focus:outline-none" />
+            {searching && <Loader2 size={13} className="text-zinc-600 animate-spin shrink-0" />}
+          </div>
+          {results.length > 0 && (
+            <div className="absolute z-10 top-full left-0 right-0 mt-1 bg-zinc-900 ring-1 ring-white/[0.1] rounded-xl overflow-hidden shadow-xl">
+              {results.slice(0, 6).map(r => (
+                <button key={r.id} onClick={() => addInterest(r)}
+                  className="w-full flex items-center justify-between gap-3 px-4 py-2.5 text-left hover:bg-white/[0.06] transition-colors">
+                  <div>
+                    <p className="text-[13px] text-zinc-200">{r.name}</p>
+                    {r.topic && <p className="text-[11px] text-zinc-600">{r.topic}</p>}
+                  </div>
+                  {r.audience_size && <span className="text-[11px] text-zinc-600 shrink-0">{fmtSize(r.audience_size)}</span>}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
         {interests.length > 0 && (
           <div className="flex flex-wrap gap-1.5">
             {interests.map((int, i) => (
-              <span key={i} className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-violet-500/10 ring-1 ring-violet-500/20 rounded-full text-[12px] text-violet-300">
-                {int}
+              <span key={int.id} className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-violet-500/10 ring-1 ring-violet-500/20 rounded-full text-[12px] text-violet-300">
+                {int.name}
+                {int.audience_size && <span className="text-[10px] text-zinc-600">{fmtSize(int.audience_size)}</span>}
                 <button onClick={() => setDraft({ ...draft, interests: interests.filter((_, j) => j !== i) })} className="hover:text-white"><X size={10} /></button>
               </span>
             ))}
@@ -401,8 +469,7 @@ function StepAudience({ draft, setDraft, onNext }: StepProps) {
       </div>
       <div className="space-y-1.5">
         <p className="text-[11px] font-semibold text-zinc-500 uppercase tracking-wider">Públicos a incluir (lookalike / personalizado)</p>
-        <input type="text" placeholder="Nome ou ID do público (opcional)"
-          className={inputCls}
+        <input type="text" placeholder="Nome ou ID do público (opcional)" className={inputCls}
           onKeyDown={e => { if (e.key === "Enter") { const v = (e.target as HTMLInputElement).value.trim(); if (v) { setDraft({ ...draft, includeAudiences: [...includeAudiences, v] }); (e.target as HTMLInputElement).value = "" } } }} />
         {includeAudiences.length > 0 && (
           <div className="flex flex-wrap gap-1.5 mt-1">
@@ -416,8 +483,7 @@ function StepAudience({ draft, setDraft, onNext }: StepProps) {
       </div>
       <div className="space-y-1.5">
         <p className="text-[11px] font-semibold text-zinc-500 uppercase tracking-wider">Excluir públicos</p>
-        <input type="text" placeholder="Ex: Clientes existentes, Compradores 180d"
-          className={inputCls}
+        <input type="text" placeholder="Ex: Clientes existentes, Compradores 180d" className={inputCls}
           onKeyDown={e => { if (e.key === "Enter") { const v = (e.target as HTMLInputElement).value.trim(); if (v) { setDraft({ ...draft, excludeAudiences: [...excludeAudiences, v] }); (e.target as HTMLInputElement).value = "" } } }} />
         {excludeAudiences.length > 0 && (
           <div className="flex flex-wrap gap-1.5 mt-1">
@@ -819,13 +885,16 @@ function buildMessage(draft: CampaignDraft): string {
     "",
   ]
   if ((draft.geo ?? []).length > 0) {
-    lines.push("**GEOLOCALIZAÇÃO:**")
-    draft.geo!.forEach(g => lines.push(`  - ${g.city} • raio ${g.radius}km`))
+    lines.push("**GEOLOCALIZAÇÃO (use as keys abaixo diretamente, sem chamar search_geo):**")
+    draft.geo!.forEach(g => lines.push(`  - key: ${g.key} | nome: ${g.name}${g.region ? ` (${g.region})` : ""} | raio: ${g.radius}km`))
     lines.push("")
   }
   lines.push("**PÚBLICO:**")
   lines.push(`  - Advantage+ Audience: ${draft.advantagePlus ? "Ativado" : "Desativado"}`)
-  if ((draft.interests ?? []).length > 0) lines.push(`  - Interesses: ${draft.interests!.join(", ")}`)
+  if ((draft.interests ?? []).length > 0) {
+    lines.push("  - Interesses (use os IDs abaixo diretamente, sem chamar search_interests):")
+    draft.interests!.forEach(i => lines.push(`    - id: ${i.id} | nome: ${i.name}`))
+  }
   if ((draft.includeAudiences ?? []).length > 0) lines.push(`  - Incluir: ${draft.includeAudiences!.join(", ")}`)
   if ((draft.excludeAudiences ?? []).length > 0) lines.push(`  - Excluir: ${draft.excludeAudiences!.join(", ")}`)
   lines.push("")

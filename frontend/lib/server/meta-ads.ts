@@ -671,18 +671,27 @@ export async function createAd(tenantId: string, params: Record<string, any>) {
       else if (thumbnailUrl) videoData.image_url  = thumbnailUrl
       spec.video_data = videoData
     } else {
-      // Image / link creative
+      // Image creative — WhatsApp destination or regular link
+      const isWhatsApp =
+        (params.destination_type ?? "").toUpperCase() === "WHATSAPP" ||
+        params.cta === "WHATSAPP_MESSAGE" ||
+        params.cta === "SEND_MESSAGE"
+
       const destUrl = params.link_url ?? params.website_url
-      if (!destUrl) throw new Error(
+
+      if (!destUrl && !isWhatsApp) throw new Error(
         "link_url ou website_url é obrigatório para criar um anúncio de imagem/link. " +
         "Solicite ao usuário a URL de destino da campanha."
       )
+
       const linkData: Record<string, any> = {
         message:        params.body ?? params.message ?? "",
         name:           params.headline ?? "",
-        link:           destUrl,
-        call_to_action: { type: params.cta ?? "LEARN_MORE" },
+        call_to_action: isWhatsApp
+          ? { type: "SEND_MESSAGE", value: { app_destination: "WHATSAPP" } }
+          : { type: params.cta ?? "LEARN_MORE" },
       }
+      if (!isWhatsApp && destUrl) linkData.link = destUrl
       if (params.image_hash)  linkData.image_hash  = params.image_hash
       if (params.caption)     linkData.caption     = params.caption
       if (params.description) linkData.description = params.description

@@ -135,6 +135,8 @@ export const api = {
   },
 
   meta: {
+    searchGeo: (q: string) => fetchWithAuth(`/meta/geo?q=${encodeURIComponent(q)}`),
+    searchInterests: (q: string) => fetchWithAuth(`/meta/interests?q=${encodeURIComponent(q)}`),
     status: () => fetchWithAuth("/meta/status"),
     connect: () => fetchWithAuth("/meta/connect"),
     disconnect: () => fetchWithAuth("/meta/status", { method: "DELETE" }),
