@@ -53,7 +53,7 @@ interface Action   { tool: string; input: Record<string, any>; result: any }
 interface CampaignBrief {
   objectiveLabel?: string; name?: string; campaigns?: number; adsets?: number; ads?: number
   budgetType?: string; dailyBudget?: number; lifetimeBudget?: boolean
-  geo?: { city: string; radius: number }[]
+  geo?: { name: string; radius: number; region?: string }[]
   creativeHash?: string; creativeVideoId?: string; creativeName?: string
 }
 interface Message  {
