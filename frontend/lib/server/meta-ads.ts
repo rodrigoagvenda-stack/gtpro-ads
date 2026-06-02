@@ -646,6 +646,11 @@ export async function createAd(tenantId: string, params: Record<string, any>) {
     const spec: Record<string, any> = { page_id: params.page_id }
     if (params.instagram_actor_id) spec.instagram_actor_id = params.instagram_actor_id
 
+    const isWhatsAppAd =
+      (params.destination_type ?? "").toUpperCase() === "WHATSAPP" ||
+      params.cta === "WHATSAPP_MESSAGE" ||
+      params.cta === "SEND_MESSAGE"
+
     if (params.video_id) {
       // Video creative — thumbnail obrigatório (erro 1443226 sem ele)
       // Usa image_url/image_hash se fornecido; senão busca automaticamente nos thumbnails do vídeo
@@ -658,28 +663,24 @@ export async function createAd(tenantId: string, params: Record<string, any>) {
         const preferred = (thumbData.data ?? []).find((t: any) => t.is_preferred) ?? thumbData.data?.[0]
         if (preferred?.uri) thumbnailUrl = preferred.uri
       }
-      const ctaValue: Record<string, any> = {}
       const destUrl = params.link_url ?? params.website_url
-      if (destUrl) ctaValue.link = destUrl
+      const ctaValue: Record<string, any> = isWhatsAppAd
+        ? { app_destination: "WHATSAPP" }
+        : destUrl ? { link: destUrl } : {}
       const videoData: Record<string, any> = {
         video_id:       params.video_id,
         title:          params.headline ?? "",
         message:        params.body ?? params.message ?? "",
-        call_to_action: { type: params.cta ?? "LEARN_MORE", value: ctaValue },
+        call_to_action: { type: isWhatsAppAd ? "SEND_MESSAGE" : (params.cta ?? "LEARN_MORE"), value: ctaValue },
       }
       if (params.image_hash) videoData.image_hash = params.image_hash
       else if (thumbnailUrl) videoData.image_url  = thumbnailUrl
       spec.video_data = videoData
     } else {
       // Image creative — WhatsApp destination or regular link
-      const isWhatsApp =
-        (params.destination_type ?? "").toUpperCase() === "WHATSAPP" ||
-        params.cta === "WHATSAPP_MESSAGE" ||
-        params.cta === "SEND_MESSAGE"
-
       const destUrl = params.link_url ?? params.website_url
 
-      if (!destUrl && !isWhatsApp) throw new Error(
+      if (!destUrl && !isWhatsAppAd) throw new Error(
         "link_url ou website_url é obrigatório para criar um anúncio de imagem/link. " +
         "Solicite ao usuário a URL de destino da campanha."
       )
@@ -687,11 +688,11 @@ export async function createAd(tenantId: string, params: Record<string, any>) {
       const linkData: Record<string, any> = {
         message:        params.body ?? params.message ?? "",
         name:           params.headline ?? "",
-        call_to_action: isWhatsApp
+        call_to_action: isWhatsAppAd
           ? { type: "SEND_MESSAGE", value: { app_destination: "WHATSAPP" } }
           : { type: params.cta ?? "LEARN_MORE" },
       }
-      if (!isWhatsApp && destUrl) linkData.link = destUrl
+      if (!isWhatsAppAd && destUrl) linkData.link = destUrl
       if (params.image_hash)  linkData.image_hash  = params.image_hash
       if (params.caption)     linkData.caption     = params.caption
       if (params.description) linkData.description = params.description
@@ -710,8 +711,8 @@ export async function createAd(tenantId: string, params: Record<string, any>) {
   }
   if (params.tracking_specs) body.tracking_specs = params.tracking_specs
 
-  // url_tags injects UTM params — skip for lead gen (no destination URL) and when caller opts out
-  const skipUtm = isLeadGen || params.skip_utm || params.url_tags === false
+  // url_tags injects UTM params — skip for lead gen / WhatsApp (no destination URL) and when caller opts out
+  const skipUtm = isLeadGen || isWhatsAppAd || params.skip_utm || params.url_tags === false
   if (!skipUtm) {
     body.url_tags = typeof params.url_tags === "string" ? params.url_tags : DEFAULT_UTM_TAGS
   }

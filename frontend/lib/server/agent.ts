@@ -180,6 +180,7 @@ OUTCOME_MESSAGES / WhatsApp:
 - NÃO use check_whatsapp_status — isso é para notificações do sistema, não para Meta Ads
 - O WhatsApp Business é vinculado à Página do Facebook no Meta Business Manager
 - Budget mínimo: R$30/dia por conjunto
+- create_ad: SEMPRE passe destination_type: "WHATSAPP" e cta: "SEND_MESSAGE" — sem link_url
 
 OUTCOME_TRAFFIC (Tráfego):
 - optimization_goal: LINK_CLICKS ou LANDING_PAGE_VIEWS
