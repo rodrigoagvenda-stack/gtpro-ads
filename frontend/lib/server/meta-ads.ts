@@ -620,7 +620,10 @@ export async function createAd(tenantId: string, params: Record<string, any>) {
   if (!params.name)     throw new Error("name é obrigatório para criar um anúncio.")
 
   const creative: Record<string, any> = {}
-  const isLeadGen = (params.optimization_goal ?? "").toUpperCase() === "LEAD_GENERATION"
+  const isLeadGen    = (params.optimization_goal ?? "").toUpperCase() === "LEAD_GENERATION"
+  const isWhatsAppAd = (params.destination_type ?? "").toUpperCase() === "WHATSAPP"
+                    || params.cta === "WHATSAPP_MESSAGE"
+                    || params.cta === "SEND_MESSAGE"
 
   if (params.creative_id) {
     // Reuse existing creative — just reference it
@@ -645,11 +648,6 @@ export async function createAd(tenantId: string, params: Record<string, any>) {
 
     const spec: Record<string, any> = { page_id: params.page_id }
     if (params.instagram_actor_id) spec.instagram_actor_id = params.instagram_actor_id
-
-    const isWhatsAppAd =
-      (params.destination_type ?? "").toUpperCase() === "WHATSAPP" ||
-      params.cta === "WHATSAPP_MESSAGE" ||
-      params.cta === "SEND_MESSAGE"
 
     if (params.video_id) {
       // Video creative — thumbnail obrigatório (erro 1443226 sem ele)
