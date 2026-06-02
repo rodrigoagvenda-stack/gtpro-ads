@@ -901,28 +901,17 @@ export default function WizardPanel({ onSubmit, onClose }: WizardPanelProps) {
         </button>
       </div>
 
-      {/* Progress bar */}
-      <div className="h-0.5 bg-white/[0.04] shrink-0">
-        <div className="h-full bg-gradient-to-r from-violet-600 to-violet-400 transition-all duration-500 ease-out" style={{ width: `${progress}%` }} />
-      </div>
-
-      {/* Breadcrumb */}
-      <div className="flex items-center gap-0.5 px-5 py-2 overflow-x-auto scrollbar-none shrink-0">
-        {steps.map((s, i) => (
-          <span key={s} className="flex items-center gap-0.5 shrink-0">
-            <button
-              onClick={() => i < idx && setStep(s)}
-              disabled={i >= idx}
-              className={cn(
-                "text-[10px] font-medium transition-colors px-0.5",
-                i === idx ? "text-violet-300 font-semibold" :
-                i < idx   ? "text-zinc-500 hover:text-zinc-300 cursor-pointer" : "text-zinc-700 cursor-default"
-              )}>
-              {i < idx ? "✓" : STEP_LABELS[s]}
-            </button>
-            {i < steps.length - 1 && <span className="text-zinc-800 text-[10px]">·</span>}
-          </span>
-        ))}
+      {/* Progress bar + step indicator */}
+      <div className="shrink-0">
+        <div className="h-px bg-white/[0.04]">
+          <div className="h-full bg-gradient-to-r from-violet-600 to-violet-400 transition-all duration-500 ease-out" style={{ width: `${progress}%` }} />
+        </div>
+        <div className="flex items-center justify-between px-5 py-2">
+          <div className="flex items-center gap-2">
+            <span className="text-[11px] font-semibold text-violet-400">{STEP_LABELS[step]}</span>
+          </div>
+          <span className="text-[11px] text-zinc-600 tabular-nums">{idx + 1} / {steps.length}</span>
+        </div>
       </div>
 
       {/* Step content */}

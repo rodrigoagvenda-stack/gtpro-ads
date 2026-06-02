@@ -9,16 +9,37 @@ import { createClient } from "@/lib/supabase"
 import { useEffect, useState } from "react"
 import { api } from "@/lib/api"
 
-const NAV_MAIN = [
-  { href: "/home",       label: "Home",           icon: Home },
-  { href: "/campanhas",  label: "Campanhas",       icon: Megaphone },
-  { href: "/audiencias", label: "Audiências",      icon: Users },
-  { href: "/conta",      label: "Conta",           icon: Building2 },
-  { href: "/criativos",  label: "Criativos",        icon: Images },
-  { href: "/agente",     label: "Agente IA",       icon: Bot },
-  { href: "/relatorios", label: "Relatórios",      icon: FileText },
-  { href: "/alertas",    label: "Alertas",         icon: Bell },
-  { href: "/rastreamento", label: "Rastreamento",  icon: Link2 },
+type NavGroup = { label?: string; items: { href: string; label: string; icon: any }[] }
+
+const NAV_GROUPS: NavGroup[] = [
+  {
+    items: [
+      { href: "/home",   label: "Home",      icon: Home },
+      { href: "/agente", label: "Agente IA", icon: Bot  },
+    ],
+  },
+  {
+    label: "Gestão",
+    items: [
+      { href: "/campanhas",  label: "Campanhas",  icon: Megaphone },
+      { href: "/criativos",  label: "Criativos",  icon: Images    },
+      { href: "/audiencias", label: "Audiências", icon: Users     },
+    ],
+  },
+  {
+    label: "Análise",
+    items: [
+      { href: "/relatorios", label: "Relatórios", icon: FileText },
+      { href: "/alertas",    label: "Alertas",    icon: Bell     },
+    ],
+  },
+  {
+    label: "Conta",
+    items: [
+      { href: "/rastreamento", label: "Rastreamento", icon: Link2     },
+      { href: "/conta",        label: "Conta",        icon: Building2 },
+    ],
+  },
 ]
 
 const NAV_BOTTOM = [
@@ -84,9 +105,18 @@ export default function Sidebar() {
       </div>
 
       {/* Main nav */}
-      <nav className="flex-1 px-2 pt-3 pb-2 space-y-0.5">
-        {NAV_MAIN.map(({ href, label, icon }) => (
-          <NavLink key={href} href={href} label={label} icon={icon} active={pathname === href || (href !== "/home" && pathname.startsWith(href))} />
+      <nav className="flex-1 px-2 pt-3 pb-2 overflow-y-auto space-y-4">
+        {NAV_GROUPS.map((group, gi) => (
+          <div key={gi}>
+            {group.label && (
+              <p className="px-3 mb-1 text-[10px] font-semibold text-zinc-700 uppercase tracking-widest">{group.label}</p>
+            )}
+            <div className="space-y-0.5">
+              {group.items.map(({ href, label, icon }) => (
+                <NavLink key={href} href={href} label={label} icon={icon} active={pathname === href || (href !== "/home" && pathname.startsWith(href))} />
+              ))}
+            </div>
+          </div>
         ))}
       </nav>
 
