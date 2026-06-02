@@ -4,8 +4,9 @@ import { useState, useRef } from "react"
 import {
   X, ChevronLeft, MapPin, Plus, Minus, Check, Upload, Hash,
   Info, Sparkles, Target, Users, Megaphone, MessageSquare,
-  TrendingUp, Eye, Image as ImageIcon, Film,
+  TrendingUp, Eye, Image as ImageIcon, Film, Loader2, AlertCircle,
 } from "lucide-react"
+import { api } from "@/lib/api"
 import { cn } from "@/lib/utils"
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -249,7 +250,7 @@ function StepAboCbo({ draft, setDraft, onNext }: StepProps) {
           )
         })}
       </div>
-      <button onClick={onNext} className="w-full py-2.5 bg-violet-600 hover:bg-violet-500 text-white text-[13px] font-semibold rounded-xl transition-colors">
+      <button onClick={() => { setDraft({ ...draft, budgetType: selected }); onNext() }} className="w-full py-2.5 bg-violet-600 hover:bg-violet-500 text-white text-[13px] font-semibold rounded-xl transition-colors">
         Próximo
       </button>
     </div>
@@ -279,7 +280,7 @@ function StepNaming({ draft, setDraft, onNext }: StepProps) {
         )}
       </div>
       <p className="text-[11px] text-zinc-700">Padrão: OBJETIVO-MÊSANO-PÚBLICO</p>
-      <button onClick={onNext} disabled={!name.trim()}
+      <button onClick={() => { setDraft({ ...draft, name: name.trim() || suggested }); onNext() }} disabled={!name.trim()}
         className="w-full py-2.5 bg-violet-600 hover:bg-violet-500 disabled:opacity-40 text-white text-[13px] font-semibold rounded-xl transition-colors">
         Próximo
       </button>
@@ -613,9 +614,32 @@ function StepConversation({ draft, setDraft, onNext }: StepProps) {
 }
 
 function StepCreative({ draft, setDraft, onNext }: StepProps) {
-  const fileRef = useRef<HTMLInputElement>(null)
+  const fileRef  = useRef<HTMLInputElement>(null)
+  const [uploading, setUploading] = useState(false)
+  const [uploadErr, setUploadErr] = useState("")
   const type    = draft.creativeType ?? "upload"
-  const canNext = type === "upload" ? !!draft.creativeName : !!(draft.creativeHash?.trim() || draft.creativeVideoId?.trim())
+  const uploaded = !!(draft.creativeHash || draft.creativeVideoId)
+  const canNext = type === "upload" ? uploaded : !!(draft.creativeHash?.trim() || draft.creativeVideoId?.trim())
+
+  async function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const f = e.target.files?.[0]
+    e.target.value = ""
+    if (!f) return
+    setUploadErr("")
+    setUploading(true)
+    try {
+      const data = await api.media.upload(f)
+      setDraft({
+        ...draft,
+        creativeName:    f.name,
+        creativeHash:    data.meta_hash    ?? undefined,
+        creativeVideoId: data.meta_video_id ?? undefined,
+      })
+    } catch (err: any) {
+      setUploadErr(err.message ?? "Erro ao enviar")
+    } finally { setUploading(false) }
+  }
+
   return (
     <div className="space-y-4">
       <div>
@@ -629,7 +653,7 @@ function StepCreative({ draft, setDraft, onNext }: StepProps) {
         ]).map(opt => {
           const Icon = opt.icon
           return (
-            <button key={opt.id} onClick={() => setDraft({ ...draft, creativeType: opt.id })}
+            <button key={opt.id} onClick={() => setDraft({ ...draft, creativeType: opt.id, creativeHash: undefined, creativeVideoId: undefined, creativeName: undefined })}
               className={cn("flex items-center gap-2.5 p-3.5 rounded-xl ring-1 transition-all",
                 type === opt.id ? "bg-violet-500/10 ring-violet-500/30 text-violet-300" : "bg-white/[0.03] ring-white/[0.07] text-zinc-500 hover:text-zinc-300")}>
               <Icon size={14} /><span className="text-[12px] font-semibold">{opt.label}</span>
@@ -639,15 +663,25 @@ function StepCreative({ draft, setDraft, onNext }: StepProps) {
       </div>
       {type === "upload" && (
         <>
-          <input ref={fileRef} type="file" accept="image/*,video/*" className="hidden"
-            onChange={e => { const f = e.target.files?.[0]; if (f) setDraft({ ...draft, creativeName: f.name }); e.target.value = "" }} />
-          <button onClick={() => fileRef.current?.click()}
-            className="w-full flex flex-col items-center justify-center gap-2 py-8 bg-white/[0.03] ring-1 ring-dashed ring-white/[0.12] rounded-xl hover:bg-white/[0.06] transition-colors">
-            {draft.creativeName
-              ? <><ImageIcon size={18} className="text-violet-400" /><p className="text-[12px] text-violet-300">{draft.creativeName}</p></>
-              : <><Upload size={18} className="text-zinc-500" /><p className="text-[12px] text-zinc-500">Clique para selecionar imagem ou vídeo</p></>
-            }
+          <input ref={fileRef} type="file" accept="image/*,video/*" className="hidden" onChange={handleFile} />
+          <button onClick={() => !uploading && fileRef.current?.click()}
+            className={cn("w-full flex flex-col items-center justify-center gap-2 py-8 ring-1 ring-dashed rounded-xl transition-colors",
+              uploaded ? "bg-emerald-500/5 ring-emerald-500/20" : "bg-white/[0.03] ring-white/[0.12] hover:bg-white/[0.06]"
+            )}>
+            {uploading ? (
+              <><Loader2 size={18} className="text-violet-400 animate-spin" /><p className="text-[12px] text-zinc-400">Enviando para Meta...</p></>
+            ) : uploaded ? (
+              <><Check size={18} className="text-emerald-400" /><p className="text-[12px] text-emerald-300 font-medium">{draft.creativeName}</p>
+              <p className="text-[10px] text-zinc-600">{draft.creativeHash ? `hash: ${draft.creativeHash.slice(0,12)}…` : `video_id: ${draft.creativeVideoId}`}</p></>
+            ) : (
+              <><Upload size={18} className="text-zinc-500" /><p className="text-[12px] text-zinc-500">Clique para selecionar imagem ou vídeo</p></>
+            )}
           </button>
+          {uploadErr && (
+            <div className="flex items-center gap-2 text-[12px] text-red-400 bg-red-500/10 ring-1 ring-red-500/20 rounded-lg px-3 py-2">
+              <AlertCircle size={13} className="shrink-0" /> {uploadErr}
+            </div>
+          )}
         </>
       )}
       {type === "existing" && (
@@ -773,13 +807,15 @@ function ReviewRow({ label, value }: { label: string; value?: string }) {
 }
 
 function buildMessage(draft: CampaignDraft): string {
-  const fmt = (n: number) => `R$ ${n.toFixed(2).replace(".", ",")}`
+  const fmt        = (n: number) => `R$ ${n.toFixed(2).replace(".", ",")}`
+  const budgetType = draft.budgetType ?? "ABO"
+  const name       = draft.name ?? `${draft.objectiveLabel?.toUpperCase() ?? "CAMP"}-${new Date().toLocaleString("pt-BR",{month:"short"}).toUpperCase().replace(".","")}`
   const lines: string[] = [
     "Crie uma nova campanha no Meta Ads com as seguintes configurações:\n",
     `**OBJETIVO:** ${draft.objectiveLabel} (${draft.objective})`,
     `**ESTRUTURA:** ${draft.campaigns ?? 1} campanha(s) • ${draft.adsets ?? 1} conjunto(s) • ${draft.ads ?? 1} anúncio(s) por conjunto`,
-    `**BUDGET:** ${draft.budgetType} • ${fmt(draft.dailyBudget ?? 0)} ${draft.lifetimeBudget ? "total" : "/dia"} ${draft.budgetType === "ABO" ? "por conjunto" : ""}`,
-    `**NOME BASE:** ${draft.name}`,
+    `**BUDGET:** ${budgetType} • ${fmt(draft.dailyBudget ?? 0)} ${draft.lifetimeBudget ? "total" : "/dia"} ${budgetType === "ABO" ? "por conjunto" : ""}`,
+    `**NOME BASE:** ${name}`,
     "",
   ]
   if ((draft.geo ?? []).length > 0) {
@@ -808,9 +844,9 @@ function buildMessage(draft: CampaignDraft): string {
   if (draft.cta) { lines.push(`**CTA:** ${ctaLabel ?? draft.cta} (${draft.cta})`); lines.push("") }
   if (draft.conversationMessage) { lines.push(`**MENSAGEM BOAS-VINDAS:** "${draft.conversationMessage}"`); lines.push("") }
   lines.push("**CRIATIVO:**")
-  if (draft.creativeType === "upload" && draft.creativeName) lines.push(`  - Arquivo: ${draft.creativeName} (enviado separadamente)`)
-  else if (draft.creativeHash) lines.push(`  - Image hash: ${draft.creativeHash}`)
-  else if (draft.creativeVideoId) lines.push(`  - Video ID: ${draft.creativeVideoId}`)
+  if (draft.creativeHash)    lines.push(`  - image_hash: ${draft.creativeHash}`)
+  else if (draft.creativeVideoId) lines.push(`  - video_id: ${draft.creativeVideoId}`)
+  else if (draft.creativeName)    lines.push(`  - Arquivo: ${draft.creativeName} (sem hash — não criar anúncio até usuário fornecer o hash)`)
   if (draft.dynamicCreative) lines.push("  - Dynamic Creative: Ativado")
   lines.push("")
   lines.push("**PROGRAMAÇÃO:**")
@@ -866,7 +902,7 @@ function StepReview({ draft, onSubmit, onBack }: { draft: CampaignDraft; onSubmi
 // ─── Main WizardPanel ─────────────────────────────────────────────────────────
 
 interface WizardPanelProps {
-  onSubmit: (message: string) => void
+  onSubmit: (message: string, draft: CampaignDraft) => void
   onClose: () => void
 }
 
@@ -880,7 +916,7 @@ export default function WizardPanel({ onSubmit, onClose }: WizardPanelProps) {
 
   function onNext() { const n = steps[idx + 1]; if (n) setStep(n) }
   function onBack() { const p = steps[idx - 1]; if (p) setStep(p) }
-  function handleSubmit(msg: string) { onSubmit(msg); onClose() }
+  function handleSubmit(msg: string) { onSubmit(msg, draft); onClose() }
 
   const stepProps: StepProps = { draft, setDraft, onNext, onBack }
 

@@ -12,16 +12,57 @@ import {
 import { cn } from "@/lib/utils"
 import WizardPanel from "./WizardPanel"
 
+function CampaignBriefCard({ b }: { b: CampaignBrief }) {
+  const name     = b.name ?? b.objectiveLabel ?? "Nova Campanha"
+  const adsets   = b.adsets ?? 1
+  const ads      = b.ads ?? 1
+  const budget   = b.dailyBudget ? `R$${b.dailyBudget}${b.lifetimeBudget ? " total" : "/dia"} · ${b.budgetType ?? "ABO"}` : null
+  const hasMedia = b.creativeHash || b.creativeVideoId
+  return (
+    <div className="bg-zinc-800/80 ring-1 ring-white/[0.09] rounded-2xl rounded-tr-sm px-5 py-4 min-w-[240px]">
+      <div className="flex items-center gap-2 mb-3 pb-2.5 border-b border-white/[0.06]">
+        <Sparkles size={12} className="text-violet-400 shrink-0" />
+        <span className="text-[12px] font-semibold text-white">Nova Campanha</span>
+        {b.objectiveLabel && <span className="text-[11px] text-zinc-500">· {b.objectiveLabel}</span>}
+      </div>
+      <div className="font-mono text-[12px] space-y-1 mb-3">
+        <p className="text-zinc-200">📁 {name}</p>
+        {Array.from({ length: Math.min(adsets, 3) }).map((_, i) => (
+          <div key={i}>
+            <p className="pl-4 text-zinc-400">└─ 📂 Conjunto {i + 1}</p>
+            {Array.from({ length: Math.min(ads, 2) }).map((_, j) => (
+              <p key={j} className="pl-9 text-zinc-600">└─ 🖼 Anúncio {j + 1}</p>
+            ))}
+          </div>
+        ))}
+        {adsets > 3 && <p className="pl-4 text-zinc-700 text-[11px]">+{adsets - 3} conjuntos…</p>}
+      </div>
+      <div className="space-y-1">
+        {b.geo && b.geo.length > 0 && <p className="text-[11px] text-zinc-500">📍 {b.geo.map(g => `${g.city} ${g.radius}km`).join(" · ")}</p>}
+        {budget && <p className="text-[11px] text-zinc-500">💰 {budget}</p>}
+        {hasMedia && <p className="text-[11px] text-emerald-400">🖼 Mídia: {b.creativeName ?? "upload"} ✓</p>}
+      </div>
+    </div>
+  )
+}
+
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 interface ToolCall { name: string; input: Record<string, any> }
 interface Action   { tool: string; input: Record<string, any>; result: any }
+interface CampaignBrief {
+  objectiveLabel?: string; name?: string; campaigns?: number; adsets?: number; ads?: number
+  budgetType?: string; dailyBudget?: number; lifetimeBudget?: boolean
+  geo?: { city: string; radius: number }[]
+  creativeHash?: string; creativeVideoId?: string; creativeName?: string
+}
 interface Message  {
   role: "user" | "assistant"
   content: string
   tools_used?: ToolCall[]
   actions?: Action[]
   mediaUpload?: { name: string; type: string; hash?: string; videoId?: string }
+  campaignBrief?: CampaignBrief
   isError?: boolean
 }
 interface ActiveTool { name: string; status: "running" | "done" | "error" }
@@ -547,7 +588,28 @@ export default function AgentePage() {
           {wizardOpen && (
             <div className="py-4">
               <WizardPanel
-                onSubmit={msg => { setWizardOpen(false); send(msg) }}
+                onSubmit={(msg, draft) => {
+                  setWizardOpen(false)
+                  const brief: CampaignBrief = {
+                    objectiveLabel: draft.objectiveLabel, name: draft.name,
+                    campaigns: draft.campaigns, adsets: draft.adsets, ads: draft.ads,
+                    budgetType: draft.budgetType, dailyBudget: draft.dailyBudget,
+                    lifetimeBudget: draft.lifetimeBudget, geo: draft.geo,
+                    creativeHash: draft.creativeHash, creativeVideoId: draft.creativeVideoId, creativeName: draft.creativeName,
+                  }
+                  setMessages(p => [...p,
+                    { role: "user", content: msg, campaignBrief: brief },
+                    { role: "assistant", content: "", tools_used: [], actions: [] },
+                  ])
+                  setLoading(true); setIsStreaming(false); setActiveTools([])
+                  const ctrl = new AbortController()
+                  abortRef.current = ctrl
+                  api.agent.queryStream(msg, selectedModel, buildHistory([...messages, { role: "user", content: msg }]),
+                    chunk => handleChunk(chunk),
+                    ctrl.signal
+                  ).catch(e => { if (e?.name !== "AbortError") setMessages(p => { const n = [...p]; n[n.length-1] = { role: "assistant", content: e.message ?? "Erro", isError: true }; return n }) })
+                    .finally(() => { setLoading(false); setIsStreaming(false); setActiveTools([]) })
+                }}
                 onClose={() => setWizardOpen(false)}
               />
             </div>
@@ -591,6 +653,8 @@ export default function AgentePage() {
                             </p>
                           </div>
                         </div>
+                      ) : msg.campaignBrief ? (
+                        <CampaignBriefCard b={msg.campaignBrief} />
                       ) : msg.role === "user" ? (
                         /* User bubble */
                         <div className="bg-zinc-800/80 ring-1 ring-white/[0.09] rounded-2xl rounded-tr-sm px-5 py-3.5 text-[14px] text-zinc-100 leading-relaxed">

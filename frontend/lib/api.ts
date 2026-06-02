@@ -198,6 +198,24 @@ export const api = {
 
   media: {
     list: () => fetchWithAuth("/meta/media"),
+    upload: async (file: File): Promise<{ meta_hash?: string; meta_video_id?: string; name: string; type: string }> => {
+      const { createClient } = await import("./supabase")
+      const supabase = createClient()
+      const { data: { session } } = await supabase.auth.getSession()
+      const fd = new FormData()
+      fd.append("file", file)
+      fd.append("name", file.name)
+      const res = await fetch("/api/meta/media", {
+        method: "POST",
+        headers: session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {},
+        body: fd,
+      })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: res.statusText }))
+        throw new Error(err.error || "Erro ao enviar mídia")
+      }
+      return res.json()
+    },
     delete: (id: string) => fetchWithAuth(`/meta/media/${id}`, { method: "DELETE" }),
   },
 }
