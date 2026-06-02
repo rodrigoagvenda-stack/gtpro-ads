@@ -38,7 +38,7 @@ function CampaignBriefCard({ b }: { b: CampaignBrief }) {
         {adsets > 3 && <p className="pl-4 text-zinc-700 text-[11px]">+{adsets - 3} conjuntos…</p>}
       </div>
       <div className="space-y-1">
-        {b.geo && b.geo.length > 0 && <p className="text-[11px] text-zinc-500">📍 {b.geo.map(g => `${g.city} ${g.radius}km`).join(" · ")}</p>}
+        {b.geo && b.geo.length > 0 && <p className="text-[11px] text-zinc-500">📍 {b.geo.map(g => `${g.name} ${g.radius}km`).join(" · ")}</p>}
         {budget && <p className="text-[11px] text-zinc-500">💰 {budget}</p>}
         {hasMedia && <p className="text-[11px] text-emerald-400">🖼 Mídia: {b.creativeName ?? "upload"} ✓</p>}
       </div>

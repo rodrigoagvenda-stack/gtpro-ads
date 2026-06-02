@@ -927,8 +927,8 @@ function buildMessage(draft: CampaignDraft): string {
 }
 
 function StepReview({ draft, onSubmit, onBack }: { draft: CampaignDraft; onSubmit: (msg: string) => void; onBack: () => void }) {
-  const geo         = (draft.geo ?? []).map(g => `${g.city} (${g.radius}km)`).join(", ") || "—"
-  const audiences   = `${draft.advantagePlus ? "Advantage+ ativo" : "Manual"}${(draft.interests ?? []).length > 0 ? ` • ${draft.interests!.join(", ")}` : ""}`
+  const geo         = (draft.geo ?? []).map(g => `${g.name} (${g.radius}km)`).join(", ") || "—"
+  const audiences   = `${draft.advantagePlus ? "Advantage+ ativo" : "Manual"}${(draft.interests ?? []).length > 0 ? ` • ${draft.interests!.map(i => i.name).join(", ")}` : ""}`
   const placement   = draft.placement === "advantage_plus" ? "Advantage+ (auto)" : `Manual (${(draft.customPlacements ?? []).length} selecionados)`
   const ctaLabel    = Object.values(CTA_BY_OBJECTIVE).flat().find(c => c.id === draft.cta)?.label ?? draft.cta
   const budgetLabel = `${draft.budgetType} — R$ ${(draft.dailyBudget ?? 0).toFixed(2).replace(".", ",")} ${draft.lifetimeBudget ? "total" : "/dia"}`
