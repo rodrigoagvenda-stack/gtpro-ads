@@ -3,7 +3,7 @@ import { getTenant, unauthorized } from "@/lib/server/auth"
 import { createServiceClient } from "@/lib/server/supabase"
 import { decrypt } from "@/lib/server/crypto"
 
-const GRAPH = "https://graph.facebook.com/v22.0"
+const GRAPH = "https://graph.facebook.com/v25.0"
 
 async function getTokenAndAccount(tenantId: string) {
   const supabase = createServiceClient()
@@ -38,78 +38,86 @@ export async function POST(req: NextRequest) {
   const tenant = await getTenant(req)
   if (!tenant) return unauthorized()
 
-  const formData = await req.formData()
-  const file     = formData.get("file") as File | null
-  const name     = (formData.get("name") as string | null) ?? file?.name ?? "media"
+  try {
+    const formData = await req.formData()
+    const file     = formData.get("file") as File | null
+    const name     = (formData.get("name") as string | null) ?? file?.name ?? "media"
 
-  if (!file) return Response.json({ error: "Campo 'file' obrigatório" }, { status: 400 })
+    if (!file) return Response.json({ error: "Campo 'file' obrigatório" }, { status: 400 })
 
-  const isVideo = file.type.startsWith("video/")
-  const isImage = file.type.startsWith("image/")
-  if (!isVideo && !isImage) return Response.json({ error: "Apenas imagens e vídeos são aceitos" }, { status: 400 })
+    const isVideo = file.type.startsWith("video/")
+    const isImage = file.type.startsWith("image/")
+    if (!isVideo && !isImage) return Response.json({ error: "Apenas imagens e vídeos são aceitos" }, { status: 400 })
 
-  const { token, adAccountId } = await getTokenAndAccount(tenant.tenant_id)
-  const accountId = adAccountId.replace("act_", "")
+    const { token, adAccountId } = await getTokenAndAccount(tenant.tenant_id)
+    const accountId = adAccountId.replace("act_", "")
 
-  const bytes   = await file.arrayBuffer()
-  const buffer  = Buffer.from(bytes)
-  const payload = new FormData()
+    const bytes   = await file.arrayBuffer()
+    const buffer  = Buffer.from(bytes)
+    const payload = new FormData()
 
-  let metaHash: string | null = null
-  let metaVideoId: string | null = null
+    let metaHash: string | null = null
+    let metaVideoId: string | null = null
 
-  if (isImage) {
-    payload.append("bytes", buffer.toString("base64"))
-    payload.append("name", name)
-    payload.append("access_token", token)
+    if (isImage) {
+      payload.append("bytes", buffer.toString("base64"))
+      payload.append("name", name)
+      payload.append("access_token", token)
 
-    const res = await fetch(`${GRAPH}/act_${accountId}/adimages`, {
-      method: "POST",
-      body: payload,
-    })
-    const json = await res.json()
-    if (!res.ok || json.error) throw new Error(json.error?.message ?? "Erro ao enviar imagem")
-    const imgData = Object.values(json.images ?? {})[0] as any
-    metaHash = imgData?.hash ?? null
-  } else {
-    // Video upload — use resumable upload (simple POST for small videos)
-    payload.append("source", new Blob([buffer], { type: file.type }), file.name)
-    payload.append("name", name)
-    payload.append("access_token", token)
+      const res = await fetch(`${GRAPH}/act_${accountId}/adimages`, {
+        method: "POST",
+        body: payload,
+      })
+      const json = await res.json()
+      if (!res.ok || json.error) {
+        const msg = json.error?.message ?? json.error?.error_user_msg ?? `Meta API retornou ${res.status}`
+        return Response.json({ error: msg }, { status: 422 })
+      }
+      const imgData = Object.values(json.images ?? {})[0] as any
+      metaHash = imgData?.hash ?? null
+      if (!metaHash) return Response.json({ error: "Meta não retornou hash da imagem" }, { status: 422 })
+    } else {
+      payload.append("source", new Blob([buffer], { type: file.type }), file.name)
+      payload.append("name", name)
+      payload.append("access_token", token)
 
-    const res = await fetch(`${GRAPH}/act_${accountId}/advideos`, {
-      method: "POST",
-      body: payload,
-    })
-    const json = await res.json()
-    if (!res.ok || json.error) throw new Error(json.error?.message ?? "Erro ao enviar vídeo")
-    metaVideoId = json.id ?? null
-  }
+      const res = await fetch(`${GRAPH}/act_${accountId}/advideos`, {
+        method: "POST",
+        body: payload,
+      })
+      const json = await res.json()
+      if (!res.ok || json.error) {
+        const msg = json.error?.message ?? json.error?.error_user_msg ?? `Meta API retornou ${res.status}`
+        return Response.json({ error: msg }, { status: 422 })
+      }
+      metaVideoId = json.id ?? null
+      if (!metaVideoId) return Response.json({ error: "Meta não retornou ID do vídeo" }, { status: 422 })
+    }
 
-  const supabase = createServiceClient()
-  const { data: asset, error } = await supabase
-    .from("media_assets")
-    .insert({
-      tenant_id:     tenant.tenant_id,
-      name,
-      type:          isImage ? "image" : "video",
+    const supabase = createServiceClient()
+    const { data: asset, error } = await supabase
+      .from("media_assets")
+      .insert({
+        tenant_id:     tenant.tenant_id,
+        name,
+        type:          isImage ? "image" : "video",
+        meta_hash:     metaHash,
+        meta_video_id: metaVideoId,
+        file_size:     file.size,
+      })
+      .select()
+      .single()
+
+    if (error) return Response.json({ error: error.message }, { status: 500 })
+
+    return Response.json({
+      id:            asset.id,
+      name:          asset.name,
+      type:          asset.type,
       meta_hash:     metaHash,
       meta_video_id: metaVideoId,
-      file_size:     file.size,
     })
-    .select()
-    .single()
-
-  if (error) return Response.json({ error: error.message }, { status: 500 })
-
-  return Response.json({
-    id:            asset.id,
-    name:          asset.name,
-    type:          asset.type,
-    meta_hash:     metaHash,
-    meta_video_id: metaVideoId,
-    instructions:  isImage
-      ? `Use meta_hash "${metaHash}" no campo image_hash ao criar o criativo.`
-      : `Use meta_video_id "${metaVideoId}" no campo video_id ao criar o criativo.`,
-  })
+  } catch (err: any) {
+    return Response.json({ error: err.message ?? "Erro interno no servidor" }, { status: 500 })
+  }
 }

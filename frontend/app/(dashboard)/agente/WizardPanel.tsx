@@ -583,21 +583,47 @@ function StepPixel({ draft, setDraft, onNext }: StepProps) {
 }
 
 function StepCopy({ draft, setDraft, onNext }: StepProps) {
-  const copies   = draft.copies ?? [{ primary: "", headline: "", description: "" }, { primary: "", headline: "", description: "" }, { primary: "", headline: "", description: "" }]
-  const selected = draft.selectedCopyIndex ?? 0
+  const copies     = draft.copies ?? [{ primary: "", headline: "", description: "" }, { primary: "", headline: "", description: "" }, { primary: "", headline: "", description: "" }]
+  const selected   = draft.selectedCopyIndex ?? 0
+  const [genLoading, setGenLoading] = useState(false)
+  const [genErr, setGenErr]         = useState("")
 
   function updateCopy(idx: number, field: keyof typeof copies[0], value: string) {
     setDraft({ ...draft, copies: copies.map((c, i) => i === idx ? { ...c, [field]: value } : c) })
+  }
+
+  async function handleGenerate() {
+    setGenLoading(true)
+    setGenErr("")
+    try {
+      const data = await api.agent.generateCopy({
+        objective: draft.objective, geo: draft.geo, interests: draft.interests,
+        budgetType: draft.budgetType, dailyBudget: draft.dailyBudget, cta: draft.cta,
+      })
+      if (data.copies?.length) setDraft({ ...draft, copies: data.copies, selectedCopyIndex: 0 })
+    } catch (e: any) {
+      setGenErr(e.message ?? "Erro ao gerar")
+    } finally {
+      setGenLoading(false)
+    }
   }
 
   const hasContent = copies[selected].primary.trim() || copies[selected].headline.trim()
 
   return (
     <div className="space-y-4">
-      <div>
-        <h3 className="text-[16px] font-semibold text-white">Copy do anúncio</h3>
-        <p className="text-[13px] text-zinc-500 mt-1">Escreva 1–3 versões de copy para teste A/B.</p>
+      <div className="flex items-start justify-between">
+        <div>
+          <h3 className="text-[16px] font-semibold text-white">Copy do anúncio</h3>
+          <p className="text-[13px] text-zinc-500 mt-1">Escreva 1–3 versões de copy para teste A/B.</p>
+        </div>
+        <button onClick={handleGenerate} disabled={genLoading}
+          className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-[12px] font-semibold bg-violet-500/10 text-violet-300 ring-1 ring-violet-500/20 hover:bg-violet-500/20 transition-all disabled:opacity-50 shrink-0">
+          {genLoading ? <Loader2 size={12} className="animate-spin" /> : <Sparkles size={12} />}
+          {genLoading ? "Gerando…" : "Gerar com IA"}
+        </button>
       </div>
+      {genErr && <p className="text-[12px] text-red-400">{genErr}</p>}
       <div className="flex gap-1.5">
         {[0, 1, 2].map(i => (
           <button key={i} onClick={() => setDraft({ ...draft, selectedCopyIndex: i })}

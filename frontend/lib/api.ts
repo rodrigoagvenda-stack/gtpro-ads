@@ -95,6 +95,8 @@ export const api = {
   },
 
   agent: {
+    generateCopy: (draft: Record<string, any>) =>
+      fetchWithAuth("/agent/generate-copy", { method: "POST", body: JSON.stringify(draft) }),
     queryStream: (
       message: string,
       model?: string,

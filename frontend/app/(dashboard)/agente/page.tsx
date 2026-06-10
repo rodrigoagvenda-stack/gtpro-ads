@@ -7,7 +7,7 @@ import {
   CheckCircle2, Sparkles, ChevronDown, ChevronRight, Trash2, FileText,
   Users, Image, X, ListChecks, XCircle, RefreshCw, Paperclip, Upload,
   Film, Check, ThumbsDown, MessageSquare, Square, PauseCircle, TrendingUp,
-  Plus,
+  Plus, ClipboardCopy, Wand2,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import WizardPanel from "./WizardPanel"
@@ -41,6 +41,98 @@ function CampaignBriefCard({ b }: { b: CampaignBrief }) {
         {b.geo && b.geo.length > 0 && <p className="text-[11px] text-zinc-500">📍 {b.geo.map(g => `${g.name} ${g.radius}km`).join(" · ")}</p>}
         {budget && <p className="text-[11px] text-zinc-500">💰 {budget}</p>}
         {hasMedia && <p className="text-[11px] text-emerald-400">🖼 Mídia: {b.creativeName ?? "upload"} ✓</p>}
+      </div>
+    </div>
+  )
+}
+
+// ─── Text mode template ───────────────────────────────────────────────────────
+
+const TEXT_CAMPAIGN_TEMPLATE = `🎯 NOVA CAMPANHA — MODO TEXTO
+Objetivo: [Conversões / Leads / Tráfego / WhatsApp / Alcance]
+Nome: [Ex: Black Friday - Produto X]
+
+📍 LOCALIZAÇÃO
+Cidades: [Ex: São Paulo, Rio de Janeiro, Belo Horizonte]
+Raio: [Ex: 20km]
+
+👥 PÚBLICO
+Faixa etária: [Ex: 25-45]
+Sexo: [Todos / Masculino / Feminino]
+Interesses: [Ex: Fitness, Nutrição, Academia]
+
+💰 ORÇAMENTO
+Tipo: [Diário / Vitalício]
+Valor: [Ex: R$80]
+Distribuição: [ABO (por conjunto) / CBO (pela campanha)]
+
+✍️ COPY
+Texto principal: [Texto principal do anúncio. Foque no benefício principal.]
+Título: [Título curto e impactante - máx 40 caracteres]
+CTA: [Saiba mais / Falar no WhatsApp / Comprar agora / Cadastre-se]
+
+📅 VEICULAÇÃO
+Início: [hoje / dd/mm/aaaa]
+Fim: [deixar vazio = sem data de fim]`
+
+function TextModePanel({ onClose }: { onClose: () => void }) {
+  const [copied, setCopied] = useState(false)
+
+  function handleCopy() {
+    navigator.clipboard.writeText(TEXT_CAMPAIGN_TEMPLATE).then(() => {
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2500)
+    })
+  }
+
+  return (
+    <div className="py-4">
+      <div className="bg-zinc-900/80 ring-1 ring-white/[0.1] rounded-2xl overflow-hidden">
+        {/* Header */}
+        <div className="flex items-center justify-between px-5 py-4 border-b border-white/[0.06]">
+          <div className="flex items-center gap-2.5">
+            <div className="w-7 h-7 rounded-xl bg-violet-500/15 ring-1 ring-violet-500/25 flex items-center justify-center">
+              <Wand2 size={13} className="text-violet-400" />
+            </div>
+            <div>
+              <p className="text-[13px] font-semibold text-white">Nova Campanha</p>
+              <p className="text-[11px] text-zinc-600">Modo texto</p>
+            </div>
+          </div>
+          <button onClick={onClose} className="text-zinc-600 hover:text-zinc-300 transition-colors">
+            <X size={15} />
+          </button>
+        </div>
+
+        {/* Instructions */}
+        <div className="px-5 py-4 border-b border-white/[0.06] bg-violet-500/[0.04]">
+          <p className="text-[13px] text-zinc-300 leading-relaxed">
+            <span className="text-violet-300 font-semibold">Como funciona: </span>
+            copie o template abaixo, preencha os campos entre colchetes e cole no chat. A IA vai criar toda a estrutura da campanha e pedir o criativo ao final.
+          </p>
+        </div>
+
+        {/* Template */}
+        <div className="px-5 py-4 font-mono text-[12px] text-zinc-400 leading-relaxed whitespace-pre-wrap bg-zinc-950/40">
+          {TEXT_CAMPAIGN_TEMPLATE}
+        </div>
+
+        {/* Actions */}
+        <div className="px-5 py-4 border-t border-white/[0.06] flex gap-3">
+          <button onClick={handleCopy}
+            className={cn(
+              "flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-[13px] font-semibold ring-1 transition-all",
+              copied
+                ? "bg-emerald-500/10 text-emerald-300 ring-emerald-500/20"
+                : "bg-violet-600 text-white hover:bg-violet-500 ring-transparent"
+            )}>
+            {copied ? <><Check size={14} /> Copiado!</> : <><ClipboardCopy size={14} /> Copiar template</>}
+          </button>
+          <button onClick={onClose}
+            className="px-4 py-2.5 rounded-xl text-[13px] font-medium text-zinc-500 hover:text-zinc-300 ring-1 ring-white/[0.08] hover:bg-white/[0.04] transition-all">
+            Fechar
+          </button>
+        </div>
       </div>
     </div>
   )
@@ -256,8 +348,10 @@ export default function AgentePage() {
   const [logsOpen, setLogsOpen]             = useState(false)
   const [logsLoading, setLogsLoading]       = useState(false)
   const [uploading, setUploading]           = useState(false)
-  const [wizardOpen, setWizardOpen]         = useState(false)
-  const [activeAction, setActiveAction]     = useState<ActiveAction>(null)
+  const [wizardOpen, setWizardOpen]           = useState(false)
+  const [textModeOpen, setTextModeOpen]       = useState(false)
+  const [createPickerOpen, setCreatePickerOpen] = useState(false)
+  const [activeAction, setActiveAction]       = useState<ActiveAction>(null)
 
   const bottomRef   = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
@@ -498,7 +592,7 @@ export default function AgentePage() {
         <div className="max-w-[700px] mx-auto w-full py-8 px-2">
 
           {/* Empty state */}
-          {messages.length === 0 && !loading && !wizardOpen && (
+          {messages.length === 0 && !loading && !wizardOpen && !textModeOpen && (
             <div className="flex flex-col items-center gap-10 pt-8 pb-4">
               <div className="flex flex-col items-center gap-4">
                 <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-violet-600/25 to-violet-900/10 ring-1 ring-violet-500/20 flex items-center justify-center shadow-[0_0_40px_rgba(139,92,246,0.12)]">
@@ -521,7 +615,7 @@ export default function AgentePage() {
                     return (
                       <button key={action.id}
                         onClick={() => {
-                          if (action.id === "criar") { setWizardOpen(true); setActiveAction(null) }
+                          if (action.id === "criar") { setCreatePickerOpen(true); setActiveAction(null) }
                           else setActiveAction(isActive ? null : action.id as ActiveAction)
                         }}
                         className={cn(
@@ -582,6 +676,49 @@ export default function AgentePage() {
                 )
               )}
             </div>
+          )}
+
+          {/* Creation mode picker overlay */}
+          {createPickerOpen && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
+              onClick={() => setCreatePickerOpen(false)}>
+              <div className="bg-zinc-900 ring-1 ring-white/[0.12] rounded-2xl overflow-hidden w-[340px] shadow-2xl"
+                onClick={e => e.stopPropagation()}>
+                <div className="flex items-center justify-between px-5 py-4 border-b border-white/[0.06]">
+                  <p className="text-[14px] font-semibold text-white">Criar campanha</p>
+                  <button onClick={() => setCreatePickerOpen(false)} className="text-zinc-600 hover:text-zinc-300 transition-colors">
+                    <X size={14} />
+                  </button>
+                </div>
+                <div className="p-3 space-y-2">
+                  <button onClick={() => { setCreatePickerOpen(false); setWizardOpen(true) }}
+                    className="w-full flex items-start gap-4 p-4 rounded-xl bg-white/[0.03] ring-1 ring-white/[0.08] hover:bg-white/[0.07] hover:ring-violet-500/20 transition-all text-left group">
+                    <div className="w-9 h-9 rounded-xl bg-violet-500/15 ring-1 ring-violet-500/20 flex items-center justify-center shrink-0 mt-0.5">
+                      <Wand2 size={16} className="text-violet-400" />
+                    </div>
+                    <div>
+                      <p className="text-[14px] font-semibold text-zinc-100 group-hover:text-white">Wizard guiado</p>
+                      <p className="text-[12px] text-zinc-600 mt-0.5 leading-snug">Interface passo a passo com todas as opções da campanha</p>
+                    </div>
+                  </button>
+                  <button onClick={() => { setCreatePickerOpen(false); setTextModeOpen(true) }}
+                    className="w-full flex items-start gap-4 p-4 rounded-xl bg-white/[0.03] ring-1 ring-white/[0.08] hover:bg-white/[0.07] hover:ring-violet-500/20 transition-all text-left group">
+                    <div className="w-9 h-9 rounded-xl bg-zinc-500/10 ring-1 ring-zinc-500/15 flex items-center justify-center shrink-0 mt-0.5">
+                      <ClipboardCopy size={16} className="text-zinc-400 group-hover:text-zinc-200" />
+                    </div>
+                    <div>
+                      <p className="text-[14px] font-semibold text-zinc-100 group-hover:text-white">Modo texto</p>
+                      <p className="text-[12px] text-zinc-600 mt-0.5 leading-snug">Preencha um template estruturado e cole no chat</p>
+                    </div>
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Text mode panel */}
+          {textModeOpen && (
+            <TextModePanel onClose={() => setTextModeOpen(false)} />
           )}
 
           {/* Wizard — fills chat area when open */}
@@ -855,9 +992,9 @@ export default function AgentePage() {
                     <Sparkles size={12} /> Skills
                   </button>
 
-                  <button onClick={() => setWizardOpen(v => !v)} disabled={loading}
+                  <button onClick={() => { if (!loading) setCreatePickerOpen(v => !v) }} disabled={loading}
                     className={cn("flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[12px] font-medium transition-all disabled:opacity-40",
-                      wizardOpen ? "text-violet-300 bg-violet-500/10 ring-1 ring-violet-500/20" : "text-zinc-600 hover:text-zinc-300 hover:bg-white/[0.05]"
+                      (wizardOpen || textModeOpen || createPickerOpen) ? "text-violet-300 bg-violet-500/10 ring-1 ring-violet-500/20" : "text-zinc-600 hover:text-zinc-300 hover:bg-white/[0.05]"
                     )}>
                     <Plus size={12} /> Campanha
                   </button>
