@@ -726,7 +726,7 @@ export default function AgentePage() {
                   </button>
                 </div>
                 <div className="p-3 space-y-2">
-                  <button onClick={() => { setCreatePickerOpen(false); setWizardOpen(true) }}
+                  <button onClick={() => { setCreatePickerOpen(false); setTextModeOpen(false); setWizardOpen(true) }}
                     className="w-full flex items-start gap-4 p-4 rounded-xl bg-white/[0.03] ring-1 ring-white/[0.08] hover:bg-white/[0.07] hover:ring-violet-500/20 transition-all text-left group">
                     <div className="w-9 h-9 rounded-xl bg-violet-500/15 ring-1 ring-violet-500/20 flex items-center justify-center shrink-0 mt-0.5">
                       <Wand2 size={16} className="text-violet-400" />
@@ -736,7 +736,7 @@ export default function AgentePage() {
                       <p className="text-[12px] text-zinc-600 mt-0.5 leading-snug">Interface passo a passo com todas as opções da campanha</p>
                     </div>
                   </button>
-                  <button onClick={() => { setCreatePickerOpen(false); setTextModeOpen(true) }}
+                  <button onClick={() => { setCreatePickerOpen(false); setWizardOpen(false); setTextModeOpen(true) }}
                     className="w-full flex items-start gap-4 p-4 rounded-xl bg-white/[0.03] ring-1 ring-white/[0.08] hover:bg-white/[0.07] hover:ring-violet-500/20 transition-all text-left group">
                     <div className="w-9 h-9 rounded-xl bg-zinc-500/10 ring-1 ring-zinc-500/15 flex items-center justify-center shrink-0 mt-0.5">
                       <ClipboardCopy size={16} className="text-zinc-400 group-hover:text-zinc-200" />
@@ -780,7 +780,7 @@ export default function AgentePage() {
           )}
 
           {/* Messages */}
-          {messages.length > 0 && !wizardOpen && (
+          {messages.length > 0 && !wizardOpen && !textModeOpen && (
             <div className="space-y-8">
               {messages.map((msg, i) => {
                 const isLast = i === messages.length - 1
