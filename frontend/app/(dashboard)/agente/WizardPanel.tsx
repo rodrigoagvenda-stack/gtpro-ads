@@ -14,7 +14,7 @@ import { cn } from "@/lib/utils"
 export type WizardStep =
   | "objective" | "structure" | "abo_cbo" | "naming" | "geo"
   | "audience" | "placement" | "pixel" | "copy" | "cta"
-  | "conversation" | "creative" | "schedule" | "budget" | "review"
+  | "conversation" | "url" | "creative" | "schedule" | "budget" | "review"
 
 export interface CampaignDraft {
   objective?: string
@@ -42,6 +42,7 @@ export interface CampaignDraft {
   creativeVideoId?: string
   creativeName?: string
   dynamicCreative?: boolean
+  destinationUrl?: string
   scheduleStart?: string
   scheduleEnd?: string
   alwaysOn?: boolean
@@ -98,6 +99,7 @@ function getStepOrder(draft: CampaignDraft): WizardStep[] {
   if (obj === "OUTCOME_LEADS" || obj === "OUTCOME_SALES") steps.push("pixel")
   steps.push("copy", "cta")
   if (obj === "MESSAGES") steps.push("conversation")
+  else steps.push("url")
   steps.push("creative", "schedule", "budget", "review")
   return steps
 }
@@ -106,7 +108,7 @@ const STEP_LABELS: Record<WizardStep, string> = {
   objective: "Objetivo", structure: "Estrutura", abo_cbo: "Budget",
   naming: "Nome", geo: "Localização", audience: "Público",
   placement: "Placement", pixel: "Pixel", copy: "Copy",
-  cta: "CTA", conversation: "Conversa", creative: "Criativo",
+  cta: "CTA", conversation: "Conversa", url: "URL destino", creative: "Criativo",
   schedule: "Programação", budget: "Orçamento", review: "Revisão",
 }
 
@@ -705,6 +707,48 @@ function StepConversation({ draft, setDraft, onNext }: StepProps) {
   )
 }
 
+function StepUrl({ draft, setDraft, onNext }: StepProps) {
+  const [url, setUrl] = useState(draft.destinationUrl ?? "")
+  const needsUrl = draft.objective === "OUTCOME_SALES" || draft.objective === "OUTCOME_TRAFFIC"
+  const canNext = !needsUrl || url.trim().startsWith("http")
+
+  function handleNext() {
+    setDraft({ ...draft, destinationUrl: url.trim() || undefined })
+    onNext()
+  }
+
+  return (
+    <div className="space-y-4">
+      <div>
+        <h3 className="text-[16px] font-semibold text-white">URL de destino</h3>
+        <p className="text-[13px] text-zinc-500 mt-1">
+          {needsUrl ? "URL para onde o anúncio leva o usuário." : "URL de destino opcional para o anúncio."}
+        </p>
+      </div>
+      <div>
+        <input
+          type="url"
+          value={url}
+          onChange={e => setUrl(e.target.value)}
+          placeholder="https://seusite.com.br/pagina"
+          className={inputCls}
+          autoFocus
+        />
+        {url && !url.startsWith("http") && (
+          <p className="text-[11px] text-amber-400 mt-1.5">URL deve começar com https://</p>
+        )}
+      </div>
+      {!needsUrl && (
+        <p className="text-[12px] text-zinc-600">Deixe vazio para pular — o agente poderá solicitar depois.</p>
+      )}
+      <button onClick={handleNext} disabled={!canNext}
+        className="w-full py-2.5 bg-violet-600 hover:bg-violet-500 disabled:opacity-40 text-white text-[13px] font-semibold rounded-xl transition-colors">
+        {url.trim() ? "Próximo" : "Pular"}
+      </button>
+    </div>
+  )
+}
+
 function StepCreative({ draft, setDraft, onNext }: StepProps) {
   const fileRef  = useRef<HTMLInputElement>(null)
   const [uploading, setUploading] = useState(false)
@@ -938,6 +982,7 @@ function buildMessage(draft: CampaignDraft): string {
   const ctaLabel = Object.values(CTA_BY_OBJECTIVE).flat().find(c => c.id === draft.cta)?.label
   if (draft.cta) { lines.push(`**CTA:** ${ctaLabel ?? draft.cta} (${draft.cta})`); lines.push("") }
   if (draft.conversationMessage) { lines.push(`**MENSAGEM BOAS-VINDAS:** "${draft.conversationMessage}"`); lines.push("") }
+  if (draft.destinationUrl) { lines.push(`**URL DE DESTINO:** ${draft.destinationUrl}`); lines.push("") }
   lines.push("**CRIATIVO:**")
   if (draft.creativeHash)    lines.push(`  - image_hash: ${draft.creativeHash}`)
   else if (draft.creativeVideoId) lines.push(`  - video_id: ${draft.creativeVideoId}`)
@@ -980,6 +1025,7 @@ function StepReview({ draft, onSubmit, onBack }: { draft: CampaignDraft; onSubmi
         <ReviewRow label="Placement"   value={placement} />
         {draft.pixelId && <ReviewRow label="Pixel" value={`${draft.pixelId} → ${draft.pixelEvent}`} />}
         {draft.cta && <ReviewRow label="CTA" value={ctaLabel} />}
+        {draft.destinationUrl && <ReviewRow label="URL destino" value={draft.destinationUrl} />}
         {draft.creativeName && <ReviewRow label="Criativo" value={draft.creativeName} />}
         {draft.creativeHash && <ReviewRow label="Criativo" value={`hash: ${draft.creativeHash.slice(0, 16)}…`} />}
         <ReviewRow label="Início" value={draft.scheduleStart} />
@@ -1064,6 +1110,7 @@ export default function WizardPanel({ onSubmit, onClose }: WizardPanelProps) {
         {step === "copy"         && <StepCopy         {...stepProps} />}
         {step === "cta"          && <StepCta          {...stepProps} />}
         {step === "conversation" && <StepConversation {...stepProps} />}
+        {step === "url"          && <StepUrl          {...stepProps} />}
         {step === "creative"     && <StepCreative     {...stepProps} />}
         {step === "schedule"     && <StepSchedule     {...stepProps} />}
         {step === "budget"       && <StepBudget       {...stepProps} />}
