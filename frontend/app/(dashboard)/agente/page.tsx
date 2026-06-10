@@ -7,7 +7,7 @@ import {
   CheckCircle2, Sparkles, ChevronDown, ChevronRight, Trash2, FileText,
   Users, Image, X, ListChecks, XCircle, RefreshCw, Paperclip, Upload,
   Film, Check, ThumbsDown, MessageSquare, Square, PauseCircle, TrendingUp,
-  Plus, ClipboardCopy, Wand2,
+  Plus, ClipboardCopy, Wand2, ChevronLeft,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import WizardPanel from "./WizardPanel"
@@ -75,14 +75,28 @@ CTA: [Saiba mais / Falar no WhatsApp / Comprar agora / Cadastre-se]
 Início: [hoje / dd/mm/aaaa]
 Fim: [deixar vazio = sem data de fim]`
 
-function TextModePanel({ onClose }: { onClose: () => void }) {
+function TextModePanel({ onClose, onSend }: { onClose: () => void; onSend: (text: string) => void }) {
+  const [step, setStep]     = useState<"template" | "paste">("template")
   const [copied, setCopied] = useState(false)
+  const [pasted, setPasted] = useState("")
+  const pasteRef            = useRef<HTMLTextAreaElement>(null)
 
   function handleCopy() {
     navigator.clipboard.writeText(TEXT_CAMPAIGN_TEMPLATE).then(() => {
       setCopied(true)
       setTimeout(() => setCopied(false), 2500)
     })
+  }
+
+  function handleAdvance() {
+    setStep("paste")
+    setTimeout(() => pasteRef.current?.focus(), 80)
+  }
+
+  function handleSend() {
+    const text = pasted.trim()
+    if (!text) return
+    onSend(text)
   }
 
   return (
@@ -95,8 +109,8 @@ function TextModePanel({ onClose }: { onClose: () => void }) {
               <Wand2 size={13} className="text-violet-400" />
             </div>
             <div>
-              <p className="text-[13px] font-semibold text-white">Nova Campanha</p>
-              <p className="text-[11px] text-zinc-600">Modo texto</p>
+              <p className="text-[13px] font-semibold text-white">Nova Campanha — Modo Texto</p>
+              <p className="text-[11px] text-zinc-600">{step === "template" ? "Passo 1 de 2 — copie e preencha" : "Passo 2 de 2 — cole aqui"}</p>
             </div>
           </div>
           <button onClick={onClose} className="text-zinc-600 hover:text-zinc-300 transition-colors">
@@ -104,35 +118,56 @@ function TextModePanel({ onClose }: { onClose: () => void }) {
           </button>
         </div>
 
-        {/* Instructions */}
-        <div className="px-5 py-4 border-b border-white/[0.06] bg-violet-500/[0.04]">
-          <p className="text-[13px] text-zinc-300 leading-relaxed">
-            <span className="text-violet-300 font-semibold">Como funciona: </span>
-            copie o template abaixo, preencha os campos entre colchetes e cole no chat. A IA vai criar toda a estrutura da campanha e pedir o criativo ao final.
-          </p>
-        </div>
-
-        {/* Template */}
-        <div className="px-5 py-4 font-mono text-[12px] text-zinc-400 leading-relaxed whitespace-pre-wrap bg-zinc-950/40">
-          {TEXT_CAMPAIGN_TEMPLATE}
-        </div>
-
-        {/* Actions */}
-        <div className="px-5 py-4 border-t border-white/[0.06] flex gap-3">
-          <button onClick={handleCopy}
-            className={cn(
-              "flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-[13px] font-semibold ring-1 transition-all",
-              copied
-                ? "bg-emerald-500/10 text-emerald-300 ring-emerald-500/20"
-                : "bg-violet-600 text-white hover:bg-violet-500 ring-transparent"
-            )}>
-            {copied ? <><Check size={14} /> Copiado!</> : <><ClipboardCopy size={14} /> Copiar template</>}
-          </button>
-          <button onClick={onClose}
-            className="px-4 py-2.5 rounded-xl text-[13px] font-medium text-zinc-500 hover:text-zinc-300 ring-1 ring-white/[0.08] hover:bg-white/[0.04] transition-all">
-            Fechar
-          </button>
-        </div>
+        {step === "template" ? (
+          <>
+            {/* Template */}
+            <div className="px-5 py-4 font-mono text-[12px] text-zinc-400 leading-relaxed whitespace-pre-wrap bg-zinc-950/40 max-h-72 overflow-y-auto">
+              {TEXT_CAMPAIGN_TEMPLATE}
+            </div>
+            {/* Actions step 1 */}
+            <div className="px-5 py-4 border-t border-white/[0.06] flex gap-3">
+              <button onClick={handleCopy}
+                className={cn(
+                  "flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-[13px] font-semibold ring-1 transition-all",
+                  copied
+                    ? "bg-emerald-500/10 text-emerald-300 ring-emerald-500/20"
+                    : "bg-white/[0.05] text-zinc-300 ring-white/[0.1] hover:bg-white/[0.09]"
+                )}>
+                {copied ? <><Check size={13} /> Copiado</> : <><ClipboardCopy size={13} /> Copiar</>}
+              </button>
+              <button onClick={handleAdvance}
+                className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-[13px] font-semibold bg-violet-600 text-white hover:bg-violet-500 transition-all">
+                Avançar <ChevronRight size={14} />
+              </button>
+            </div>
+          </>
+        ) : (
+          <>
+            {/* Paste area */}
+            <div className="px-5 pt-4 pb-2">
+              <p className="text-[12px] text-zinc-500 mb-2">Cole o template preenchido abaixo:</p>
+              <textarea
+                ref={pasteRef}
+                value={pasted}
+                onChange={e => setPasted(e.target.value)}
+                placeholder={"🎯 NOVA CAMPANHA — MODO TEXTO\nObjetivo: ...\n\n📍 LOCALIZAÇÃO\n..."}
+                rows={10}
+                className="w-full px-4 py-3 bg-zinc-950/60 ring-1 ring-white/[0.08] rounded-xl text-[12px] font-mono text-zinc-300 placeholder-zinc-700 focus:outline-none focus:ring-violet-500/40 resize-none leading-relaxed transition-all"
+              />
+            </div>
+            {/* Actions step 2 */}
+            <div className="px-5 py-4 flex gap-3">
+              <button onClick={() => setStep("template")}
+                className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-[13px] font-medium text-zinc-500 hover:text-zinc-300 ring-1 ring-white/[0.08] hover:bg-white/[0.04] transition-all">
+                <ChevronLeft size={13} /> Voltar
+              </button>
+              <button onClick={handleSend} disabled={!pasted.trim()}
+                className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-[13px] font-semibold bg-violet-600 text-white hover:bg-violet-500 disabled:opacity-40 transition-all">
+                <ArrowUp size={14} /> Criar campanha
+              </button>
+            </div>
+          </>
+        )}
       </div>
     </div>
   )
@@ -718,7 +753,10 @@ export default function AgentePage() {
 
           {/* Text mode panel */}
           {textModeOpen && (
-            <TextModePanel onClose={() => setTextModeOpen(false)} />
+            <TextModePanel
+              onClose={() => setTextModeOpen(false)}
+              onSend={(text) => { setTextModeOpen(false); send(text) }}
+            />
           )}
 
           {/* Wizard — fills chat area when open */}

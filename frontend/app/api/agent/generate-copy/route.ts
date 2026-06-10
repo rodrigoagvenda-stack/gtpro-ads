@@ -1,8 +1,7 @@
 import { NextRequest } from "next/server"
 import { getTenant, unauthorized } from "@/lib/server/auth"
+import { getAnthropicKey } from "@/lib/server/platform"
 import Anthropic from "@anthropic-ai/sdk"
-
-const anthropic = new Anthropic()
 
 const OBJECTIVE_LABELS: Record<string, string> = {
   OUTCOME_LEADS:          "captação de leads",
@@ -18,6 +17,9 @@ export async function POST(req: NextRequest) {
   if (!tenant) return unauthorized()
 
   try {
+    const apiKey = await getAnthropicKey()
+    const anthropic = new Anthropic({ apiKey })
+
     const { objective, geo, interests, budgetType, dailyBudget, cta } = await req.json()
 
     const lines = [
