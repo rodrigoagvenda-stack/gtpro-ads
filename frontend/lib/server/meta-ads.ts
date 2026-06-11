@@ -64,11 +64,15 @@ function parseMetaError(raw: string): string {
     }
     if (code === 200 || code === 273 || code === 10)
       return `Permissão negada pela Meta (código ${code}): ${msg}. O token precisa ter permissão 'ads_management' — reconecte a conta via OAuth em Configurações → Meta Ads.`
-    if (code === 100) return `Parâmetro inválido (código 100): ${msg}`
     if (code === 4 || code === 17 || code === 32 || code === 613 ||
         (code >= 80001 && code <= 80014))
       return "Limite de requisições da Meta atingido. Aguarde alguns minutos."
-    return `${msg || raw} (código Meta ${code})`
+    // error_user_title/error_user_msg carregam o motivo real em erros de criativo/anúncio
+    const parts = [`Meta API erro ${code}${sub ? `/${sub}` : ""}: ${msg || raw}`]
+    if (err.error_user_title) parts.push(`Título: ${err.error_user_title}`)
+    if (err.error_user_msg)   parts.push(`Detalhe: ${err.error_user_msg}`)
+    if (json?.error?.fbtrace_id) parts.push(`fbtrace_id: ${json.error.fbtrace_id}`)
+    return parts.join(" | ")
   } catch {
     return raw
   }
