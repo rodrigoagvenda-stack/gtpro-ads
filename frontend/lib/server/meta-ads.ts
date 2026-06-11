@@ -39,10 +39,12 @@ async function getTokenAndAccount(tenantId: string, connectionId?: string) {
 class MetaError extends Error {
   code: number
   subcode?: number
-  constructor(message: string, code: number, subcode?: number) {
+  isTransient: boolean
+  constructor(message: string, code: number, subcode?: number, isTransient = false) {
     super(message)
     this.code = code
     this.subcode = subcode
+    this.isTransient = isTransient
   }
 }
 
@@ -72,6 +74,7 @@ function parseMetaError(raw: string): string {
     if (err.error_user_title) parts.push(`Título: ${err.error_user_title}`)
     if (err.error_user_msg)   parts.push(`Detalhe: ${err.error_user_msg}`)
     if (json?.error?.fbtrace_id) parts.push(`fbtrace_id: ${json.error.fbtrace_id}`)
+    if (err.is_transient)     parts.push("(erro transitório do servidor Meta — tente novamente em instantes)")
     return parts.join(" | ")
   } catch {
     return raw
@@ -91,7 +94,7 @@ async function graphGet(path: string, params: Record<string, string>) {
   return res.json()
 }
 
-async function graphPost(path: string, token: string, body: Record<string, unknown>) {
+async function graphPost(path: string, token: string, body: Record<string, unknown>, _retries = 3): Promise<any> {
   const url = new URL(`${GRAPH}${path}`)
   url.searchParams.set("access_token", token)
   console.log(`[meta-ads] POST ${path} body=${JSON.stringify(body)}`)
@@ -103,13 +106,16 @@ async function graphPost(path: string, token: string, body: Record<string, unkno
   if (!res.ok) {
     const raw = await res.text()
     console.error(`[meta-ads] POST ${path} FAILED status=${res.status} response=${raw}`)
-    try {
-      const json = JSON.parse(raw)
-      throw new MetaError(parseMetaError(raw), json?.error?.code ?? 0, json?.error?.error_subcode)
-    } catch (e) {
-      if (e instanceof MetaError) throw e
-      throw new Error(parseMetaError(raw))
+    let parsed: any
+    try { parsed = JSON.parse(raw) } catch { /* noop */ }
+    const isTransient = parsed?.error?.is_transient === true
+    if (isTransient && _retries > 0) {
+      const delay = (4 - _retries) * 3000 // 3s, 6s, 9s
+      console.log(`[meta-ads] POST ${path} transient error — retry in ${delay}ms (${_retries} remaining)`)
+      await new Promise(r => setTimeout(r, delay))
+      return graphPost(path, token, body, _retries - 1)
     }
+    throw new MetaError(parseMetaError(raw), parsed?.error?.code ?? 0, parsed?.error?.error_subcode, isTransient)
   }
   return res.json()
 }
@@ -627,7 +633,6 @@ export async function createAd(tenantId: string, params: Record<string, any>) {
   const isLeadGen    = (params.optimization_goal ?? "").toUpperCase() === "LEAD_GENERATION"
   const isWhatsAppAd = (params.destination_type ?? "").toUpperCase() === "WHATSAPP"
                     || params.cta === "WHATSAPP_MESSAGE"
-                    || params.cta === "SEND_MESSAGE"
 
   if (params.creative_id) {
     // Reuse existing creative — just reference it
@@ -666,9 +671,9 @@ export async function createAd(tenantId: string, params: Record<string, any>) {
         if (preferred?.uri) thumbnailUrl = preferred.uri
       }
       const destUrl = params.link_url ?? params.website_url
-      // CTWA vídeo (docs oficiais): WHATSAPP_MESSAGE + link api.whatsapp.com/send no value
+      // CTWA vídeo: apenas app_destination — sem link (WhatsApp resolvido via BM)
       const ctaValue: Record<string, any> = isWhatsAppAd
-        ? { app_destination: "WHATSAPP", link: "https://api.whatsapp.com/send" }
+        ? { app_destination: "WHATSAPP" }
         : destUrl ? { link: destUrl } : {}
       const videoData: Record<string, any> = {
         video_id:       params.video_id,
@@ -693,13 +698,13 @@ export async function createAd(tenantId: string, params: Record<string, any>) {
       const linkData: Record<string, any> = {
         message:        params.body ?? params.message ?? "",
         name:           params.headline ?? "",
-        // CTWA (docs oficiais): link fixo api.whatsapp.com/send + WHATSAPP_MESSAGE.
-        // SEND_MESSAGE é CTA de Messenger — usar aqui causa erro 1487891.
+        // CTWA: WHATSAPP_MESSAGE + app_destination. SEND_MESSAGE/CHAT_ON_WHATSAPP causam erro 1487891.
         call_to_action: isWhatsAppAd
           ? { type: "WHATSAPP_MESSAGE", value: { app_destination: "WHATSAPP" } }
           : { type: params.cta ?? "LEARN_MORE" },
       }
-      linkData.link = isWhatsAppAd ? "https://api.whatsapp.com/send" : destUrl
+      // CTWA: sem link — WhatsApp resolvido via app_destination + BM. Link só para anúncios de tráfego.
+      if (!isWhatsAppAd) linkData.link = destUrl
       if (isWhatsAppAd && (params.page_welcome_message ?? params.welcome_message))
         linkData.page_welcome_message = params.page_welcome_message ?? params.welcome_message
       if (params.image_hash)  linkData.image_hash  = params.image_hash
