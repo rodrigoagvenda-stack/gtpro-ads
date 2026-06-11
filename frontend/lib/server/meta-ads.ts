@@ -662,27 +662,26 @@ export async function createAd(tenantId: string, params: Record<string, any>) {
         if (preferred?.uri) thumbnailUrl = preferred.uri
       }
       const destUrl = params.link_url ?? params.website_url
+      // CTWA vídeo (docs oficiais): WHATSAPP_MESSAGE + link api.whatsapp.com/send no value
       const ctaValue: Record<string, any> = isWhatsAppAd
-        ? { app_destination: "WHATSAPP" }
+        ? { app_destination: "WHATSAPP", link: "https://api.whatsapp.com/send" }
         : destUrl ? { link: destUrl } : {}
       const videoData: Record<string, any> = {
         video_id:       params.video_id,
         title:          params.headline ?? "",
         message:        params.body ?? params.message ?? "",
-        call_to_action: { type: isWhatsAppAd ? "SEND_MESSAGE" : (params.cta ?? "LEARN_MORE"), value: ctaValue },
+        call_to_action: { type: isWhatsAppAd ? "WHATSAPP_MESSAGE" : (params.cta ?? "LEARN_MORE"), value: ctaValue },
       }
+      if (isWhatsAppAd && (params.page_welcome_message ?? params.welcome_message))
+        videoData.page_welcome_message = params.page_welcome_message ?? params.welcome_message
       if (params.image_hash) videoData.image_hash = params.image_hash
       else if (thumbnailUrl) videoData.image_url  = thumbnailUrl
       spec.video_data = videoData
     } else {
       // Image creative
       const destUrl = params.link_url ?? params.website_url
-      const waPhone = params.whatsapp_number ? String(params.whatsapp_number).replace(/\D/g, "") : null
-      const waUrl   = waPhone ? `https://wa.me/${waPhone}` : null
-      // wa.me link approach avoids Meta BM-linking requirement (error 1487891)
-      const useWaLink = isWhatsAppAd && !!waUrl
 
-      if (!destUrl && !useWaLink && !isWhatsAppAd) throw new Error(
+      if (!destUrl && !isWhatsAppAd) throw new Error(
         "link_url ou website_url é obrigatório para criar um anúncio de imagem/link. " +
         "Solicite ao usuário a URL de destino da campanha."
       )
@@ -690,14 +689,15 @@ export async function createAd(tenantId: string, params: Record<string, any>) {
       const linkData: Record<string, any> = {
         message:        params.body ?? params.message ?? "",
         name:           params.headline ?? "",
-        call_to_action: useWaLink
-          ? { type: "WHATSAPP_MESSAGE", value: { link: waUrl } }
-          : isWhatsAppAd
-            ? { type: "SEND_MESSAGE", value: { app_destination: "WHATSAPP" } }
-            : { type: params.cta ?? "LEARN_MORE" },
+        // CTWA (docs oficiais): link fixo api.whatsapp.com/send + WHATSAPP_MESSAGE.
+        // SEND_MESSAGE é CTA de Messenger — usar aqui causa erro 1487891.
+        call_to_action: isWhatsAppAd
+          ? { type: "WHATSAPP_MESSAGE", value: { app_destination: "WHATSAPP" } }
+          : { type: params.cta ?? "LEARN_MORE" },
       }
-      if (useWaLink)          linkData.link        = waUrl
-      else if (destUrl)       linkData.link        = destUrl
+      linkData.link = isWhatsAppAd ? "https://api.whatsapp.com/send" : destUrl
+      if (isWhatsAppAd && (params.page_welcome_message ?? params.welcome_message))
+        linkData.page_welcome_message = params.page_welcome_message ?? params.welcome_message
       if (params.image_hash)  linkData.image_hash  = params.image_hash
       if (params.caption)     linkData.caption     = params.caption
       if (params.description) linkData.description = params.description

@@ -180,7 +180,7 @@ OUTCOME_MESSAGES / WhatsApp:
 - NÃO use check_whatsapp_status — isso é para notificações do sistema, não para Meta Ads
 - O WhatsApp Business é vinculado à Página do Facebook no Meta Business Manager
 - Budget mínimo: R$30/dia por conjunto
-- create_ad: SEMPRE passe destination_type: "WHATSAPP" e cta: "SEND_MESSAGE" — sem link_url
+- create_ad: SEMPRE passe cta: "WHATSAPP_MESSAGE" — NÃO passe link_url (o link api.whatsapp.com/send é injetado automaticamente). Se o usuário forneceu mensagem de boas-vindas, passe em page_welcome_message
 
 OUTCOME_TRAFFIC (Tráfego):
 - optimization_goal: LINK_CLICKS ou LANDING_PAGE_VIEWS
@@ -307,7 +307,7 @@ const TOOLS: Anthropic.Tool[] = [
   { name: "get_ad_insights",  description: "Métricas detalhadas de um anúncio específico.", input_schema: { ...o, properties: { ad_id: s, date_preset: s }, required: ["ad_id"] } },
 
   // ── Ads — Write
-  { name: "create_ad", description: "Cria um anúncio completo com criativo. UTM é injetado automaticamente. Para imagem: forneça image_hash + link_url. Para vídeo: forneça video_id + link_url. Para LEAD_GENERATION: forneça lead_gen_form_id + optimization_goal='LEAD_GENERATION'. Para WhatsApp via wa.me (sem vínculo BM): forneça whatsapp_number (só dígitos, ex: 5514991741988) + image_hash + cta='WHATSAPP_MESSAGE' — NÃO use destination_type:WHATSAPP no conjunto. page_id é sempre obrigatório exceto quando reusando creative_id.", input_schema: { ...o, properties: { adset_id: s, name: s, page_id: s, headline: s, body: s, link_url: s, cta: s, image_hash: s, video_id: s, whatsapp_number: s, lead_gen_form_id: s, optimization_goal: s, instagram_actor_id: s, caption: s, description: s, utm_tags: s, creative_id: s, status: s }, required: ["adset_id", "name"] } },
+  { name: "create_ad", description: "Cria um anúncio completo com criativo. UTM é injetado automaticamente. Para imagem: forneça image_hash + link_url. Para vídeo: forneça video_id + link_url. Para LEAD_GENERATION: forneça lead_gen_form_id + optimization_goal='LEAD_GENERATION'. Para WhatsApp (CTWA): cta='WHATSAPP_MESSAGE' — o link api.whatsapp.com/send é injetado automaticamente, NÃO passe link_url; opcionalmente passe page_welcome_message com a mensagem de abertura da conversa. page_id é sempre obrigatório exceto quando reusando creative_id.", input_schema: { ...o, properties: { adset_id: s, name: s, page_id: s, headline: s, body: s, link_url: s, cta: s, image_hash: s, video_id: s, page_welcome_message: s, lead_gen_form_id: s, optimization_goal: s, instagram_actor_id: s, caption: s, description: s, utm_tags: s, creative_id: s, status: s }, required: ["adset_id", "name"] } },
   { name: "update_ad",    description: "Atualiza status ou nome de um anúncio.", input_schema: { ...o, properties: { ad_id: s, status: s, name: s }, required: ["ad_id"] } },
   { name: "duplicate_ad", description: "Duplica um anúncio, opcionalmente para outro ad set.", input_schema: { ...o, properties: { ad_id: s, adset_id: s }, required: ["ad_id"] } },
   { name: "delete_ad",    description: "Deleta um anúncio.", input_schema: { ...o, properties: { ad_id: s }, required: ["ad_id"] } },
