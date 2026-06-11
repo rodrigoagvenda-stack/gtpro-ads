@@ -10,6 +10,7 @@ const OBJECTIVE_LABELS: Record<string, string> = {
   OUTCOME_ENGAGEMENT:     "engajamento",
   OUTCOME_AWARENESS:      "alcance / awareness",
   OUTCOME_APP_PROMOTION:  "instalações de app",
+  MESSAGES:               "mensagens WhatsApp",
 }
 
 export async function POST(req: NextRequest) {
@@ -20,36 +21,57 @@ export async function POST(req: NextRequest) {
     const apiKey = await getAnthropicKey()
     const anthropic = new Anthropic({ apiKey })
 
-    const { objective, geo, interests, budgetType, dailyBudget, cta } = await req.json()
+    const { objective, geo, interests, budgetType, dailyBudget, cta, name, productContext } = await req.json()
 
-    const lines = [
+    const productLine = productContext?.trim()
+      ? `PRODUTO/SERVIÇO: ${productContext}`
+      : name?.trim()
+        ? `Campanha: ${name}`
+        : null
+
+    if (!productLine) {
+      return Response.json(
+        { error: "Preencha o campo 'Produto / serviço anunciado' para gerar copy relevante." },
+        { status: 400 }
+      )
+    }
+
+    const contextLines = [
+      productLine,
       objective   && `Objetivo: ${OBJECTIVE_LABELS[objective] ?? objective}`,
-      geo?.length && `Localização: ${geo.map((g: any) => g.name).join(", ")}`,
+      geo?.length && `Localização alvo: ${geo.map((g: any) => g.name).join(", ")}`,
       interests?.length && `Interesses do público: ${interests.map((i: any) => i.name).join(", ")}`,
-      dailyBudget && `Orçamento: R$${dailyBudget}/dia (${budgetType ?? "ABO"})`,
-      cta         && `CTA: ${cta}`,
+      cta         && `CTA do anúncio: ${cta}`,
     ].filter(Boolean).join("\n")
 
     const msg = await anthropic.messages.create({
-      model:      "claude-haiku-4-5-20251001",
-      max_tokens: 800,
+      model:      "claude-sonnet-4-6",
+      max_tokens: 1000,
       messages: [{
         role:    "user",
-        content: `Você é um especialista em copy para Meta Ads em português brasileiro.
+        content: `Você é um redator especialista em performance marketing para Meta Ads no Brasil.
 
-Crie 3 variações de copy para um anúncio com os seguintes dados:
-${lines || "Campanha genérica"}
+Gere 3 variações de copy para o anúncio abaixo. Cada versão deve ter abordagem diferente: benefício direto, urgência/escassez, prova social ou dor/solução.
 
-Retorne APENAS o JSON abaixo (sem markdown, sem explicação):
+DADOS DA CAMPANHA:
+${contextLines}
+
+REGRAS OBRIGATÓRIAS:
+- Texto principal: max 125 caracteres, foco no benefício ESPECÍFICO do produto, pode usar 1 emoji relevante
+- Título: max 40 caracteres, direto ao ponto, com CTA claro e específico ao produto
+- Descrição: max 30 caracteres, complemento do título
+- PROIBIDO: "Fale conosco", "Entre em contato", "Saiba mais" sozinhos, frases genéricas de atendimento
+- OBRIGATÓRIO: mencionar o produto/serviço real na copy
+- Tom: direto, sem rodeios, como quem vende de verdade
+
+Retorne APENAS o JSON (sem markdown, sem explicação):
 {
   "copies": [
-    { "primary": "texto principal (max 125 chars, pode ter emoji)", "headline": "título impactante (max 40 chars)", "description": "descrição curta (max 30 chars)" },
+    { "primary": "...", "headline": "...", "description": "..." },
     { "primary": "...", "headline": "...", "description": "..." },
     { "primary": "...", "headline": "...", "description": "..." }
   ]
-}
-
-Regras: linguagem direta, foco no benefício, tom profissional e acessível, sem clichês.`,
+}`,
       }],
     })
 

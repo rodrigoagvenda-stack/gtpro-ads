@@ -43,6 +43,8 @@ export interface CampaignDraft {
   creativeName?: string
   dynamicCreative?: boolean
   destinationUrl?: string
+  whatsappNumber?: string
+  productContext?: string
   scheduleStart?: string
   scheduleEnd?: string
   alwaysOn?: boolean
@@ -601,6 +603,7 @@ function StepCopy({ draft, setDraft, onNext }: StepProps) {
       const data = await api.agent.generateCopy({
         objective: draft.objective, geo: draft.geo, interests: draft.interests,
         budgetType: draft.budgetType, dailyBudget: draft.dailyBudget, cta: draft.cta,
+        name: draft.name, productContext: draft.productContext,
       })
       if (data.copies?.length) setDraft({ ...draft, copies: data.copies, selectedCopyIndex: 0 })
     } catch (e: any) {
@@ -626,6 +629,14 @@ function StepCopy({ draft, setDraft, onNext }: StepProps) {
         </button>
       </div>
       {genErr && <p className="text-[12px] text-red-400">{genErr}</p>}
+      <div>
+        <label className="text-[11px] font-semibold text-zinc-600 uppercase tracking-wider block mb-1.5">Produto / serviço anunciado</label>
+        <input type="text" value={draft.productContext ?? ""}
+          onChange={e => setDraft({ ...draft, productContext: e.target.value })}
+          placeholder="Ex: Ração premium para gado de corte, entrega em todo o Brasil"
+          className={inputCls} />
+        <p className="text-[11px] text-zinc-700 mt-1">Preencha para a IA gerar copy relevante ao seu negócio.</p>
+      </div>
       <div className="flex gap-1.5">
         {[0, 1, 2].map(i => (
           <button key={i} onClick={() => setDraft({ ...draft, selectedCopyIndex: i })}
@@ -693,14 +704,23 @@ function StepConversation({ draft, setDraft, onNext }: StepProps) {
   return (
     <div className="space-y-4">
       <div>
-        <h3 className="text-[16px] font-semibold text-white">Mensagem de boas-vindas</h3>
-        <p className="text-[13px] text-zinc-500 mt-1">Mensagem enviada quando o usuário inicia a conversa no WhatsApp.</p>
+        <h3 className="text-[16px] font-semibold text-white">WhatsApp de destino</h3>
+        <p className="text-[13px] text-zinc-500 mt-1">Número que receberá as mensagens do anúncio.</p>
       </div>
-      <textarea value={draft.conversationMessage ?? ""} onChange={e => setDraft({ ...draft, conversationMessage: e.target.value })}
-        placeholder="Ex: Olá! Vi seu anúncio e gostaria de saber mais sobre..." rows={4}
-        className={cn(inputCls, "resize-none leading-relaxed")} />
-      <button onClick={onNext}
-        className="w-full py-2.5 bg-violet-600 hover:bg-violet-500 text-white text-[13px] font-semibold rounded-xl transition-colors">
+      <div>
+        <label className="text-[11px] font-semibold text-zinc-600 uppercase tracking-wider block mb-1.5">Número WhatsApp</label>
+        <input type="tel" value={draft.whatsappNumber ?? ""} onChange={e => setDraft({ ...draft, whatsappNumber: e.target.value })}
+          placeholder="Ex: 5514991741988 (só números, com DDI)" className={inputCls} />
+        <p className="text-[11px] text-zinc-700 mt-1">Formato: 55 + DDD + número (sem espaços ou traços)</p>
+      </div>
+      <div>
+        <label className="text-[11px] font-semibold text-zinc-600 uppercase tracking-wider block mb-1.5">Mensagem de abertura (opcional)</label>
+        <textarea value={draft.conversationMessage ?? ""} onChange={e => setDraft({ ...draft, conversationMessage: e.target.value })}
+          placeholder="Ex: Olá! Vi seu anúncio e gostaria de saber mais sobre..." rows={3}
+          className={cn(inputCls, "resize-none leading-relaxed")} />
+      </div>
+      <button onClick={onNext} disabled={!draft.whatsappNumber?.trim()}
+        className="w-full py-2.5 bg-violet-600 hover:bg-violet-500 disabled:opacity-40 text-white text-[13px] font-semibold rounded-xl transition-colors">
         Próximo
       </button>
     </div>
@@ -981,6 +1001,12 @@ function buildMessage(draft: CampaignDraft): string {
   }
   const ctaLabel = Object.values(CTA_BY_OBJECTIVE).flat().find(c => c.id === draft.cta)?.label
   if (draft.cta) { lines.push(`**CTA:** ${ctaLabel ?? draft.cta} (${draft.cta})`); lines.push("") }
+  if (draft.whatsappNumber) {
+    const phone = draft.whatsappNumber.replace(/\D/g, "")
+    lines.push(`**WHATSAPP NUMBER:** ${phone}`)
+    lines.push(`**URL DE DESTINO (WhatsApp link):** https://wa.me/${phone} — use esta URL como link_url, CTA: WHATSAPP_MESSAGE, NÃO use destination_type:WHATSAPP no conjunto`)
+    lines.push("")
+  }
   if (draft.conversationMessage) { lines.push(`**MENSAGEM BOAS-VINDAS:** "${draft.conversationMessage}"`); lines.push("") }
   if (draft.destinationUrl) { lines.push(`**URL DE DESTINO:** ${draft.destinationUrl}`); lines.push("") }
   lines.push("**CRIATIVO:**")

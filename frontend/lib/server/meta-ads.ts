@@ -675,10 +675,14 @@ export async function createAd(tenantId: string, params: Record<string, any>) {
       else if (thumbnailUrl) videoData.image_url  = thumbnailUrl
       spec.video_data = videoData
     } else {
-      // Image creative — WhatsApp destination or regular link
+      // Image creative
       const destUrl = params.link_url ?? params.website_url
+      const waPhone = params.whatsapp_number ? String(params.whatsapp_number).replace(/\D/g, "") : null
+      const waUrl   = waPhone ? `https://wa.me/${waPhone}` : null
+      // wa.me link approach avoids Meta BM-linking requirement (error 1487891)
+      const useWaLink = isWhatsAppAd && !!waUrl
 
-      if (!destUrl && !isWhatsAppAd) throw new Error(
+      if (!destUrl && !useWaLink && !isWhatsAppAd) throw new Error(
         "link_url ou website_url é obrigatório para criar um anúncio de imagem/link. " +
         "Solicite ao usuário a URL de destino da campanha."
       )
@@ -686,11 +690,14 @@ export async function createAd(tenantId: string, params: Record<string, any>) {
       const linkData: Record<string, any> = {
         message:        params.body ?? params.message ?? "",
         name:           params.headline ?? "",
-        call_to_action: isWhatsAppAd
-          ? { type: "SEND_MESSAGE", value: { app_destination: "WHATSAPP" } }
-          : { type: params.cta ?? "LEARN_MORE" },
+        call_to_action: useWaLink
+          ? { type: "WHATSAPP_MESSAGE", value: { link: waUrl } }
+          : isWhatsAppAd
+            ? { type: "SEND_MESSAGE", value: { app_destination: "WHATSAPP" } }
+            : { type: params.cta ?? "LEARN_MORE" },
       }
-      if (!isWhatsAppAd && destUrl) linkData.link = destUrl
+      if (useWaLink)          linkData.link        = waUrl
+      else if (destUrl)       linkData.link        = destUrl
       if (params.image_hash)  linkData.image_hash  = params.image_hash
       if (params.caption)     linkData.caption     = params.caption
       if (params.description) linkData.description = params.description
