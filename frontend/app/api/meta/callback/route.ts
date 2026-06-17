@@ -3,7 +3,8 @@ import { createServiceClient } from "@/lib/server/supabase"
 import { exchangeCodeForToken, getLongLivedToken, getAdAccounts, saveMetaConnection } from "@/lib/server/meta-ads"
 
 export async function GET(req: NextRequest) {
-  const { searchParams, origin } = req.nextUrl
+  const { searchParams } = req.nextUrl
+  const origin = process.env.NEXT_PUBLIC_APP_URL ?? req.nextUrl.origin
   const code = searchParams.get("code")
   const state = searchParams.get("state")
   const error = searchParams.get("error")
