@@ -511,9 +511,10 @@ Tabela: Criativo | Copy (trecho) | CTR | ${resultLabel} | Taxa clique→resultad
       const cpc = Number(c.metrics?.cpc ?? 0)
       return (cpc > 0 && (best === 0 || cpc < best)) ? cpc : best
     }, 0)
-    const avgCtr   = totalClicks > 0 && totalImpressions > 0 ? (totalClicks / totalImpressions * 100) : 0
-    const dailySpend = totalSpend / days
-    const dailyReach = totalReach / days
+    const avgCtr         = totalClicks > 0 && totalImpressions > 0 ? (totalClicks / totalImpressions * 100) : 0
+    const dailySpend     = totalSpend / days
+    const dailyReach     = totalReach / days
+    const custoSeguidores = totalFollows > 0 ? totalSpend / totalFollows : null
 
     // Chart data — pre-computed, injected verbatim (AI does not generate this)
     const totalResultado = ({
@@ -571,7 +572,7 @@ TOTAIS PRÉ-CALCULADOS:
 - Melhor CPC: R$ ${bestCpc > 0 ? bestCpc.toFixed(2).replace(".", ",") : "—"}
 - CTR médio: ${avgCtr.toFixed(2).replace(".", ",")}%
 - Investimento diário médio: R$ ${dailySpend.toFixed(2).replace(".", ",")}
-- Pessoas alcançadas por dia: ${Math.round(dailyReach)}
+- Pessoas alcançadas por dia: ${Math.round(dailyReach)}${custoSeguidores != null ? `\n- Custo por seguidor: R$ ${custoSeguidores.toFixed(2).replace(".", ",")}` : ""}
 
 CAMPANHAS (dados individuais):
 ${campaignRows}
@@ -598,7 +599,7 @@ ${headerLines}
 | Investimento total | R$ ${totalSpend.toFixed(2).replace(".", ",")} |
 | Custo médio por clique | R$ ${totalClicks > 0 ? (totalSpend / totalClicks).toFixed(2).replace(".", ",") : "—"} |
 | Melhor CPC | R$ ${bestCpc > 0 ? bestCpc.toFixed(2).replace(".", ",") : "—"} |
-| Custo por [resultado principal] | [calcule com base nos totais] |
+| Custo por [resultado principal] | [calcule com base nos totais] |${custoSeguidores != null ? `\n| Custo por seguidor | R$ ${custoSeguidores.toFixed(2).replace(".", ",")} |` : ""}
 | Taxa de interesse nos anúncios (CTR) | ${avgCtr.toFixed(2).replace(".", ",")}% |
 | Investimento diário médio | R$ ${dailySpend.toFixed(2).replace(".", ",")} |
 | Pessoas alcançadas por dia | ${Math.round(dailyReach)} |

@@ -2,9 +2,9 @@
 
 import React, { useEffect, useState } from "react"
 import { api } from "@/lib/api"
-import { FileText, Download, Loader2, Plus, ChevronDown, ChevronUp, CalendarClock,
+import { FileText, Download, Loader2, Plus, CalendarClock,
   MessageCircle, Check, RefreshCw, X, AlertTriangle, TrendingDown,
-  Pencil, Users, DollarSign, Sparkles, ChevronRight } from "lucide-react"
+  Pencil, Users, DollarSign, Sparkles, ChevronRight, Eye } from "lucide-react"
 import { cn } from "@/lib/utils"
 
 interface Report {
@@ -154,48 +154,61 @@ function printReport(title: string, period: string, content: string) {
   <meta charset="utf-8" />
   <title>${title}</title>
   <style>
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=Inter:ital,wght@0,400;0,500;0,600;0,700;0,800;1,400&display=swap');
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: 'Inter', -apple-system, sans-serif; color: #111827; background: #fff; padding: 48px 52px; max-width: 860px; margin: 0 auto; }
-    .header { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 2px solid #7C3AED; padding-bottom: 20px; margin-bottom: 32px; }
-    .badge { background: #7C3AED; color: #fff; font-size: 10px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; padding: 3px 10px; border-radius: 999px; }
-    .header-title { font-size: 22px; font-weight: 700; margin-top: 8px; color: #111827; }
-    .header-meta { font-size: 11px; color: #9CA3AF; margin-top: 4px; }
-    h1 { font-size: 20px; font-weight: 700; margin: 28px 0 10px; }
-    h2 { font-size: 16px; font-weight: 600; color: #1F2937; margin: 24px 0 10px; padding-bottom: 6px; border-bottom: 1px solid #E5E7EB; }
-    h3 { font-size: 13px; font-weight: 600; color: #374151; margin: 16px 0 6px; }
-    p { font-size: 13px; line-height: 1.75; color: #374151; margin-bottom: 6px; }
-    ul { margin: 8px 0 8px 20px; }
-    li { font-size: 13px; line-height: 1.75; color: #374151; margin-bottom: 3px; }
-    strong { font-weight: 600; color: #111827; }
-    code { background: #F3F4F6; padding: 1px 5px; border-radius: 4px; font-size: 11px; font-family: 'Courier New', monospace; color: #6D28D9; }
-    hr { border: none; border-top: 1px solid #E5E7EB; margin: 20px 0; }
-    table { width: 100%; border-collapse: collapse; margin: 16px 0; font-size: 12px; }
-    th { background: #F3F4F6; text-align: left; padding: 8px 10px; font-weight: 600; color: #374151; border-bottom: 2px solid #E5E7EB; }
-    td { padding: 7px 10px; color: #374151; border-bottom: 1px solid #F3F4F6; }
+    body { font-family: 'Inter', -apple-system, sans-serif; color: #1a1a2e; background: #fff; }
+    .cover { background: linear-gradient(135deg, #1e1b4b 0%, #4c1d95 60%, #7c3aed 100%); color: #fff; padding: 52px 60px 44px; display: flex; flex-direction: column; gap: 0; min-height: 160px; }
+    .cover-badge { display: inline-flex; align-items: center; gap: 6px; background: rgba(255,255,255,.15); border: 1px solid rgba(255,255,255,.25); border-radius: 999px; padding: 4px 14px; font-size: 10px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; width: fit-content; margin-bottom: 18px; }
+    .cover-title { font-size: 26px; font-weight: 800; line-height: 1.2; }
+    .cover-sub { font-size: 13px; color: rgba(255,255,255,.65); margin-top: 8px; }
+    .cover-divider { height: 3px; background: rgba(255,255,255,.2); border-radius: 2px; margin-top: 28px; }
+    .body { padding: 44px 60px 60px; max-width: 860px; margin: 0 auto; }
+    h1 { font-size: 22px; font-weight: 800; color: #111; margin: 36px 0 12px; }
+    h2 { font-size: 15px; font-weight: 700; color: #1e1b4b; margin: 32px 0 10px; padding: 10px 14px; background: #f5f3ff; border-left: 4px solid #7c3aed; border-radius: 0 8px 8px 0; }
+    h3 { font-size: 13px; font-weight: 600; color: #374151; margin: 20px 0 8px; }
+    p { font-size: 13px; line-height: 1.8; color: #374151; margin-bottom: 8px; }
+    ul { margin: 10px 0 10px 0; padding: 0; list-style: none; }
+    li { font-size: 13px; line-height: 1.75; color: #374151; margin-bottom: 5px; padding-left: 16px; position: relative; }
+    li::before { content: "●"; position: absolute; left: 0; color: #7c3aed; font-size: 8px; top: 5px; }
+    strong { font-weight: 700; color: #111; }
+    em { font-style: italic; color: #6b7280; }
+    code { background: #f3f0ff; padding: 2px 6px; border-radius: 4px; font-size: 11px; font-family: 'Courier New', monospace; color: #6d28d9; }
+    blockquote { border-left: 3px solid #7c3aed; padding: 10px 16px; background: #faf5ff; border-radius: 0 8px 8px 0; margin: 14px 0; }
+    blockquote p { margin: 0; color: #4c1d95; font-style: italic; }
+    hr { border: none; border-top: 1px solid #e5e7eb; margin: 28px 0; }
+    table { width: 100%; border-collapse: collapse; margin: 18px 0; font-size: 12.5px; border-radius: 10px; overflow: hidden; box-shadow: 0 0 0 1px #e5e7eb; }
+    th { background: #1e1b4b; color: #fff; text-align: left; padding: 10px 14px; font-weight: 600; font-size: 11px; letter-spacing: .03em; text-transform: uppercase; }
+    td { padding: 9px 14px; color: #374151; border-bottom: 1px solid #f3f4f6; }
+    tr:nth-child(even) td { background: #fafafa; }
     tr:last-child td { border-bottom: none; }
-    .footer { margin-top: 48px; padding-top: 16px; border-top: 1px solid #E5E7EB; font-size: 11px; color: #9CA3AF; display: flex; justify-content: space-between; }
+    .footer { margin-top: 48px; padding: 16px 60px; border-top: 2px solid #f3f4f6; font-size: 11px; color: #9ca3af; display: flex; justify-content: space-between; align-items: center; background: #fafafa; }
+    .footer-brand { font-weight: 600; color: #7c3aed; }
     @media print {
-      body { padding: 0; }
-      @page { margin: 1.8cm 1.5cm; size: A4; }
-      h2 { page-break-after: avoid; }
+      .cover { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+      h2 { -webkit-print-color-adjust: exact; print-color-adjust: exact; page-break-after: avoid; }
+      table { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+      th { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+      tr:nth-child(even) td { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+      @page { margin: 0 0 1.5cm; size: A4; }
+      .footer { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
     }
   </style>
 </head>
 <body>
-  <div class="header">
-    <div>
-      <div class="badge">GTPRO</div>
-      <div class="header-title">${title}</div>
-      <div class="header-meta">${period} · Gerado em ${new Date().toLocaleString("pt-BR")}</div>
-    </div>
+  <div class="cover">
+    <div class="cover-badge">📊 Relatório de Performance</div>
+    <div class="cover-title">${title}</div>
+    <div class="cover-sub">${period} &nbsp;·&nbsp; Gerado em ${new Date().toLocaleString("pt-BR")} &nbsp;·&nbsp; GTPRO</div>
+    <div class="cover-divider"></div>
   </div>
-  ${html}
+  <div class="body">
+    ${html}
+  </div>
   <div class="footer">
-    <span>GTPRO — Gestão de Meta Ads com IA</span>
-    <span>gtpro.vendai.pro</span>
+    <span class="footer-brand">GTPRO</span>
+    <span>Gestão de Meta Ads com Inteligência Artificial &nbsp;·&nbsp; gtpro.vendai.pro</span>
   </div>
-  <script>setTimeout(() => { window.print(); }, 600);<\/script>
+  <script>setTimeout(() => { window.print(); }, 700);<\/script>
 </body>
 </html>`)
   win.document.close()
@@ -297,7 +310,103 @@ function RenderMd({ content }: { content: string }) {
     }
   }
 
-  return <div className="text-[12px] text-zinc-400 leading-relaxed space-y-1">{nodes}</div>
+  return <div className="text-[13px] text-zinc-300 leading-relaxed space-y-1.5">{nodes}</div>
+}
+
+// ─── Report reader modal ──────────────────────────────────────────────────────
+
+function parseSections(md: string): { title: string; content: string }[] {
+  const lines = md.split("\n")
+  const sections: { title: string; content: string }[] = []
+  let cur: { title: string; lines: string[] } | null = null
+  for (const line of lines) {
+    if (line.startsWith("## ")) {
+      if (cur) sections.push({ title: cur.title, content: cur.lines.join("\n") })
+      cur = { title: line.slice(3).trim(), lines: [] }
+    } else if (line.startsWith("# ")) {
+      if (cur) sections.push({ title: cur.title, content: cur.lines.join("\n") })
+      cur = { title: line.slice(2).trim(), lines: [] }
+    } else {
+      if (cur) cur.lines.push(line)
+      else {
+        if (!sections.length) sections.push({ title: "Início", content: "" })
+        sections[0].content += line + "\n"
+      }
+    }
+  }
+  if (cur) sections.push({ title: cur.title, content: cur.lines.join("\n") })
+  return sections.filter(s => s.title && (s.content.trim() || s.title !== "Início"))
+}
+
+function ReportModal({ report, onClose, onPrint }: {
+  report: Report & { summary: string }
+  onClose: () => void
+  onPrint: () => void
+}) {
+  const sections = parseSections(report.summary)
+  const [active, setActive] = useState(0)
+
+  return (
+    <div className="fixed inset-0 z-50 flex bg-black/80 backdrop-blur-sm">
+      {/* Sidebar */}
+      <div className="w-64 shrink-0 bg-[#0d0d0f] border-r border-white/[0.06] flex flex-col">
+        <div className="px-5 py-5 border-b border-white/[0.06]">
+          <p className="text-[13px] font-semibold text-white leading-tight">{report.title}</p>
+          <p className="text-[11px] text-zinc-600 mt-1">{report.period}</p>
+        </div>
+        <nav className="flex-1 overflow-y-auto py-3 px-3 space-y-0.5">
+          {sections.map((s, i) => (
+            <button key={i} onClick={() => setActive(i)}
+              className={cn("w-full text-left px-3 py-2 rounded-lg text-[12px] transition-colors leading-tight",
+                active === i ? "bg-violet-600/20 text-violet-300 font-medium" : "text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.04]"
+              )}>
+              {s.title.replace(/^\d+\s*[·.]\s*/, "")}
+            </button>
+          ))}
+        </nav>
+        <div className="px-3 py-4 border-t border-white/[0.06] space-y-2">
+          <button onClick={onPrint}
+            className="w-full flex items-center justify-center gap-1.5 py-2 bg-white/[0.06] hover:bg-white/[0.09] ring-1 ring-white/[0.09] text-zinc-300 hover:text-white text-[12px] rounded-lg transition-colors">
+            <Download size={11} /> Exportar PDF
+          </button>
+          <button onClick={onClose}
+            className="w-full flex items-center justify-center gap-1.5 py-2 bg-white/[0.03] hover:bg-white/[0.06] ring-1 ring-white/[0.06] text-zinc-600 hover:text-zinc-300 text-[12px] rounded-lg transition-colors">
+            Fechar
+          </button>
+        </div>
+      </div>
+
+      {/* Content */}
+      <div className="flex-1 overflow-y-auto">
+        <div className="max-w-3xl mx-auto px-10 py-10">
+          {sections[active] && (
+            <>
+              <h2 className="text-[22px] font-bold text-white mb-6 pb-4 border-b border-white/[0.08]">
+                {sections[active].title}
+              </h2>
+              <RenderMd content={sections[active].content} />
+            </>
+          )}
+          <div className="flex items-center justify-between mt-10 pt-6 border-t border-white/[0.05]">
+            <button disabled={active === 0} onClick={() => setActive(a => a - 1)}
+              className="flex items-center gap-1.5 px-4 py-2 text-[12px] text-zinc-500 hover:text-zinc-200 disabled:opacity-20 bg-white/[0.03] hover:bg-white/[0.06] ring-1 ring-white/[0.06] rounded-lg transition-colors">
+              ← Anterior
+            </button>
+            <span className="text-[11px] text-zinc-700">{active + 1} / {sections.length}</span>
+            <button disabled={active === sections.length - 1} onClick={() => setActive(a => a + 1)}
+              className="flex items-center gap-1.5 px-4 py-2 text-[12px] text-zinc-500 hover:text-zinc-200 disabled:opacity-20 bg-white/[0.03] hover:bg-white/[0.06] ring-1 ring-white/[0.06] rounded-lg transition-colors">
+              Próximo →
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Close button */}
+      <button onClick={onClose} className="absolute top-4 right-4 w-8 h-8 flex items-center justify-center bg-white/[0.06] hover:bg-white/[0.10] rounded-full text-zinc-400 hover:text-white transition-colors">
+        <X size={14} />
+      </button>
+    </div>
+  )
 }
 
 // ─── Generate modal ───────────────────────────────────────────────────────────
@@ -306,7 +415,7 @@ const OBJECTIVES = [
   { id: "all",                label: "Todas as campanhas",   desc: "Analisa todos os objetivos" },
   { id: "OUTCOME_LEADS",      label: "Geração de Leads",     desc: "CPL, leads, taxa clique→lead" },
   { id: "OUTCOME_TRAFFIC",    label: "Tráfego",              desc: "CPC, CTR, cliques outbound" },
-  { id: "OUTCOME_ENGAGEMENT", label: "Engajamento",          desc: "CPE, engajamentos, seguidores" },
+  { id: "OUTCOME_ENGAGEMENT", label: "Engajamento",          desc: "CPE, seguidores, custo por seguidor" },
   { id: "OUTCOME_AWARENESS",  label: "Reconhecimento",       desc: "Alcance, CPM, frequência" },
   { id: "OUTCOME_SALES",      label: "Vendas",               desc: "ROAS, compras, CPP" },
   { id: "OUTCOME_MESSAGES",   label: "WhatsApp",             desc: "Conversas, custo por conversa" },
@@ -598,12 +707,12 @@ export default function RelatoriosPage() {
   const [reports, setReports]             = useState<Report[]>([])
   const [loading, setLoading]             = useState(true)
   const [generating, setGenerating]       = useState(false)
-  const [expanded, setExpanded]           = useState<string | null>(null)
   const [schedule, setSchedule]           = useState("none")
   const [scheduleWhatsapp, setScheduleWhatsapp] = useState(false)
   const [savingSchedule, setSavingSchedule]     = useState(false)
   const [savedSchedule, setSavedSchedule]       = useState(false)
   const [showModal, setShowModal]         = useState(false)
+  const [readingReport, setReadingReport] = useState<(Report & { summary: string }) | null>(null)
 
   useEffect(() => {
     api.reports.list().then((d: any) => {
@@ -639,6 +748,13 @@ export default function RelatoriosPage() {
   return (
     <div className="space-y-7">
       {showModal && <GenerateModal onClose={() => setShowModal(false)} onGenerate={generateReport} />}
+      {readingReport && (
+        <ReportModal
+          report={readingReport}
+          onClose={() => setReadingReport(null)}
+          onPrint={() => printReport(readingReport.title, readingReport.period, readingReport.summary)}
+        />
+      )}
 
       <div className="flex items-center justify-between">
         <div>
@@ -710,43 +826,34 @@ export default function RelatoriosPage() {
       ) : (
         <div className="space-y-2">
           {reports.map(report => (
-            <div key={report.id} className="bg-white/[0.02] ring-1 ring-white/[0.06] rounded-xl overflow-hidden">
+            <div key={report.id} className="bg-white/[0.02] ring-1 ring-white/[0.06] rounded-xl overflow-hidden hover:ring-white/[0.09] transition-all">
               <div className="flex items-center gap-3 px-5 py-3.5">
-                <div className="w-7 h-7 rounded-lg bg-violet-600/15 flex items-center justify-center shrink-0">
-                  <FileText size={13} className="text-violet-400" />
+                <div className="w-8 h-8 rounded-lg bg-violet-600/15 flex items-center justify-center shrink-0">
+                  <FileText size={14} className="text-violet-400" />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-[13px] font-medium text-zinc-200">{report.title}</p>
+                  <p className="text-[13px] font-medium text-zinc-200 truncate">{report.title}</p>
                   <p className="text-[11px] text-zinc-600 mt-0.5">{report.period}</p>
                 </div>
-                <p className="text-[11px] text-zinc-700 shrink-0" suppressHydrationWarning>
+                <p className="text-[11px] text-zinc-700 shrink-0 tabular-nums" suppressHydrationWarning>
                   {new Date(report.created_at).toLocaleDateString("pt-BR")}
                 </p>
                 {report.summary && (
-                  <button onClick={() => printReport(report.title, report.period, report.summary!)}
-                    title="Exportar PDF"
-                    className="w-7 h-7 flex items-center justify-center hover:bg-white/[0.06] rounded-lg transition-colors">
-                    <Download size={13} className="text-zinc-600 hover:text-violet-400" />
+                  <button
+                    onClick={() => setReadingReport(report as Report & { summary: string })}
+                    title="Visualizar relatório"
+                    className="flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-medium text-violet-400 bg-violet-600/10 hover:bg-violet-600/20 ring-1 ring-violet-500/20 rounded-lg transition-colors shrink-0">
+                    <Eye size={11} /> Visualizar
                   </button>
                 )}
                 {report.summary && (
-                  <button onClick={() => setExpanded(expanded === report.id ? null : report.id)}
-                    className="w-7 h-7 flex items-center justify-center hover:bg-white/[0.06] rounded-lg transition-colors">
-                    {expanded === report.id
-                      ? <ChevronUp size={13} className="text-zinc-600" />
-                      : <ChevronDown size={13} className="text-zinc-600" />}
+                  <button onClick={() => printReport(report.title, report.period, report.summary!)}
+                    title="Exportar PDF"
+                    className="w-7 h-7 flex items-center justify-center hover:bg-white/[0.06] rounded-lg transition-colors shrink-0">
+                    <Download size={13} className="text-zinc-600 hover:text-violet-400" />
                   </button>
                 )}
               </div>
-              {expanded === report.id && report.summary && (
-                <div className="px-5 pb-6 border-t border-white/[0.05] pt-5">
-                  <RenderMd content={report.summary} />
-                  <button onClick={() => printReport(report.title, report.period, report.summary!)}
-                    className="mt-5 flex items-center gap-1.5 px-3.5 py-1.5 bg-white/[0.04] hover:bg-white/[0.07] ring-1 ring-white/[0.08] text-zinc-400 hover:text-white text-[12px] rounded-lg transition-colors">
-                    <Download size={11} /> Exportar como PDF
-                  </button>
-                </div>
-              )}
             </div>
           ))}
         </div>
