@@ -322,6 +322,9 @@ function MetaTab() {
   const [switchingId, setSwitchingId] = useState<string | null>(null)
   const [removingId, setRemovingId] = useState<string | null>(null)
   const [showAddAccount, setShowAddAccount] = useState(false)
+  const [showSelectModal, setShowSelectModal] = useState(false)
+  const [selectList, setSelectList] = useState<(MetaAccount & { checked: boolean })[]>([])
+  const [confirming, setConfirming] = useState(false)
 
   function loadAccounts() {
     api.meta.accounts().then((d: MetaAccount[]) => setAccounts(Array.isArray(d) ? d : [])).catch(() => {})
@@ -347,7 +350,14 @@ function MetaTab() {
 
   useEffect(() => {
     const meta = searchParams.get("meta"), account = searchParams.get("account"), msg = searchParams.get("msg")
-    if (meta === "connected") { setMetaMsg({ type: "ok", text: `Meta Ads conectado${account ? ` — ${account}` : ""}` }); api.meta.status().then(setMetaStatus) }
+    if (meta === "select") {
+      api.meta.status().then(setMetaStatus)
+      api.meta.accounts().then((accs: MetaAccount[]) => {
+        setSelectList(accs.map(a => ({ ...a, checked: true })))
+        setShowSelectModal(true)
+      }).catch(() => {})
+    }
+    else if (meta === "connected") { setMetaMsg({ type: "ok", text: `Meta Ads conectado${account ? ` — ${account}` : ""}` }); api.meta.status().then(setMetaStatus) }
     else if (meta === "denied")  setMetaMsg({ type: "info", text: "Conexão cancelada." })
     else if (meta === "expired") setMetaMsg({ type: "err",  text: "Link expirado. Tente novamente." })
     else if (meta === "error")   setMetaMsg({ type: "err",  text: msg ? decodeURIComponent(msg) : "Erro ao conectar." })
@@ -392,8 +402,59 @@ function MetaTab() {
     }
   }
 
+  async function confirmSelection() {
+    setConfirming(true)
+    const toRemove = selectList.filter(a => !a.checked && !a.is_active)
+    for (const acc of toRemove) {
+      try { await api.delete(`/meta/accounts/${acc.id}`) } catch {}
+    }
+    setShowSelectModal(false)
+    loadAccounts()
+    api.meta.status().then(setMetaStatus)
+    const kept = selectList.filter(a => a.checked).length
+    setMetaMsg({ type: "ok", text: `${kept} conta(s) salva(s) com sucesso.` })
+    setConfirming(false)
+  }
+
   return (
     <div className="space-y-4 max-w-xl">
+      {showSelectModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
+          <div className="w-full max-w-md bg-[#111113] ring-1 ring-white/[0.08] rounded-2xl flex flex-col max-h-[80vh]">
+            <div className="flex items-center justify-between px-6 pt-6 pb-4 border-b border-white/[0.06]">
+              <div>
+                <h3 className="text-[14px] font-semibold text-white">Selecione as contas</h3>
+                <p className="text-[12px] text-zinc-500 mt-0.5">Desmarque as contas que não deseja manter no GTPRO</p>
+              </div>
+              <button onClick={() => setShowSelectModal(false)} className="text-zinc-500 hover:text-zinc-300 transition-colors"><X size={16} /></button>
+            </div>
+            <div className="overflow-y-auto flex-1 px-6 py-3 space-y-1">
+              {selectList.map(acc => (
+                <label key={acc.id} className={cn("flex items-center gap-3 px-3 py-2.5 rounded-lg cursor-pointer transition-colors", acc.checked ? "bg-violet-500/10" : "hover:bg-white/[0.03]")}>
+                  <input
+                    type="checkbox"
+                    checked={acc.checked}
+                    disabled={acc.is_active}
+                    onChange={e => setSelectList(prev => prev.map(a => a.id === acc.id ? { ...a, checked: e.target.checked } : a))}
+                    className="w-4 h-4 accent-violet-500 shrink-0"
+                  />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-[13px] text-zinc-200 truncate">{acc.name || <span className="italic text-zinc-600">sem nome</span>}</p>
+                    <p className="text-[11px] text-zinc-600 font-mono">{acc.ad_account_id}</p>
+                  </div>
+                  {acc.is_active && <span className="text-[10px] text-violet-400 font-medium shrink-0">ativa</span>}
+                </label>
+              ))}
+            </div>
+            <div className="px-6 py-4 border-t border-white/[0.06] flex items-center justify-between gap-3">
+              <p className="text-[12px] text-zinc-500">{selectList.filter(a => a.checked).length} de {selectList.length} selecionadas</p>
+              <button onClick={confirmSelection} disabled={confirming} className="flex items-center gap-1.5 px-4 py-2 bg-violet-600 hover:bg-violet-500 disabled:opacity-50 text-white text-[13px] font-medium rounded-lg transition-colors">
+                {confirming ? <><Loader2 size={13} className="animate-spin" /> Salvando...</> : "Confirmar seleção"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       {isAdmin && (
         <Card>
           <h2 className="text-[13px] font-semibold text-zinc-200">Credenciais do App</h2>

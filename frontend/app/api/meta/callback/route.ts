@@ -37,8 +37,7 @@ export async function GET(req: NextRequest) {
 
     await saveAllMetaConnections(oauthState.tenant_id, longToken.access_token, accounts)
 
-    const first = accounts[0]
-    return Response.redirect(`${origin}/configuracoes?meta=connected&account=${encodeURIComponent(first.name ?? first.id ?? "")}`)
+    return Response.redirect(`${origin}/configuracoes?meta=select`)
   } catch (e: any) {
     console.error("meta/callback error:", e)
     return Response.redirect(`${origin}/configuracoes?meta=error&msg=${encodeURIComponent(e.message)}`)
