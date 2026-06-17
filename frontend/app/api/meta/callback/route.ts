@@ -1,6 +1,6 @@
 import { NextRequest } from "next/server"
 import { createServiceClient } from "@/lib/server/supabase"
-import { exchangeCodeForToken, getLongLivedToken, getAdAccounts, saveMetaConnection } from "@/lib/server/meta-ads"
+import { exchangeCodeForToken, getLongLivedToken, getAdAccounts, saveAllMetaConnections } from "@/lib/server/meta-ads"
 
 export async function GET(req: NextRequest) {
   const { searchParams } = req.nextUrl
@@ -34,12 +34,10 @@ export async function GET(req: NextRequest) {
     const accounts = await getAdAccounts(longToken.access_token)
     if (!accounts.length) throw new Error("Nenhuma conta de anúncios encontrada")
 
-    const first = accounts[0]
-    // Meta returns id as "act_XXXXXXX" — strip prefix before storing (code adds act_ on use)
-    const accountId = (first.id ?? first.account_id ?? "").replace(/^act_/, "")
-    await saveMetaConnection(oauthState.tenant_id, longToken.access_token, accountId)
+    await saveAllMetaConnections(oauthState.tenant_id, longToken.access_token, accounts)
 
-    return Response.redirect(`${origin}/configuracoes?meta=connected&account=${encodeURIComponent(first.name ?? accountId)}`)
+    const first = accounts[0]
+    return Response.redirect(`${origin}/configuracoes?meta=connected&account=${encodeURIComponent(first.name ?? first.id ?? "")}`)
   } catch (e: any) {
     console.error("meta/callback error:", e)
     return Response.redirect(`${origin}/configuracoes?meta=error&msg=${encodeURIComponent(e.message)}`)

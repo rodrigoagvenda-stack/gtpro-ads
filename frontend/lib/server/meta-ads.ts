@@ -1033,6 +1033,30 @@ export async function saveMetaConnection(tenantId: string, accessToken: string, 
   }
 }
 
+// Salva todas as contas do OAuth — primeira fica ativa, demais aparecem em "Usar esta"
+export async function saveAllMetaConnections(tenantId: string, accessToken: string, accounts: any[]) {
+  const supabase = createServiceClient()
+  await supabase.from("meta_connections").update({ is_active: false }).eq("tenant_id", tenantId)
+
+  for (let i = 0; i < accounts.length; i++) {
+    const accountId = (accounts[i].id ?? accounts[i].account_id ?? "").replace(/^act_/, "")
+    if (!accountId) continue
+    const isFirst = i === 0
+    const { data: existing } = await supabase.from("meta_connections")
+      .select("id").eq("tenant_id", tenantId).eq("ad_account_id", accountId).single()
+    if (existing) {
+      await supabase.from("meta_connections")
+        .update({ access_token_encrypted: encrypt(accessToken), active: true, is_active: isFirst })
+        .eq("id", existing.id)
+    } else {
+      await supabase.from("meta_connections").insert({
+        tenant_id: tenantId, access_token_encrypted: encrypt(accessToken),
+        ad_account_id: accountId, active: true, is_active: isFirst,
+      })
+    }
+  }
+}
+
 export { encrypt, getToken }
 
 // ─── Smart campaign filter for AI agents ─────────────────────────────────────
