@@ -739,7 +739,7 @@ export default function RelatoriosPage() {
     try {
       const report = await api.reports.generate(skills, objective, datePreset, connectionId || undefined, campaignIds, since, until)
       setReports(p => [report, ...p])
-      setExpanded(report.id)
+      if (report.summary) setReadingReport(report as Report & { summary: string })
     } catch (e: any) {
       alert(e.message || "Erro ao gerar relatório")
     } finally { setGenerating(false) }
