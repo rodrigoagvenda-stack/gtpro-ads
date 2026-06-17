@@ -1008,11 +1008,21 @@ export async function getLongLivedToken(shortToken: string) {
 }
 
 export async function getAdAccounts(accessToken: string) {
-  const data = await graphGet("/me/adaccounts", {
-    access_token: accessToken,
-    fields: "id,name,account_status,currency,timezone_name,business_name",
-  })
-  return data.data ?? []
+  let all: any[] = []
+  let after: string | undefined
+  do {
+    const params: Record<string, string> = {
+      access_token: accessToken,
+      fields: "id,name,account_status,currency,timezone_name,business_name",
+      limit: "100",
+    }
+    if (after) params.after = after
+    const page = await graphGet("/me/adaccounts", params)
+    all = [...all, ...(page.data ?? [])]
+    after = page.paging?.cursors?.after
+    if (!page.paging?.next) break
+  } while (after)
+  return all
 }
 
 export async function saveMetaConnection(tenantId: string, accessToken: string, adAccountId: string) {
