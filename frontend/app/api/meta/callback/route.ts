@@ -35,9 +35,11 @@ export async function GET(req: NextRequest) {
     if (!accounts.length) throw new Error("Nenhuma conta de anúncios encontrada")
 
     const first = accounts[0]
-    await saveMetaConnection(oauthState.tenant_id, longToken.access_token, first.account_id)
+    // Meta returns id as "act_XXXXXXX" — strip prefix before storing (code adds act_ on use)
+    const accountId = (first.id ?? first.account_id ?? "").replace(/^act_/, "")
+    await saveMetaConnection(oauthState.tenant_id, longToken.access_token, accountId)
 
-    return Response.redirect(`${origin}/configuracoes?meta=connected&account=${encodeURIComponent(first.name ?? first.account_id)}`)
+    return Response.redirect(`${origin}/configuracoes?meta=connected&account=${encodeURIComponent(first.name ?? accountId)}`)
   } catch (e: any) {
     console.error("meta/callback error:", e)
     return Response.redirect(`${origin}/configuracoes?meta=error&msg=${encodeURIComponent(e.message)}`)
