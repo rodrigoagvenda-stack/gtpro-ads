@@ -156,15 +156,18 @@ function TextModePanel({ onClose, onSend }: { onClose: () => void; onSend: (text
               />
             </div>
             {/* Actions step 2 */}
-            <div className="px-5 py-4 flex gap-3">
-              <button onClick={() => setStep("template")}
-                className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-[13px] font-medium text-zinc-500 hover:text-zinc-300 ring-1 ring-white/[0.08] hover:bg-white/[0.04] transition-all">
-                <ChevronLeft size={13} /> Voltar
-              </button>
-              <button onClick={handleSend} disabled={!pasted.trim()}
-                className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-[13px] font-semibold bg-violet-600 text-white hover:bg-violet-500 disabled:opacity-40 transition-all">
-                <ArrowUp size={14} /> Criar campanha
-              </button>
+            <div className="px-5 pb-4 space-y-3">
+              <p className="text-[11px] text-zinc-600">Após enviar, o agente vai pedir a imagem ou vídeo do anúncio — você faz o upload aqui mesmo no chat.</p>
+              <div className="flex gap-3">
+                <button onClick={() => setStep("template")}
+                  className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-[13px] font-medium text-zinc-500 hover:text-zinc-300 ring-1 ring-white/[0.08] hover:bg-white/[0.04] transition-all">
+                  <ChevronLeft size={13} /> Voltar
+                </button>
+                <button onClick={handleSend} disabled={!pasted.trim()}
+                  className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-[13px] font-semibold bg-violet-600 text-white hover:bg-violet-500 disabled:opacity-40 transition-all">
+                  <ArrowUp size={14} /> Enviar estrutura
+                </button>
+              </div>
             </div>
           </>
         )}
