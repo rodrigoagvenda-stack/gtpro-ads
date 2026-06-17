@@ -32,6 +32,7 @@ export async function GET(req: NextRequest) {
     const longToken = await getLongLivedToken(tokenData.access_token)
 
     const accounts = await getAdAccounts(longToken.access_token)
+    console.log(`[oauth/callback] accounts found (${accounts.length}):`, JSON.stringify(accounts.map((a: any) => ({ id: a.id, name: a.name, status: a.account_status }))))
     if (!accounts.length) throw new Error("Nenhuma conta de anúncios encontrada")
 
     await saveAllMetaConnections(oauthState.tenant_id, longToken.access_token, accounts)
