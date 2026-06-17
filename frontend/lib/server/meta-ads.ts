@@ -1044,14 +1044,15 @@ export async function saveAllMetaConnections(tenantId: string, accessToken: stri
     const isFirst = i === 0
     const { data: existing } = await supabase.from("meta_connections")
       .select("id").eq("tenant_id", tenantId).eq("ad_account_id", accountId).single()
+    const name = accounts[i].name ?? accounts[i].business_name ?? null
     if (existing) {
       await supabase.from("meta_connections")
-        .update({ access_token_encrypted: encrypt(accessToken), active: true, is_active: isFirst })
+        .update({ access_token_encrypted: encrypt(accessToken), active: true, is_active: isFirst, ...(name ? { name } : {}) })
         .eq("id", existing.id)
     } else {
       await supabase.from("meta_connections").insert({
         tenant_id: tenantId, access_token_encrypted: encrypt(accessToken),
-        ad_account_id: accountId, active: true, is_active: isFirst,
+        ad_account_id: accountId, active: true, is_active: isFirst, name,
       })
     }
   }
