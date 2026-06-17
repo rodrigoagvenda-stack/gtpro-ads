@@ -1,6 +1,6 @@
 import { NextRequest } from "next/server"
 import { getTenant, unauthorized } from "@/lib/server/auth"
-import { getInsights } from "@/lib/server/meta-ads"
+import { getInsights, invalidateActiveConnection } from "@/lib/server/meta-ads"
 
 export async function GET(req: NextRequest) {
   const tenant = await getTenant(req)
@@ -13,6 +13,7 @@ export async function GET(req: NextRequest) {
     const data = await getInsights(tenant.tenant_id, datePreset, since, until)
     return Response.json(data)
   } catch (e: any) {
+    if (e.code === 190) await invalidateActiveConnection(tenant.tenant_id)
     return Response.json({ error: e.message }, { status: 500 })
   }
 }

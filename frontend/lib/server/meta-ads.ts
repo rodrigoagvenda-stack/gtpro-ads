@@ -89,9 +89,21 @@ async function graphGet(path: string, params: Record<string, string>) {
   if (!res.ok) {
     const raw = await res.text()
     console.error(`[meta-ads] GET ${path} FAILED status=${res.status} response=${raw}`)
-    throw new Error(parseMetaError(raw))
+    let parsed: any
+    try { parsed = JSON.parse(raw) } catch { /* noop */ }
+    throw new MetaError(parseMetaError(raw), parsed?.error?.code ?? 0, parsed?.error?.error_subcode)
   }
   return res.json()
+}
+
+export async function invalidateActiveConnection(tenantId: string): Promise<void> {
+  const supabase = createServiceClient()
+  await supabase
+    .from("meta_connections")
+    .update({ active: false, is_active: false })
+    .eq("tenant_id", tenantId)
+    .eq("is_active", true)
+  console.log(`[meta-ads] invalidateActiveConnection tenant_id=${tenantId} — token revogado, conexão marcada como inativa`)
 }
 
 async function graphPost(path: string, token: string, body: Record<string, unknown>, _retries = 3): Promise<any> {

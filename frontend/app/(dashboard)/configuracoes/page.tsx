@@ -434,18 +434,31 @@ function MetaTab() {
                   <p className="text-[11px] text-zinc-600 mt-0.5">Conta {metaStatus.ad_account_id}{metaStatus.connected_at ? ` · desde ${new Date(metaStatus.connected_at).toLocaleDateString("pt-BR")}` : ""}{metaStatus.token_days_remaining != null && !metaStatus.token_expires_soon ? ` · token expira em ${metaStatus.token_days_remaining}d` : ""}</p>
                 </div>
               </div>
-              <button onClick={async () => { if (!confirm("Desconectar?")) return; await api.meta.disconnect(); setMetaStatus({ connected: false }); setMetaMsg({ type: "info", text: "Conta desconectada." }) }} className="flex items-center gap-1.5 px-2.5 py-1.5 text-[12px] text-red-400 hover:bg-red-500/10 rounded-lg transition-colors"><Unlink size={11} /> Desconectar</button>
+              <div className="flex items-center gap-1">
+                <button onClick={async () => { setConnecting(true); try { const { url } = await api.meta.connect(); window.open(url, "_blank") } catch (e: any) { setMetaMsg({ type: "err", text: e.message }) } finally { setConnecting(false) } }} disabled={connecting} className="flex items-center gap-1.5 px-2.5 py-1.5 text-[12px] text-violet-400 hover:bg-violet-500/10 rounded-lg transition-colors disabled:opacity-40">
+                  {connecting ? <Loader2 size={11} className="animate-spin" /> : <RotateCcw size={11} />} Reconectar
+                </button>
+                <button onClick={async () => { if (!confirm("Desconectar?")) return; await api.meta.disconnect(); setMetaStatus({ connected: false }); setMetaMsg({ type: "info", text: "Conta desconectada." }) }} className="flex items-center gap-1.5 px-2.5 py-1.5 text-[12px] text-red-400 hover:bg-red-500/10 rounded-lg transition-colors"><Unlink size={11} /> Desconectar</button>
+              </div>
             </div>
             <button onClick={() => setShowAddAccount(v => !v)} className="flex items-center gap-1.5 text-[12px] text-zinc-500 hover:text-zinc-300 transition-colors">
               <Plus size={12} /> {showAddAccount ? "Cancelar" : "Conectar outra conta de anúncios"}
             </button>
             {showAddAccount && (
-              <div className="space-y-2 pt-1">
-                <Field label="Access Token"><input type="password" placeholder="EAAxxxxx..." value={manualToken} onChange={e => setManualToken(e.target.value)} className={inputCls} /></Field>
-                <Field label="Ad Account ID"><input type="text" placeholder="act_123456789" value={manualAccount} onChange={e => setManualAccount(e.target.value)} className={inputCls} /></Field>
-                <button onClick={saveToken} disabled={savingToken || !manualToken.trim() || !manualAccount.trim()} className="flex items-center gap-1.5 px-4 py-2 bg-violet-600 hover:bg-violet-500 disabled:opacity-40 text-white text-[13px] font-medium rounded-lg transition-colors">
-                  {savingToken ? <><Loader2 size={13} className="animate-spin" /> Salvando...</> : "Salvar conta"}
+              <div className="space-y-3 pt-1">
+                <button onClick={async () => { setConnecting(true); try { const { url } = await api.meta.connect(); window.open(url, "_blank") } catch (e: any) { setMetaMsg({ type: "err", text: e.message }) } finally { setConnecting(false) } }} disabled={connecting || (isAdmin && !platform.meta_app_id)} className="flex items-center gap-2 px-4 py-2.5 bg-white text-zinc-900 text-[13px] font-semibold rounded-lg hover:bg-zinc-100 disabled:opacity-40 transition-colors">
+                  {connecting ? <><Loader2 size={13} className="animate-spin" /> Redirecionando...</> : <><Link2 size={13} /> Conectar via OAuth</>}
                 </button>
+                <button onClick={() => setShowManual(v => !v)} className="text-[12px] text-zinc-500 hover:text-zinc-300 transition-colors">{showManual ? "▲ Ocultar" : "▼ Tenho um System User Token permanente"}</button>
+                {showManual && (
+                  <div className="space-y-2">
+                    <Field label="Access Token"><input type="password" placeholder="EAAxxxxx..." value={manualToken} onChange={e => setManualToken(e.target.value)} className={inputCls} /></Field>
+                    <Field label="Ad Account ID"><input type="text" placeholder="act_123456789" value={manualAccount} onChange={e => setManualAccount(e.target.value)} className={inputCls} /></Field>
+                    <button onClick={saveToken} disabled={savingToken || !manualToken.trim() || !manualAccount.trim()} className="flex items-center gap-1.5 px-4 py-2 bg-violet-600 hover:bg-violet-500 disabled:opacity-40 text-white text-[13px] font-medium rounded-lg transition-colors">
+                      {savingToken ? <><Loader2 size={13} className="animate-spin" /> Salvando...</> : "Salvar conta"}
+                    </button>
+                  </div>
+                )}
               </div>
             )}
           </div>
