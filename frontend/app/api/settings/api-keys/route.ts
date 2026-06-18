@@ -18,7 +18,17 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   const tenant = await getTenant(req)
   if (!tenant) return unauthorized()
-  const { name, scope = "read_write" } = await req.json()
+  // Aceita nome/scope via query params (legado) ou JSON body
+  const qp = req.nextUrl.searchParams
+  let name: string | undefined = qp.get("name") ?? undefined
+  let scope: string = qp.get("scope") ?? "read_write"
+  const ct = req.headers.get("content-type") ?? ""
+  if (!name && ct.includes("application/json")) {
+    const body = await req.json().catch(() => ({}))
+    name = body.name ?? undefined
+    scope = body.scope ?? scope
+  }
+  if (!name) return Response.json({ error: "name obrigatório" }, { status: 400 })
   const rawKey = `gtpro_${randomBytes(32).toString("base64url")}`
   const supabase = createServiceClient()
   const { data } = await supabase.from("api_keys").insert({
