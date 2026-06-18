@@ -43,11 +43,11 @@ export async function POST(req: NextRequest) {
           })
         } catch (e: any) {
           const msg: string = e?.message ?? String(e)
-          let errMsg = "Erro interno. Tente novamente."
+          console.error("[agent/query] error:", msg, e?.stack ?? "")
+          let errMsg: string
           if (msg.includes("Conta Meta não conectada")) errMsg = "Conta Meta não conectada. Configure em Configurações → Meta Ads."
-          else if (msg.includes("Token Meta") || msg.includes("Token sem permissão")) errMsg = msg
-          else if (msg.includes("Permissão negada")) errMsg = msg
           else if (msg.toLowerCase().includes("overloaded")) errMsg = "Serviço de IA temporariamente sobrecarregado. Tente em instantes."
+          else errMsg = msg || "Erro interno. Tente novamente."
           controller.enqueue(send({ type: "error", message: errMsg }))
         } finally {
           controller.close()
