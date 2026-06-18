@@ -115,22 +115,28 @@ export async function GET(req: NextRequest) {
   const since  = searchParams.get("since")
   const until  = searchParams.get("until")
 
+  // Token Meta: vem do header (Zaapply) ou do meta_connections (GTPRO próprio)
+  const headerToken     = req.headers.get("X-Meta-Token")
+  const headerAccountId = req.headers.get("X-Meta-Account-Id")
+
+  let token: string
   const supabase = createServiceClient()
 
-  // Meta connection for this tenant
-  const { data: conn } = await supabase
-    .from("meta_connections")
-    .select("access_token_encrypted, ad_account_id")
-    .eq("tenant_id", tenant.tenant_id)
-    .eq("active", true)
-    .eq("is_active", true)
-    .maybeSingle()
+  if (headerToken) {
+    token = headerToken
+  } else {
+    const { data: conn } = await supabase
+      .from("meta_connections")
+      .select("access_token_encrypted, ad_account_id")
+      .eq("tenant_id", tenant.tenant_id)
+      .maybeSingle()
 
-  if (!conn) {
-    return Response.json({ error: "meta_not_connected" }, { status: 424 })
+    if (!conn) {
+      return Response.json({ error: "meta_not_connected" }, { status: 424 })
+    }
+    token = decrypt(conn.access_token_encrypted)
   }
 
-  const token = decrypt(conn.access_token_encrypted)
   const { sinceIso, untilIso, metaPreset, metaRange } = toDateRange(preset, since, until)
 
   // Leads do período com ad_id preenchido
