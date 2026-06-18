@@ -34,6 +34,7 @@ const TABS = [
   { id: "whatsapp",   label: "WhatsApp",   icon: MessageCircle },
   { id: "skills",     label: "Skills",     icon: Zap },
   { id: "equipe",     label: "Equipe",     icon: Users },
+  { id: "api",        label: "API",        icon: Key },
   { id: "plataforma", label: "Plataforma", icon: Settings },
 ]
 
@@ -928,6 +929,85 @@ function SkillsTab() {
   )
 }
 
+// ─── Tab: API Keys ────────────────────────────────────────────────────────────
+
+function ApiKeysTab() {
+  const [apiKeys, setApiKeys] = useState<ApiKey[]>([])
+  const [newKeyName, setNewKeyName] = useState("")
+  const [generatedKey, setGeneratedKey] = useState("")
+  const [copiedKey, setCopiedKey] = useState(false)
+  const [creatingKey, setCreatingKey] = useState(false)
+
+  useEffect(() => {
+    api.get("/settings/api-keys").then(d => setApiKeys(Array.isArray(d) ? d : []))
+  }, [])
+
+  async function createApiKey() {
+    if (!newKeyName.trim()) return
+    setCreatingKey(true)
+    const result = await api.post(`/settings/api-keys?name=${encodeURIComponent(newKeyName)}&scope=read_write`, null)
+    setGeneratedKey(result.key); setApiKeys(p => [...p, result]); setNewKeyName(""); setCreatingKey(false)
+  }
+
+  function copyKey(key: string) { navigator.clipboard.writeText(key); setCopiedKey(true); setTimeout(() => setCopiedKey(false), 2000) }
+
+  return (
+    <div className="space-y-4 max-w-xl">
+      <Card>
+        <h2 className="text-[13px] font-semibold text-zinc-200">API Keys</h2>
+        <p className="text-[12px] text-zinc-500 -mt-3">
+          Conecte outros sistemas ao GTPRO. Use a chave no header{" "}
+          <code className="bg-white/[0.06] px-1 py-0.5 rounded text-[11px]">Authorization: Bearer &lt;chave&gt;</code>
+        </p>
+        {generatedKey && (
+          <div className="bg-emerald-500/[0.08] ring-1 ring-emerald-500/20 rounded-lg p-4">
+            <p className="text-[11px] text-emerald-500 mb-2 font-medium">Copie agora — não será exibida novamente</p>
+            <div className="flex items-center gap-2">
+              <code className="flex-1 text-[11px] text-emerald-300 bg-black/20 px-3 py-2 rounded-md truncate">{generatedKey}</code>
+              <button onClick={() => copyKey(generatedKey)} className="shrink-0 w-8 h-8 flex items-center justify-center bg-white/[0.06] hover:bg-white/[0.10] rounded-lg transition-colors">
+                {copiedKey ? <Check size={13} className="text-emerald-400" /> : <Copy size={13} className="text-zinc-400" />}
+              </button>
+            </div>
+          </div>
+        )}
+        <div className="flex gap-2">
+          <input placeholder="Nome (ex: Nexio CRM, Zaapply)" value={newKeyName} onChange={e => setNewKeyName(e.target.value)} onKeyDown={e => e.key === "Enter" && createApiKey()} className={cn(inputCls, "flex-1")} />
+          <button onClick={createApiKey} disabled={creatingKey || !newKeyName.trim()} className="flex items-center gap-1.5 px-4 py-2.5 bg-white/[0.06] ring-1 ring-white/[0.08] hover:bg-white/[0.09] disabled:opacity-40 text-white text-[13px] font-medium rounded-lg transition-colors">
+            <Plus size={13} /> Gerar
+          </button>
+        </div>
+        {apiKeys.length > 0 && (
+          <div className="divide-y divide-white/[0.05] ring-1 ring-white/[0.06] rounded-lg overflow-hidden">
+            {apiKeys.map(key => (
+              <div key={key.id} className="flex items-center justify-between px-4 py-3">
+                <div>
+                  <p className="text-[13px] text-zinc-200">{key.name}</p>
+                  <p className="text-[11px] text-zinc-600 mt-0.5">{key.scope} · {new Date(key.created_at).toLocaleDateString("pt-BR")}</p>
+                </div>
+                <button onClick={() => { api.post(`/settings/api-keys/${key.id}`, null); setApiKeys(p => p.filter(k => k.id !== key.id)) }} className="w-7 h-7 flex items-center justify-center hover:bg-red-500/10 rounded-lg transition-colors">
+                  <Trash2 size={13} className="text-zinc-600 hover:text-red-400" />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+        {apiKeys.length === 0 && !generatedKey && (
+          <p className="text-[12px] text-zinc-600">Nenhuma chave criada ainda.</p>
+        )}
+      </Card>
+
+      <div className="rounded-xl bg-white/[0.03] ring-1 ring-white/[0.06] px-4 py-4 space-y-2">
+        <p className="text-[12px] font-medium text-zinc-300">Como usar no Zaapply / Nexio</p>
+        <ol className="text-[12px] text-zinc-500 space-y-1 list-decimal list-inside">
+          <li>Gere uma API Key acima com nome "Zaapply"</li>
+          <li>Copie a chave (exibida uma única vez)</li>
+          <li>No Zaapply: Configurações → Integrações → GTPRO · Meta Ads → Cole a chave</li>
+        </ol>
+      </div>
+    </div>
+  )
+}
+
 // ─── Tab: Plataforma ──────────────────────────────────────────────────────────
 
 function PlataformaTab() {
@@ -1283,7 +1363,7 @@ function EquipeTab() {
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
-type TabId = "agente" | "meta" | "alertas" | "whatsapp" | "skills" | "equipe" | "plataforma"
+type TabId = "agente" | "meta" | "alertas" | "whatsapp" | "skills" | "equipe" | "api" | "plataforma"
 
 function ConfiguracoesContent() {
   const [tab, setTab] = useState<TabId>("agente")
@@ -1324,6 +1404,7 @@ function ConfiguracoesContent() {
       {tab === "whatsapp"   && <WhatsAppTab />}
       {tab === "skills"     && <SkillsTab />}
       {tab === "equipe"     && <EquipeTab />}
+      {tab === "api"        && <ApiKeysTab />}
       {tab === "plataforma" && isAdmin && <PlataformaTab />}
     </div>
   )

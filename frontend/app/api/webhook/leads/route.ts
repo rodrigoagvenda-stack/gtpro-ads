@@ -2,23 +2,30 @@ import { NextRequest } from "next/server"
 import crypto from "crypto"
 import { createServiceClient } from "@/lib/server/supabase"
 import { sendCAPIEvent } from "@/lib/server/capi"
+import { getTenant } from "@/lib/server/auth"
 
-// Public endpoint — authenticated by x-api-key header matching webhook_token
+// Public endpoint — aceita x-api-key (webhook_token legado) ou Authorization: Bearer (api_keys)
 export async function POST(req: NextRequest) {
-  const apiKey = req.headers.get("x-api-key") ?? req.nextUrl.searchParams.get("api_key")
-  if (!apiKey) return Response.json({ error: "x-api-key obrigatório" }, { status: 401 })
-
   const supabase = createServiceClient()
+  let tenantId: string | null = null
 
-  const { data: config } = await supabase
-    .from("agent_configs")
-    .select("tenant_id, webhook_token")
-    .eq("webhook_token", apiKey)
-    .single()
+  const xApiKey = req.headers.get("x-api-key") ?? req.nextUrl.searchParams.get("api_key")
 
-  if (!config) return Response.json({ error: "API key inválida" }, { status: 401 })
+  if (xApiKey) {
+    // Modo legado: valida contra agent_configs.webhook_token
+    const { data: config } = await supabase
+      .from("agent_configs")
+      .select("tenant_id")
+      .eq("webhook_token", xApiKey)
+      .single()
+    tenantId = config?.tenant_id ?? null
+  } else {
+    // Modo API Key: Authorization: Bearer gtpro_xxx → api_keys table
+    const ctx = await getTenant(req)
+    tenantId = ctx?.tenant_id ?? null
+  }
 
-  const tenantId = config.tenant_id
+  if (!tenantId) return Response.json({ error: "API key inválida" }, { status: 401 })
 
   // ─── Rate limit: max 30 leads/minute per tenant ──────────────────────────────
   const oneMinuteAgo = new Date(Date.now() - 60_000).toISOString()
