@@ -29,6 +29,7 @@ export async function GET(req: NextRequest) {
   return Response.json({
     connected: !!data,
     ad_account_id: data?.ad_account_id ?? null,
+    name: data?.name ?? null,
     connected_at: data?.created_at ?? null,
     token_expires_soon,
     token_days_remaining,

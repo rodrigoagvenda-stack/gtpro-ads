@@ -16,7 +16,7 @@ export async function GET(req: NextRequest) {
 
   const { data: oauthState } = await supabase
     .from("oauth_states")
-    .select("tenant_id, expires_at")
+    .select("tenant_id, expires_at, redirect_back")
     .eq("state", state)
     .single()
 
@@ -37,7 +37,10 @@ export async function GET(req: NextRequest) {
 
     await saveAllMetaConnections(oauthState.tenant_id, longToken.access_token, accounts)
 
-    return Response.redirect(`${origin}/configuracoes?meta=select`)
+    const destBase = oauthState.redirect_back ?? `${origin}/configuracoes`
+    const dest = new URL(destBase)
+    dest.searchParams.set("meta", "connected")
+    return Response.redirect(dest.toString())
   } catch (e: any) {
     console.error("meta/callback error:", e)
     return Response.redirect(`${origin}/configuracoes?meta=error&msg=${encodeURIComponent(e.message)}`)

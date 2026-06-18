@@ -12,11 +12,13 @@ export async function GET(req: NextRequest) {
   if (!appId) return Response.json({ error: "Meta App ID não configurado em Configurações" }, { status: 400 })
 
   const state = randomBytes(16).toString("hex")
+  const redirectBack = req.nextUrl.searchParams.get("redirect_back") ?? null
   const supabase = createServiceClient()
   await supabase.from("oauth_states").insert({
     state,
     tenant_id: tenant.tenant_id,
     expires_at: new Date(Date.now() + 10 * 60 * 1000).toISOString(),
+    redirect_back: redirectBack,
   })
 
   const redirectUri = `${process.env.NEXT_PUBLIC_APP_URL ?? req.nextUrl.origin}/api/meta/callback`
