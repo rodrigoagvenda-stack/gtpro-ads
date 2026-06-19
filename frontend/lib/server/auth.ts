@@ -49,13 +49,24 @@ export async function getTenant(req: NextRequest): Promise<TenantContext | null>
 
   // Tenta como API Key
   if (!ctx) {
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from("api_keys")
       .select("tenant_id, scope, ad_account_ids")
       .eq("key_hash", hashKey(token))
       .eq("active", true)
       .single()
-    if (data) ctx = { tenant_id: data.tenant_id, auth_type: "api_key", scope: data.scope, ad_account_ids: data.ad_account_ids ?? null }
+    if (data) {
+      ctx = { tenant_id: data.tenant_id, auth_type: "api_key", scope: data.scope, ad_account_ids: data.ad_account_ids ?? null }
+    } else if (error && error.code !== "PGRST116") {
+      // coluna ad_account_ids pode não existir ainda — fallback sem ela
+      const { data: d2 } = await supabase
+        .from("api_keys")
+        .select("tenant_id, scope")
+        .eq("key_hash", hashKey(token))
+        .eq("active", true)
+        .single()
+      if (d2) ctx = { tenant_id: d2.tenant_id, auth_type: "api_key", scope: d2.scope, ad_account_ids: null }
+    }
   }
 
   if (!ctx) return null
