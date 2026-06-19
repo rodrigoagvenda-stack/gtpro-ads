@@ -968,15 +968,24 @@ function ApiKeysTab() {
   }
 
   async function saveEditAccounts(keyId: string) {
-    const updated = await api.patch(`/settings/api-keys/${keyId}`, {
-      ad_account_ids: editAccIds.length ? editAccIds : null,
-    })
-    setApiKeys(p => p.map(k => k.id === keyId ? { ...k, ad_account_ids: updated.ad_account_ids } : k))
-    setEditingKeyId(null)
+    try {
+      const updated = await api.patch(`/settings/api-keys/${keyId}`, {
+        ad_account_ids: editAccIds.length ? editAccIds : null,
+      })
+      if (updated) {
+        setApiKeys(p => p.map(k => k.id === keyId ? { ...k, ad_account_ids: updated.ad_account_ids ?? null } : k))
+      }
+    } catch (e) {
+      console.error("saveEditAccounts error", e)
+    } finally {
+      setEditingKeyId(null)
+    }
   }
 
   async function deleteKey(keyId: string) {
-    await api.delete(`/settings/api-keys/${keyId}`)
+    try {
+      await api.delete(`/settings/api-keys/${keyId}`)
+    } catch {}
     setApiKeys(p => p.filter(k => k.id !== keyId))
   }
 
@@ -1056,7 +1065,7 @@ function ApiKeysTab() {
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-[13px] text-zinc-200">{key.name}</p>
-                    <p className="text-[11px] text-zinc-600 mt-0.5">{new Date(key.created_at).toLocaleDateString("pt-BR")}</p>
+                    <p className="text-[11px] text-zinc-600 mt-0.5">{key.created_at ? new Date(key.created_at).toLocaleDateString("pt-BR") : '—'}</p>
                   </div>
                   <div className="flex items-center gap-1">
                     {metaAccounts.length > 0 && (
