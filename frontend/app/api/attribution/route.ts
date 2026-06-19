@@ -115,27 +115,27 @@ export async function GET(req: NextRequest) {
   const since  = searchParams.get("since")
   const until  = searchParams.get("until")
 
-  // Token Meta: vem do header (Zaapply) ou do meta_connections (GTPRO próprio)
-  const headerToken     = req.headers.get("X-Meta-Token")
-  const headerAccountId = req.headers.get("X-Meta-Account-Id")
-
   let token: string
   const supabase = createServiceClient()
 
-  if (headerToken) {
-    token = headerToken
-  } else {
-    const { data: conn } = await supabase
-      .from("meta_connections")
-      .select("access_token_encrypted, ad_account_id")
-      .eq("tenant_id", tenant.tenant_id)
-      .maybeSingle()
+  // Busca meta_connections filtrando por ad_account_ids da API key (se escopada)
+  let connQuery = supabase
+    .from("meta_connections")
+    .select("access_token_encrypted, ad_account_id")
+    .eq("tenant_id", tenant.tenant_id)
 
-    if (!conn) {
-      return Response.json({ error: "meta_not_connected" }, { status: 424 })
-    }
-    token = decrypt(conn.access_token_encrypted)
+  if (tenant.ad_account_ids?.length) {
+    connQuery = connQuery.in("ad_account_id", tenant.ad_account_ids)
+  } else {
+    connQuery = connQuery.eq("is_active", true)
   }
+
+  const { data: conn } = await connQuery.maybeSingle()
+
+  if (!conn) {
+    return Response.json({ error: "meta_not_connected" }, { status: 424 })
+  }
+  token = decrypt(conn.access_token_encrypted)
 
   const { sinceIso, untilIso, metaPreset, metaRange } = toDateRange(preset, since, until)
 

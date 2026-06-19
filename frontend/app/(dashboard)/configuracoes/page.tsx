@@ -6,14 +6,15 @@ import { api } from "@/lib/api"
 import {
   Check, Copy, Eye, EyeOff, Plus, Trash2, RefreshCw, Link2, Unlink,
   Loader2, LayoutGrid, Pencil, Bot, Megaphone, Bell, MessageCircle,
-  Zap, Key, Settings, Smartphone, RotateCcw, Users, Shield, UserMinus,
+  Zap, Key, Settings, Settings2, Smartphone, RotateCcw, Users, Shield, UserMinus,
   Mail, X, ExternalLink,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-interface ApiKey { id: string; name: string; scope: string; active: boolean; created_at: string }
+interface ApiKey { id: string; name: string; scope: string; ad_account_ids: string[] | null; active: boolean; created_at: string }
+interface MetaAccount { id: string; ad_account_id: string; name: string; is_active: boolean }
 interface Skill  { id: string; name: string; icon: string; color: string; prompt: string; is_default: boolean; tenant_id: string | null }
 interface AlertCfg { type: string; label: string; description: string; enabled: boolean; channels: string[] }
 interface Member { id: string; email: string; name: string; role: string; created_at: string }
@@ -933,23 +934,57 @@ function SkillsTab() {
 
 function ApiKeysTab() {
   const [apiKeys, setApiKeys] = useState<ApiKey[]>([])
+  const [metaAccounts, setMetaAccounts] = useState<MetaAccount[]>([])
   const [newKeyName, setNewKeyName] = useState("")
+  const [selectedAccIds, setSelectedAccIds] = useState<string[]>([])
   const [generatedKey, setGeneratedKey] = useState("")
   const [copiedKey, setCopiedKey] = useState(false)
   const [creatingKey, setCreatingKey] = useState(false)
+  const [editingKeyId, setEditingKeyId] = useState<string | null>(null)
+  const [editAccIds, setEditAccIds] = useState<string[]>([])
 
   useEffect(() => {
     api.get("/settings/api-keys").then(d => setApiKeys(Array.isArray(d) ? d : []))
+    api.get("/meta/accounts").then(d => setMetaAccounts(Array.isArray(d) ? d : []))
   }, [])
+
+  function toggleAcc(ids: string[], accId: string): string[] {
+    return ids.includes(accId) ? ids.filter(x => x !== accId) : [...ids, accId]
+  }
 
   async function createApiKey() {
     if (!newKeyName.trim()) return
     setCreatingKey(true)
-    const result = await api.post(`/settings/api-keys?name=${encodeURIComponent(newKeyName)}&scope=read_write`, null)
-    setGeneratedKey(result.key); setApiKeys(p => [...p, result]); setNewKeyName(""); setCreatingKey(false)
+    const result = await api.post("/settings/api-keys", {
+      name: newKeyName,
+      scope: "read_write",
+      ad_account_ids: selectedAccIds.length ? selectedAccIds : null,
+    })
+    setGeneratedKey(result.key)
+    setApiKeys(p => [...p, result])
+    setNewKeyName("")
+    setSelectedAccIds([])
+    setCreatingKey(false)
+  }
+
+  async function saveEditAccounts(keyId: string) {
+    const updated = await api.patch(`/settings/api-keys/${keyId}`, {
+      ad_account_ids: editAccIds.length ? editAccIds : null,
+    })
+    setApiKeys(p => p.map(k => k.id === keyId ? { ...k, ad_account_ids: updated.ad_account_ids } : k))
+    setEditingKeyId(null)
+  }
+
+  async function deleteKey(keyId: string) {
+    await api.delete(`/settings/api-keys/${keyId}`)
+    setApiKeys(p => p.filter(k => k.id !== keyId))
   }
 
   function copyKey(key: string) { navigator.clipboard.writeText(key); setCopiedKey(true); setTimeout(() => setCopiedKey(false), 2000) }
+
+  function accountName(adAccountId: string) {
+    return metaAccounts.find(a => a.ad_account_id === adAccountId)?.name ?? adAccountId
+  }
 
   return (
     <div className="space-y-4 max-w-xl">
@@ -959,6 +994,7 @@ function ApiKeysTab() {
           Conecte outros sistemas ao GTPRO. Use a chave no header{" "}
           <code className="bg-white/[0.06] px-1 py-0.5 rounded text-[11px]">Authorization: Bearer &lt;chave&gt;</code>
         </p>
+
         {generatedKey && (
           <div className="bg-emerald-500/[0.08] ring-1 ring-emerald-500/20 rounded-lg p-4">
             <p className="text-[11px] text-emerald-500 mb-2 font-medium">Copie agora — não será exibida novamente</p>
@@ -970,27 +1006,128 @@ function ApiKeysTab() {
             </div>
           </div>
         )}
-        <div className="flex gap-2">
-          <input placeholder="Nome (ex: Nexio CRM, Zaapply)" value={newKeyName} onChange={e => setNewKeyName(e.target.value)} onKeyDown={e => e.key === "Enter" && createApiKey()} className={cn(inputCls, "flex-1")} />
-          <button onClick={createApiKey} disabled={creatingKey || !newKeyName.trim()} className="flex items-center gap-1.5 px-4 py-2.5 bg-white/[0.06] ring-1 ring-white/[0.08] hover:bg-white/[0.09] disabled:opacity-40 text-white text-[13px] font-medium rounded-lg transition-colors">
-            <Plus size={13} /> Gerar
-          </button>
+
+        <div className="space-y-2">
+          <div className="flex gap-2">
+            <input
+              placeholder="Nome (ex: Zaapply – Fernando)"
+              value={newKeyName}
+              onChange={e => setNewKeyName(e.target.value)}
+              onKeyDown={e => e.key === "Enter" && createApiKey()}
+              className={cn(inputCls, "flex-1")}
+            />
+            <button
+              onClick={createApiKey}
+              disabled={creatingKey || !newKeyName.trim()}
+              className="flex items-center gap-1.5 px-4 py-2.5 bg-white/[0.06] ring-1 ring-white/[0.08] hover:bg-white/[0.09] disabled:opacity-40 text-white text-[13px] font-medium rounded-lg transition-colors"
+            >
+              <Plus size={13} /> Gerar
+            </button>
+          </div>
+
+          {metaAccounts.length > 0 && (
+            <div className="rounded-lg ring-1 ring-white/[0.06] px-3 py-2.5 space-y-2">
+              <p className="text-[11px] text-zinc-500 font-medium">Contas de anúncio desta chave <span className="text-zinc-600">(vazio = todas)</span></p>
+              <div className="flex flex-wrap gap-2">
+                {metaAccounts.map(acc => (
+                  <button
+                    key={acc.ad_account_id}
+                    onClick={() => setSelectedAccIds(ids => toggleAcc(ids, acc.ad_account_id))}
+                    className={cn(
+                      "flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium ring-1 transition-colors",
+                      selectedAccIds.includes(acc.ad_account_id)
+                        ? "bg-blue-500/20 ring-blue-500/40 text-blue-300"
+                        : "bg-white/[0.04] ring-white/[0.08] text-zinc-400 hover:bg-white/[0.07]"
+                    )}
+                  >
+                    {selectedAccIds.includes(acc.ad_account_id) && <Check size={10} />}
+                    {acc.name}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
+
         {apiKeys.length > 0 && (
           <div className="divide-y divide-white/[0.05] ring-1 ring-white/[0.06] rounded-lg overflow-hidden">
             {apiKeys.map(key => (
-              <div key={key.id} className="flex items-center justify-between px-4 py-3">
-                <div>
-                  <p className="text-[13px] text-zinc-200">{key.name}</p>
-                  <p className="text-[11px] text-zinc-600 mt-0.5">{key.scope} · {new Date(key.created_at).toLocaleDateString("pt-BR")}</p>
+              <div key={key.id} className="px-4 py-3 space-y-2">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-[13px] text-zinc-200">{key.name}</p>
+                    <p className="text-[11px] text-zinc-600 mt-0.5">{new Date(key.created_at).toLocaleDateString("pt-BR")}</p>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    {metaAccounts.length > 0 && (
+                      <button
+                        onClick={() => {
+                          if (editingKeyId === key.id) { setEditingKeyId(null); return }
+                          setEditingKeyId(key.id)
+                          setEditAccIds(key.ad_account_ids ?? [])
+                        }}
+                        className="w-7 h-7 flex items-center justify-center hover:bg-white/[0.06] rounded-lg transition-colors"
+                        title="Editar contas"
+                      >
+                        <Settings2 size={12} className="text-zinc-500" />
+                      </button>
+                    )}
+                    <button
+                      onClick={() => deleteKey(key.id)}
+                      className="w-7 h-7 flex items-center justify-center hover:bg-red-500/10 rounded-lg transition-colors"
+                    >
+                      <Trash2 size={13} className="text-zinc-600 hover:text-red-400" />
+                    </button>
+                  </div>
                 </div>
-                <button onClick={() => { api.post(`/settings/api-keys/${key.id}`, null); setApiKeys(p => p.filter(k => k.id !== key.id)) }} className="w-7 h-7 flex items-center justify-center hover:bg-red-500/10 rounded-lg transition-colors">
-                  <Trash2 size={13} className="text-zinc-600 hover:text-red-400" />
-                </button>
+
+                {key.ad_account_ids?.length ? (
+                  <div className="flex flex-wrap gap-1.5">
+                    {key.ad_account_ids.map(accId => (
+                      <span key={accId} className="px-2 py-0.5 rounded-full bg-blue-500/10 ring-1 ring-blue-500/20 text-[10px] text-blue-400">
+                        {accountName(accId)}
+                      </span>
+                    ))}
+                  </div>
+                ) : metaAccounts.length > 0 ? (
+                  <p className="text-[11px] text-zinc-600">Acessa todas as contas</p>
+                ) : null}
+
+                {editingKeyId === key.id && (
+                  <div className="rounded-lg ring-1 ring-white/[0.08] bg-white/[0.03] px-3 py-2.5 space-y-2">
+                    <p className="text-[11px] text-zinc-500 font-medium">Selecionar contas <span className="text-zinc-600">(vazio = todas)</span></p>
+                    <div className="flex flex-wrap gap-2">
+                      {metaAccounts.map(acc => (
+                        <button
+                          key={acc.ad_account_id}
+                          onClick={() => setEditAccIds(ids => toggleAcc(ids, acc.ad_account_id))}
+                          className={cn(
+                            "flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium ring-1 transition-colors",
+                            editAccIds.includes(acc.ad_account_id)
+                              ? "bg-blue-500/20 ring-blue-500/40 text-blue-300"
+                              : "bg-white/[0.04] ring-white/[0.08] text-zinc-400 hover:bg-white/[0.07]"
+                          )}
+                        >
+                          {editAccIds.includes(acc.ad_account_id) && <Check size={10} />}
+                          {acc.name}
+                        </button>
+                      ))}
+                    </div>
+                    <div className="flex gap-2 pt-1">
+                      <button onClick={() => saveEditAccounts(key.id)} className="px-3 py-1.5 bg-blue-500/20 hover:bg-blue-500/30 ring-1 ring-blue-500/30 text-blue-300 text-[11px] font-medium rounded-lg transition-colors">
+                        Salvar
+                      </button>
+                      <button onClick={() => setEditingKeyId(null)} className="px-3 py-1.5 text-zinc-500 hover:text-zinc-300 text-[11px] transition-colors">
+                        Cancelar
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             ))}
           </div>
         )}
+
         {apiKeys.length === 0 && !generatedKey && (
           <p className="text-[12px] text-zinc-600">Nenhuma chave criada ainda.</p>
         )}
@@ -999,7 +1136,8 @@ function ApiKeysTab() {
       <div className="rounded-xl bg-white/[0.03] ring-1 ring-white/[0.06] px-4 py-4 space-y-2">
         <p className="text-[12px] font-medium text-zinc-300">Como usar no Zaapply / Nexio</p>
         <ol className="text-[12px] text-zinc-500 space-y-1 list-decimal list-inside">
-          <li>Gere uma API Key acima com nome "Zaapply"</li>
+          <li>Gere uma API Key acima com nome "Zaapply – [seu nome]"</li>
+          <li>Selecione as contas de anúncio que essa chave pode acessar</li>
           <li>Copie a chave (exibida uma única vez)</li>
           <li>No Zaapply: Configurações → Integrações → GTPRO · Meta Ads → Cole a chave</li>
         </ol>

@@ -8,6 +8,7 @@ export interface TenantContext {
   scope?: string
   user_id?: string
   user_email?: string
+  ad_account_ids?: string[] | null
 }
 
 export async function getTenant(req: NextRequest): Promise<TenantContext | null> {
@@ -50,11 +51,11 @@ export async function getTenant(req: NextRequest): Promise<TenantContext | null>
   if (!ctx) {
     const { data } = await supabase
       .from("api_keys")
-      .select("tenant_id, scope")
+      .select("tenant_id, scope, ad_account_ids")
       .eq("key_hash", hashKey(token))
       .eq("active", true)
       .single()
-    if (data) ctx = { tenant_id: data.tenant_id, auth_type: "api_key", scope: data.scope }
+    if (data) ctx = { tenant_id: data.tenant_id, auth_type: "api_key", scope: data.scope, ad_account_ids: data.ad_account_ids ?? null }
   }
 
   if (!ctx) return null

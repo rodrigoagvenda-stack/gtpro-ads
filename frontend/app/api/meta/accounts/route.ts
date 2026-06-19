@@ -7,13 +7,18 @@ export async function GET(req: NextRequest) {
   if (!tenant) return unauthorized()
 
   const supabase = createServiceClient()
-  const { data } = await supabase
+  let query = supabase
     .from("meta_connections")
     .select("id, ad_account_id, name, is_active, created_at")
     .eq("tenant_id", tenant.tenant_id)
     .eq("active", true)
     .order("created_at", { ascending: true })
 
+  if (tenant.ad_account_ids?.length) {
+    query = query.in("ad_account_id", tenant.ad_account_ids)
+  }
+
+  const { data } = await query
   return Response.json(data ?? [])
 }
 
