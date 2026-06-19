@@ -4,7 +4,7 @@ import { exchangeCodeForToken, getLongLivedToken, getAdAccounts, saveAllMetaConn
 
 export async function GET(req: NextRequest) {
   const { searchParams } = req.nextUrl
-  const origin = process.env.NEXT_PUBLIC_APP_URL ?? req.nextUrl.origin
+  const origin = process.env.NEXT_PUBLIC_APP_URL ?? 'https://gtpro.vendai.pro'
   const code = searchParams.get("code")
   const state = searchParams.get("state")
   const error = searchParams.get("error")

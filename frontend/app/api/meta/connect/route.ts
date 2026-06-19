@@ -21,7 +21,7 @@ export async function GET(req: NextRequest) {
     redirect_back: redirectBack,
   })
 
-  const redirectUri = `${process.env.NEXT_PUBLIC_APP_URL ?? req.nextUrl.origin}/api/meta/callback`
+  const redirectUri = `${process.env.NEXT_PUBLIC_APP_URL ?? 'https://gtpro.vendai.pro'}/api/meta/callback`
   const scope = "ads_management,ads_read,business_management,read_insights,pages_show_list,pages_read_engagement,instagram_basic"
   const url = `https://www.facebook.com/dialog/oauth?client_id=${appId}&redirect_uri=${encodeURIComponent(redirectUri)}&scope=${scope}&state=${state}&response_type=code`
 
