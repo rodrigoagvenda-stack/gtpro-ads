@@ -15,6 +15,7 @@ export interface Metrics {
   leads?: number
   cpc_conv?: number
   frequency?: number
+  conversations?: number
   messaging_conversations?: number
   // Extended Meta API metrics
   cpp?: number

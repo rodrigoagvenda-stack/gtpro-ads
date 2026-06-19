@@ -237,6 +237,7 @@ export async function getCampaigns(tenantId: string, datePreset = "last_7d", con
         frequency:   ins.frequency ? Number(ins.frequency) : undefined,
         leads,
         cpl,
+        conversations,
         messaging_conversations: conversations,
         cpc_conv,
         post_engagement: engagements,
