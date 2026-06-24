@@ -4,7 +4,7 @@ import { useEffect, useState } from "react"
 import { api } from "@/lib/api"
 import {
   MessageCircle, Plus, X, Check, Loader2, Trash2, Power, RefreshCw,
-  ChevronRight, Instagram, Image as ImageIcon, Zap, MessageSquare,
+  ChevronRight, Image as ImageIcon, Zap, MessageSquare,
   ToggleLeft, ToggleRight, AlertCircle,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
@@ -198,7 +198,7 @@ function FlowModal({ onClose, onSaved, editFlow }: {
                         )}>
                         {acc.profile_picture_url
                           ? <img src={acc.profile_picture_url} alt="" className="w-8 h-8 rounded-full object-cover shrink-0" />
-                          : <div className="w-8 h-8 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center shrink-0"><Instagram size={14} className="text-white" /></div>
+                          : <div className="w-8 h-8 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center shrink-0"><MessageCircle size={14} className="text-white" /></div>
                         }
                         <div className="flex-1 min-w-0">
                           <p className="text-[12px] font-medium text-zinc-200 truncate">@{acc.ig_username || acc.ig_name}</p>

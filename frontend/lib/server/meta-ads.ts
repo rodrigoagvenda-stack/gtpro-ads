@@ -36,7 +36,7 @@ async function getTokenAndAccount(tenantId: string, connectionId?: string) {
   return { token: decrypt(data.access_token_encrypted), adAccountId: data.ad_account_id }
 }
 
-class MetaError extends Error {
+export class MetaError extends Error {
   code: number
   subcode?: number
   isTransient: boolean
