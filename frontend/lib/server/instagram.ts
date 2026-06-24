@@ -1,5 +1,4 @@
 import { createServiceClient } from "./supabase"
-import { MetaError } from "./meta-ads"
 
 const GRAPH = "https://graph.facebook.com/v25.0"
 
@@ -8,7 +7,7 @@ async function igGet(path: string, params: Record<string, string>) {
   for (const [k, v] of Object.entries(params)) url.searchParams.set(k, v)
   const res = await fetch(url.toString(), { next: { revalidate: 0 } })
   const data = await res.json()
-  if (data.error) throw new MetaError(data.error)
+  if (data.error) throw new Error(data.error?.message ?? JSON.stringify(data.error))
   return data
 }
 
@@ -19,7 +18,7 @@ async function igPost(path: string, token: string, body: Record<string, unknown>
     body: JSON.stringify({ ...body, access_token: token }),
   })
   const data = await res.json()
-  if (data.error) throw new MetaError(data.error)
+  if (data.error) throw new Error(data.error?.message ?? JSON.stringify(data.error))
   return data
 }
 
@@ -31,7 +30,7 @@ export async function syncIgAccounts(tenantId: string) {
     .from("meta_connections")
     .select("access_token")
     .eq("tenant_id", tenantId)
-    .eq("is_active", true)
+    .eq("active", true)
     .single()
   if (!conn?.access_token) throw new Error("Conta Meta não conectada. Conecte em Configurações → Meta Ads.")
 
