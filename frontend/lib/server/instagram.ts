@@ -1,4 +1,5 @@
 import { createServiceClient } from "./supabase"
+import { decrypt } from "./crypto"
 
 const GRAPH = "https://graph.facebook.com/v25.0"
 
@@ -22,20 +23,27 @@ async function igPost(path: string, token: string, body: Record<string, unknown>
   return data
 }
 
+async function getDecryptedToken(tenantId: string): Promise<string> {
+  const supabase = createServiceClient()
+  const { data } = await supabase
+    .from("meta_connections")
+    .select("access_token_encrypted")
+    .eq("tenant_id", tenantId)
+    .eq("active", true)
+    .eq("is_active", true)
+    .single()
+  if (!data?.access_token_encrypted)
+    throw new Error("Conta Meta não conectada. Conecte em Configurações → Meta Ads.")
+  return decrypt(data.access_token_encrypted)
+}
+
 // ─── Accounts ─────────────────────────────────────────────────────────────────
 
 export async function syncIgAccounts(tenantId: string) {
-  const supabase = createServiceClient()
-  const { data: conn } = await supabase
-    .from("meta_connections")
-    .select("access_token")
-    .eq("tenant_id", tenantId)
-    .eq("active", true)
-    .single()
-  if (!conn?.access_token) throw new Error("Conta Meta não conectada. Conecte em Configurações → Meta Ads.")
+  const token = await getDecryptedToken(tenantId)
 
   const pages = await igGet("/me/accounts", {
-    access_token: conn.access_token,
+    access_token: token,
     fields: "id,name,access_token,instagram_business_account{id,name,username,profile_picture_url}",
     limit: "100",
   })
@@ -56,6 +64,7 @@ export async function syncIgAccounts(tenantId: string) {
   }
 
   if (accounts.length) {
+    const supabase = createServiceClient()
     await supabase.from("ig_accounts").upsert(accounts, { onConflict: "tenant_id,ig_user_id" })
   }
 
@@ -80,7 +89,8 @@ export async function getPageToken(tenantId: string, igUserId: string): Promise<
     .eq("tenant_id", tenantId)
     .eq("ig_user_id", igUserId)
     .single()
-  if (!data?.page_access_token) throw new Error("Conta Instagram não encontrada. Sincronize as contas primeiro.")
+  if (!data?.page_access_token)
+    throw new Error("Conta Instagram não encontrada. Sincronize as contas primeiro.")
   return data.page_access_token
 }
 
@@ -168,6 +178,8 @@ export async function findFlowsForComment(igUserId: string, mediaId: string): Pr
 }
 
 export async function incrementExecutions(id: string) {
-  const supabase = createServiceClient()
-  await supabase.rpc("increment_ig_flow_executions", { flow_id: id }).catch(() => {})
+  try {
+    const supabase = createServiceClient()
+    await supabase.rpc("increment_ig_flow_executions", { flow_id: id })
+  } catch {}
 }
