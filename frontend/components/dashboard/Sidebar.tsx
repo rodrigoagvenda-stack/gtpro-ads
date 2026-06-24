@@ -3,7 +3,7 @@
 import Link from "next/link"
 import Image from "next/image"
 import { usePathname, useRouter } from "next/navigation"
-import { Megaphone, Bot, FileText, Bell, Settings, LogOut, Zap, Link2, Home, Users, Building2, Shield, Images } from "lucide-react"
+import { Megaphone, Bot, FileText, Bell, Settings, LogOut, Zap, Link2, Home, Users, Building2, Shield, Images, MessageCircle } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { createClient } from "@/lib/supabase"
 import { useEffect, useState } from "react"
@@ -21,9 +21,10 @@ const NAV_GROUPS: NavGroup[] = [
   {
     label: "Gestão",
     items: [
-      { href: "/campanhas",  label: "Campanhas",  icon: Megaphone },
-      { href: "/criativos",  label: "Criativos",  icon: Images    },
-      { href: "/audiencias", label: "Audiências", icon: Users     },
+      { href: "/campanhas",   label: "Campanhas",   icon: Megaphone     },
+      { href: "/criativos",   label: "Criativos",   icon: Images        },
+      { href: "/audiencias",  label: "Audiências",  icon: Users         },
+      { href: "/automacoes",  label: "Automações",  icon: MessageCircle },
     ],
   },
   {

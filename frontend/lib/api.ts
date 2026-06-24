@@ -200,6 +200,16 @@ export const api = {
       fetchWithAuth(`/team/members/${userId}`, { method: "PATCH", body: JSON.stringify({ role }) }),
   },
 
+  instagram: {
+    accounts:    (sync = false) => fetchWithAuth(`/instagram/accounts${sync ? "?sync=1" : ""}`),
+    posts:       (igUserId: string) => fetchWithAuth(`/instagram/posts?ig_user_id=${igUserId}`),
+    flows:       () => fetchWithAuth("/instagram/flows"),
+    createFlow:  (body: Record<string, any>) => fetchWithAuth("/instagram/flows", { method: "POST", body: JSON.stringify(body) }),
+    updateFlow:  (id: string, body: Record<string, any>) => fetchWithAuth(`/instagram/flows/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
+    deleteFlow:  (id: string) => fetchWithAuth(`/instagram/flows/${id}`, { method: "DELETE" }),
+    toggleFlow:  (id: string, is_active: boolean) => fetchWithAuth(`/instagram/flows/${id}`, { method: "PATCH", body: JSON.stringify({ is_active }) }),
+  },
+
   media: {
     list: () => fetchWithAuth("/meta/media"),
     upload: async (file: File): Promise<{ meta_hash?: string; meta_video_id?: string; name: string; type: string }> => {
