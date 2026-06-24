@@ -46,8 +46,8 @@ ALTER TABLE ig_accounts ENABLE ROW LEVEL SECURITY;
 ALTER TABLE ig_flows     ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY ig_accounts_tenant ON ig_accounts USING (
-  tenant_id = (SELECT tenant_id FROM tenant_users WHERE user_id = auth.uid() LIMIT 1)
+  tenant_id = (SELECT tenant_id FROM tenant_members WHERE user_id = auth.uid() LIMIT 1)
 );
 CREATE POLICY ig_flows_tenant ON ig_flows USING (
-  tenant_id = (SELECT tenant_id FROM tenant_users WHERE user_id = auth.uid() LIMIT 1)
+  tenant_id = (SELECT tenant_id FROM tenant_members WHERE user_id = auth.uid() LIMIT 1)
 );
