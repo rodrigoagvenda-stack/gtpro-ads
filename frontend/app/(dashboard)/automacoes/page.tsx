@@ -121,8 +121,7 @@ function FlowModal({ onClose, onSaved, editFlow }: {
     } catch (e: any) { setErr(e.message) } finally { setSaving(false) }
   }
 
-  const step1Ok = !!selAccount && selPost !== null
-  // selAccount sozinho habilita o scroll para escolher o post — step1Ok bloqueia o Próximo
+  const step1Ok = !!name.trim() && !!selAccount && selPost !== null
   const step2Ok = triggerType === "any" || keywords.length > 0
 
   return (
