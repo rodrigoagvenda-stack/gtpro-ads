@@ -69,7 +69,7 @@ function FlowModal({ onClose, onSaved, editFlow }: {
         const found = p?.find((x: IgPost) => x.id === editFlow.media_id)
         setSelPost(found ?? "any")
       }
-    }).catch(() => {}).finally(() => setLoadingPosts(false))
+    }).catch((e: any) => setErr(`Erro ao carregar posts: ${e.message}`)).finally(() => setLoadingPosts(false))
   }, [selAccount])
 
   async function syncAccounts() {
