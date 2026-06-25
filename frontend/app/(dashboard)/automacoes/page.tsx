@@ -122,6 +122,7 @@ function FlowModal({ onClose, onSaved, editFlow }: {
   }
 
   const step1Ok = !!selAccount && selPost !== null
+  // selAccount sozinho habilita o scroll para escolher o post — step1Ok bloqueia o Próximo
   const step2Ok = triggerType === "any" || keywords.length > 0
 
   return (
@@ -192,9 +193,9 @@ function FlowModal({ onClose, onSaved, editFlow }: {
                 ) : (
                   <div className="space-y-1.5">
                     {accounts.map(acc => (
-                      <button key={acc.id} onClick={() => setSelAccount(acc)}
+                      <button key={acc.ig_user_id} onClick={() => setSelAccount(acc)}
                         className={cn("w-full flex items-center gap-3 px-3 py-2.5 rounded-xl ring-1 text-left transition-all",
-                          selAccount?.id === acc.id ? "bg-violet-600/15 ring-violet-500/40" : "bg-white/[0.02] ring-white/[0.06] hover:bg-white/[0.04]"
+                          selAccount?.ig_user_id === acc.ig_user_id ? "bg-violet-600/15 ring-violet-500/40" : "bg-white/[0.02] ring-white/[0.06] hover:bg-white/[0.04]"
                         )}>
                         {acc.profile_picture_url
                           ? <img src={acc.profile_picture_url} alt="" className="w-8 h-8 rounded-full object-cover shrink-0" />
@@ -204,12 +205,16 @@ function FlowModal({ onClose, onSaved, editFlow }: {
                           <p className="text-[12px] font-medium text-zinc-200 truncate">@{acc.ig_username || acc.ig_name}</p>
                           <p className="text-[10px] text-zinc-600">ID: {acc.ig_user_id}</p>
                         </div>
-                        {selAccount?.id === acc.id && <Check size={12} className="text-violet-400 shrink-0" />}
+                        {selAccount?.ig_user_id === acc.ig_user_id && <Check size={12} className="text-violet-400 shrink-0" />}
                       </button>
                     ))}
                   </div>
                 )}
               </div>
+
+              {selAccount && !selPost && (
+                <p className="text-[11px] text-violet-400 mt-1">↓ Agora selecione um post abaixo</p>
+              )}
 
               {/* Posts */}
               {selAccount && (
