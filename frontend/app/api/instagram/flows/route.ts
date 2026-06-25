@@ -47,8 +47,15 @@ export async function POST(req: NextRequest) {
         .eq("tenant_id", tenant.tenant_id)
         .eq("ig_user_id", ig_user_id)
         .single()
-      if (acc) await subscribePageToComments(acc.page_id, acc.page_access_token)
-    } catch {}
+      if (acc?.page_access_token) {
+        const subResult = await subscribePageToComments(acc.page_id, acc.page_access_token)
+        console.log(`[ig/flows] subscribePageToComments page=${acc.page_id} result=`, JSON.stringify(subResult))
+      } else {
+        console.warn(`[ig/flows] no page_access_token for ig_user_id=${ig_user_id} — skipping webhook subscribe`)
+      }
+    } catch (e: any) {
+      console.error("[ig/flows] subscribePageToComments error:", e.message)
+    }
 
     return Response.json(flow, { status: 201 })
   } catch (e: any) {
