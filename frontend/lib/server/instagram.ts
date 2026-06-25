@@ -23,7 +23,8 @@ async function igPost(path: string, token: string, body: Record<string, unknown>
   return data
 }
 
-async function getDecryptedToken(tenantId: string): Promise<string> {
+// User access token (descriptografado) de meta_connections
+async function getUserToken(tenantId: string): Promise<string> {
   const supabase = createServiceClient()
   const { data } = await supabase
     .from("meta_connections")
@@ -40,11 +41,11 @@ async function getDecryptedToken(tenantId: string): Promise<string> {
 // ─── Accounts ─────────────────────────────────────────────────────────────────
 
 export async function syncIgAccounts(tenantId: string) {
-  const token = await getDecryptedToken(tenantId)
+  const userToken = await getUserToken(tenantId)
 
   const pages = await igGet("/me/accounts", {
-    access_token: token,
-    fields: "id,name,access_token,instagram_business_account{id,name,username,profile_picture_url}",
+    access_token: userToken,
+    fields: "id,name,instagram_business_account{id,name,username,profile_picture_url}",
     limit: "100",
   })
 
@@ -52,6 +53,17 @@ export async function syncIgAccounts(tenantId: string) {
   for (const page of pages.data ?? []) {
     const ig = page.instagram_business_account
     if (!ig) continue
+
+    // Busca o page access token corretamente via GET /{page-id}?fields=access_token
+    let pageToken: string | null = null
+    try {
+      const pageData = await igGet(`/${page.id}`, {
+        fields: "access_token",
+        access_token: userToken,
+      })
+      pageToken = pageData.access_token ?? null
+    } catch {}
+
     accounts.push({
       tenant_id:           tenantId,
       ig_user_id:          ig.id,
@@ -59,7 +71,7 @@ export async function syncIgAccounts(tenantId: string) {
       ig_name:             ig.name ?? null,
       profile_picture_url: ig.profile_picture_url ?? null,
       page_id:             page.id,
-      page_access_token:   page.access_token,
+      page_access_token:   pageToken,
     })
   }
 
@@ -90,22 +102,23 @@ export async function getPageToken(tenantId: string, igUserId: string): Promise<
     .eq("ig_user_id", igUserId)
     .single()
   if (!data?.page_access_token)
-    throw new Error("Conta Instagram não encontrada. Sincronize as contas primeiro.")
+    throw new Error("Page token não encontrado. Sincronize as contas novamente.")
   return data.page_access_token
 }
 
-// ─── Media ────────────────────────────────────────────────────────────────────
+// ─── Media — usa user token, não page token ───────────────────────────────────
 
-export async function getIgMedia(igUserId: string, pageToken: string) {
+export async function getIgMedia(tenantId: string, igUserId: string) {
+  const userToken = await getUserToken(tenantId)
   const res = await igGet(`/${igUserId}/media`, {
-    access_token: pageToken,
+    access_token: userToken,
     fields: "id,caption,media_type,media_url,thumbnail_url,timestamp,permalink",
     limit: "24",
   })
   return res.data ?? []
 }
 
-// ─── Actions ──────────────────────────────────────────────────────────────────
+// ─── Actions — usa page token ─────────────────────────────────────────────────
 
 export async function sendIgDM(igUserId: string, commentId: string, message: string, pageToken: string) {
   return igPost(`/${igUserId}/messages`, pageToken, {
