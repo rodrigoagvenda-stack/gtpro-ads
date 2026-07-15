@@ -7,7 +7,7 @@ import {
   Check, Copy, Eye, EyeOff, Plus, Trash2, RefreshCw, Link2, Unlink,
   Loader2, LayoutGrid, Pencil, Bot, Megaphone, Bell, MessageCircle,
   Zap, Key, Settings, Settings2, Smartphone, RotateCcw, Users, Shield, UserMinus,
-  Mail, X, ExternalLink,
+  Mail, X, ExternalLink, TrendingUp,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 
@@ -29,14 +29,15 @@ const OBJETIVOS = [
 ]
 
 const TABS = [
-  { id: "agente",     label: "Agente",     icon: Bot },
-  { id: "meta",       label: "Meta Ads",   icon: Megaphone },
-  { id: "alertas",    label: "Alertas",    icon: Bell },
-  { id: "whatsapp",   label: "WhatsApp",   icon: MessageCircle },
-  { id: "skills",     label: "Skills",     icon: Zap },
-  { id: "equipe",     label: "Equipe",     icon: Users },
-  { id: "api",        label: "API",        icon: Key },
-  { id: "plataforma", label: "Plataforma", icon: Settings },
+  { id: "agente",     label: "Agente",      icon: Bot },
+  { id: "meta",       label: "Meta Ads",    icon: Megaphone },
+  { id: "google",     label: "Google Ads",  icon: TrendingUp },
+  { id: "alertas",    label: "Alertas",     icon: Bell },
+  { id: "whatsapp",   label: "WhatsApp",    icon: MessageCircle },
+  { id: "skills",     label: "Skills",      icon: Zap },
+  { id: "equipe",     label: "Equipe",      icon: Users },
+  { id: "api",        label: "API",         icon: Key },
+  { id: "plataforma", label: "Plataforma",  icon: Settings },
 ]
 
 const ROLE_LABEL: Record<string, string> = {
@@ -1249,6 +1250,195 @@ function PlataformaTab() {
   )
 }
 
+// ─── Tab: Google Ads ──────────────────────────────────────────────────────────
+
+interface GoogleAccount { id: string; customer_id: string; customer_name: string; currency_code: string; is_active: boolean; manager_customer_id: string | null; created_at: string }
+
+function GoogleAdsTab() {
+  const searchParams = useSearchParams()
+  const [isAdmin, setIsAdmin] = useState(false)
+  const [platform, setPlatform] = useState({ google_client_id: "", google_client_secret_set: false, google_developer_token_set: false })
+  const [form, setForm] = useState({ google_client_id: "", google_client_secret: "", google_developer_token: "" })
+  const [showSecret, setShowSecret]   = useState(false)
+  const [showDevToken, setShowDevToken] = useState(false)
+  const [saving, setSaving]   = useState(false)
+  const [saved, setSaved]     = useState(false)
+  const [credErr, setCredErr] = useState("")
+  const [googleStatus, setGoogleStatus] = useState<{ connected: boolean; active?: GoogleAccount; accounts?: GoogleAccount[] } | null>(null)
+  const [connecting, setConnecting]   = useState(false)
+  const [googleMsg, setGoogleMsg]     = useState<{ type: "ok"|"err"|"info"; text: string } | null>(null)
+  const [accounts, setAccounts]       = useState<GoogleAccount[]>([])
+  const [switchingId, setSwitchingId] = useState<string | null>(null)
+
+  function loadStatus() {
+    api.get("/google/status").then((d: any) => {
+      setGoogleStatus(d)
+      setAccounts(d.accounts ?? [])
+    }).catch(() => setGoogleStatus({ connected: false }))
+  }
+
+  useEffect(() => {
+    api.get("/auth/me").then((me: any) => { if (me?.is_admin) setIsAdmin(true) }).catch(() => {})
+    api.get("/settings/platform").then((d: any) => {
+      setPlatform({ google_client_id: d.google_client_id ?? "", google_client_secret_set: !!d.google_client_secret_set, google_developer_token_set: !!d.google_developer_token_set })
+      if (d.google_client_id) setForm(f => ({ ...f, google_client_id: d.google_client_id }))
+    }).catch(() => {})
+    loadStatus()
+  }, [])
+
+  useEffect(() => {
+    const g = searchParams.get("google"), msg = searchParams.get("msg")
+    if (g === "connected")  { setGoogleMsg({ type: "ok",   text: "Google Ads conectado com sucesso!" }); loadStatus() }
+    else if (g === "denied")  setGoogleMsg({ type: "info", text: "Conexão cancelada." })
+    else if (g === "expired") setGoogleMsg({ type: "err",  text: "Link expirado. Tente novamente." })
+    else if (g === "error")   setGoogleMsg({ type: "err",  text: msg ? decodeURIComponent(msg) : "Erro ao conectar." })
+  }, [searchParams])
+
+  async function saveCreds() {
+    setSaving(true); setCredErr("")
+    const payload: Record<string, string> = {}
+    if (form.google_client_id)       payload.google_client_id = form.google_client_id
+    if (form.google_client_secret)   payload.google_client_secret = form.google_client_secret
+    if (form.google_developer_token) payload.google_developer_token = form.google_developer_token
+    if (!Object.keys(payload).length) { setCredErr("Preencha pelo menos um campo."); setSaving(false); return }
+    try {
+      await api.post("/settings/platform", payload)
+      const u = await api.get("/settings/platform")
+      setPlatform({ google_client_id: u.google_client_id ?? "", google_client_secret_set: !!u.google_client_secret_set, google_developer_token_set: !!u.google_developer_token_set })
+      if (u.google_client_id) setForm(f => ({ ...f, google_client_id: u.google_client_id }))
+      setForm(f => ({ ...f, google_client_secret: "", google_developer_token: "" }))
+      setSaved(true); setTimeout(() => setSaved(false), 3000)
+    } catch (e: any) { setCredErr(e.message) } finally { setSaving(false) }
+  }
+
+  async function connect() {
+    setConnecting(true)
+    try {
+      const { url } = await api.get("/google/connect")
+      window.open(url, "_blank")
+    } catch (e: any) { setGoogleMsg({ type: "err", text: e.message }) } finally { setConnecting(false) }
+  }
+
+  async function switchAccount(id: string) {
+    setSwitchingId(id)
+    try {
+      await api.post("/google/accounts", { id })
+      setGoogleMsg({ type: "ok", text: "Conta ativada." })
+      loadStatus()
+    } catch (e: any) { setGoogleMsg({ type: "err", text: e.message }) } finally { setSwitchingId(null) }
+  }
+
+  return (
+    <div className="space-y-4 max-w-xl">
+      {/* Admin: credentials */}
+      {isAdmin && (
+        <Card>
+          <h2 className="text-[13px] font-semibold text-zinc-200">Credenciais do Google Cloud</h2>
+          <p className="text-[12px] text-zinc-600 -mt-3">Necessário para autenticação OAuth com o Google Ads.</p>
+          {credErr && <div className="text-[12px] text-red-400 bg-red-500/10 ring-1 ring-red-500/20 rounded-lg px-3 py-2">{credErr}</div>}
+          <div className="space-y-3">
+            <Field label="Client ID">
+              <input type="text" placeholder={platform.google_client_id || "xxxx.apps.googleusercontent.com"} value={form.google_client_id} onChange={e => setForm(f => ({ ...f, google_client_id: e.target.value }))} className={inputCls} />
+            </Field>
+            <Field label="Client Secret" badge={platform.google_client_secret_set ? "configurado" : undefined}>
+              <div className="relative">
+                <input type={showSecret ? "text" : "password"} placeholder={platform.google_client_secret_set ? "Deixe vazio para manter" : "GOCSPX-..."} value={form.google_client_secret} onChange={e => setForm(f => ({ ...f, google_client_secret: e.target.value }))} className={cn(inputCls, "pr-10")} />
+                <button type="button" onClick={() => setShowSecret(v => !v)} className="absolute right-3 top-2.5 text-zinc-600 hover:text-zinc-400">{showSecret ? <EyeOff size={13} /> : <Eye size={13} />}</button>
+              </div>
+            </Field>
+            <Field label="Developer Token" badge={platform.google_developer_token_set ? "configurado" : undefined}>
+              <div className="relative">
+                <input type={showDevToken ? "text" : "password"} placeholder={platform.google_developer_token_set ? "Deixe vazio para manter" : "Dev Token do Google Ads"} value={form.google_developer_token} onChange={e => setForm(f => ({ ...f, google_developer_token: e.target.value }))} className={cn(inputCls, "pr-10")} />
+                <button type="button" onClick={() => setShowDevToken(v => !v)} className="absolute right-3 top-2.5 text-zinc-600 hover:text-zinc-400">{showDevToken ? <EyeOff size={13} /> : <Eye size={13} />}</button>
+              </div>
+            </Field>
+          </div>
+          <div className="bg-white/[0.02] rounded-lg px-3 py-2.5 space-y-1 text-[11px] text-zinc-600">
+            <p className="font-medium text-zinc-500">Como obter as credenciais:</p>
+            <ol className="list-decimal list-inside space-y-0.5">
+              <li>Google Cloud Console → APIs &amp; Services → Credentials → Create OAuth 2.0 Client ID</li>
+              <li>Application type: Web application</li>
+              <li>Authorized redirect URI: <span className="font-mono text-zinc-400">{typeof window !== "undefined" ? `${window.location.origin}/api/google/callback` : "/api/google/callback"}</span></li>
+              <li>Developer Token: Google Ads Manager → Ferramentas → Centro de API</li>
+            </ol>
+          </div>
+          <SaveBtn saving={saving} saved={saved} onClick={saveCreds} />
+        </Card>
+      )}
+
+      {/* Connection */}
+      <Card>
+        <h2 className="text-[13px] font-semibold text-zinc-200">Conexão Google Ads</h2>
+        {googleMsg && (
+          <div className={cn("flex items-center gap-2 text-[12px] rounded-lg px-3 py-2 ring-1",
+            googleMsg.type === "ok"   ? "text-emerald-400 bg-emerald-500/10 ring-emerald-500/20" :
+            googleMsg.type === "err"  ? "text-red-400 bg-red-500/10 ring-red-500/20" :
+            "text-zinc-400 bg-white/[0.04] ring-white/[0.08]"
+          )}>{googleMsg.text}</div>
+        )}
+        {googleStatus === null ? (
+          <div className="flex items-center gap-2 text-zinc-600 text-[13px]"><Loader2 size={13} className="animate-spin" /> Verificando...</div>
+        ) : googleStatus.connected ? (
+          <div className="space-y-3">
+            <div className="flex items-center justify-between bg-white/[0.03] ring-1 ring-white/[0.07] rounded-lg px-4 py-3">
+              <div className="flex items-center gap-3">
+                <div className="w-7 h-7 rounded-lg bg-blue-500/15 flex items-center justify-center">
+                  <TrendingUp size={13} className="text-blue-400" />
+                </div>
+                <div>
+                  <p className="text-[13px] font-medium text-zinc-200">Google Ads conectado</p>
+                  <p className="text-[11px] text-zinc-600 mt-0.5">
+                    {googleStatus.active?.customer_name ?? googleStatus.active?.customer_id}
+                    {googleStatus.active?.manager_customer_id ? " · MCC" : ""}
+                  </p>
+                </div>
+              </div>
+              <button onClick={connect} disabled={connecting} className="flex items-center gap-1.5 px-2.5 py-1.5 text-[12px] text-violet-400 hover:bg-violet-500/10 rounded-lg transition-colors disabled:opacity-40">
+                {connecting ? <Loader2 size={11} className="animate-spin" /> : <RotateCcw size={11} />} Reconectar
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {isAdmin && !platform.google_client_id && <p className="text-[12px] text-amber-400">Configure as credenciais acima antes de conectar.</p>}
+            <button onClick={connect} disabled={connecting || (isAdmin && !platform.google_client_id)} className="flex items-center gap-2 px-4 py-2.5 bg-white text-zinc-900 text-[13px] font-semibold rounded-lg hover:bg-zinc-100 disabled:opacity-40 transition-colors">
+              {connecting ? <><Loader2 size={13} className="animate-spin" /> Redirecionando...</> : <><Link2 size={13} /> Conectar via OAuth</>}
+            </button>
+          </div>
+        )}
+      </Card>
+
+      {/* Account list */}
+      {accounts.length > 1 && (
+        <Card>
+          <h2 className="text-[13px] font-semibold text-zinc-200">Contas conectadas</h2>
+          <p className="text-[12px] text-zinc-600 -mt-3">Selecione qual conta será usada para campanhas e insights.</p>
+          <div className="space-y-1.5">
+            {accounts.map(acc => (
+              <div key={acc.id} className={cn("flex items-center gap-3 px-4 py-3 rounded-lg ring-1 transition-colors",
+                acc.is_active ? "bg-blue-500/10 ring-blue-500/30" : "bg-white/[0.02] ring-white/[0.06]"
+              )}>
+                <div className={cn("w-2 h-2 rounded-full shrink-0", acc.is_active ? "bg-blue-400" : "bg-zinc-600")} />
+                <div className="flex-1 min-w-0">
+                  <p className="text-[13px] font-medium text-zinc-200">{acc.customer_name || acc.customer_id}</p>
+                  <p className="text-[11px] text-zinc-600 mt-0.5">{acc.customer_id} · {acc.currency_code}{acc.manager_customer_id ? " · MCC" : ""}</p>
+                </div>
+                {acc.is_active
+                  ? <span className="text-[11px] text-blue-400 font-medium shrink-0">Ativa</span>
+                  : <button onClick={() => switchAccount(acc.id)} disabled={!!switchingId}
+                      className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 text-[12px] text-zinc-400 hover:text-white hover:bg-white/[0.06] rounded-lg transition-colors disabled:opacity-40">
+                      {switchingId === acc.id ? <Loader2 size={11} className="animate-spin" /> : null} Usar esta
+                    </button>
+                }
+              </div>
+            ))}
+          </div>
+        </Card>
+      )}
+    </div>
+  )
+}
+
 // ─── Equipe ───────────────────────────────────────────────────────────────────
 
 function EquipeTab() {
@@ -1510,7 +1700,7 @@ function EquipeTab() {
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
-type TabId = "agente" | "meta" | "alertas" | "whatsapp" | "skills" | "equipe" | "api" | "plataforma"
+type TabId = "agente" | "meta" | "google" | "alertas" | "whatsapp" | "skills" | "equipe" | "api" | "plataforma"
 
 function ConfiguracoesContent() {
   const [tab, setTab] = useState<TabId>("agente")
@@ -1547,6 +1737,7 @@ function ConfiguracoesContent() {
 
       {tab === "agente"     && <AgenteTab />}
       {tab === "meta"       && <MetaTab />}
+      {tab === "google"     && <GoogleAdsTab />}
       {tab === "alertas"    && <AlertasTab />}
       {tab === "whatsapp"   && <WhatsAppTab />}
       {tab === "skills"     && <SkillsTab />}

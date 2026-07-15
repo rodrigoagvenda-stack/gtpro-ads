@@ -29,7 +29,10 @@ export async function setSetting(key: string, value: string) {
   cache.delete(key)
 }
 
-export const getAnthropicKey = () => getSetting("anthropic_api_key")
-export const getMetaAppId = () => getSetting("meta_app_id")
-export const getMetaAppSecret = () => getSetting("meta_app_secret")
+export const getAnthropicKey        = () => getSetting("anthropic_api_key")
+export const getMetaAppId           = () => getSetting("meta_app_id")
+export const getMetaAppSecret       = () => getSetting("meta_app_secret")
+export const getGoogleClientId      = () => getSetting("google_client_id")
+export const getGoogleClientSecret  = () => getSetting("google_client_secret")
+export const getGoogleDeveloperToken = () => getSetting("google_developer_token")
 export { getSetting }

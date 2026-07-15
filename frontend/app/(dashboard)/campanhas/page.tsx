@@ -341,10 +341,152 @@ function KpiCards({ obj, insights, totalSpend }: { obj: ObjectiveId; insights: R
   </div>
 }
 
+// ─── Google Ads View ──────────────────────────────────────────────────────────
+
+interface GoogleCampaign {
+  id: string; name: string; status: string; channel_type: string
+  budget: number | null; impressions: number; clicks: number; spend: number
+  conversions: number; conv_value: number; ctr: number; avg_cpc: number
+  roas: number | null; cpa: number | null; currency: string
+}
+
+function GoogleCampaignsView({ preset }: { preset: string }) {
+  const router = useRouter()
+  const [campaigns, setCampaigns] = useState<GoogleCampaign[]>([])
+  const [totals, setTotals] = useState<any>(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [toggling, setToggling] = useState<string | null>(null)
+
+  useEffect(() => {
+    setLoading(true); setError(null)
+    Promise.all([
+      api.get(`/google/campaigns?date_preset=${preset}`),
+      api.get(`/google/insights?date_preset=${preset}`),
+    ]).then(([c, i]) => {
+      setCampaigns(Array.isArray(c) ? c : [])
+      setTotals(i)
+      setLoading(false)
+    }).catch(e => { setError(e.message); setLoading(false) })
+  }, [preset])
+
+  async function toggle(id: string, currentStatus: string) {
+    const enable = currentStatus !== "ENABLED"
+    setToggling(id)
+    try {
+      await api.patch("/google/campaigns", { campaign_id: id, status: enable ? "ENABLED" : "PAUSED" })
+      setCampaigns(prev => prev.map(c => c.id === id ? { ...c, status: enable ? "ENABLED" : "PAUSED" } : c))
+    } catch (e: any) { alert(e.message) } finally { setToggling(null) }
+  }
+
+  const fmt = (n: number, currency = "BRL") =>
+    new Intl.NumberFormat("pt-BR", { style: "currency", currency }).format(n)
+  const fmtNum = (n: number) => n >= 1_000_000 ? `${(n/1_000_000).toFixed(1)}M` : n >= 1000 ? `${(n/1000).toFixed(1)}k` : String(n)
+
+  return (
+    <div className="space-y-6">
+      {/* KPIs */}
+      {totals && (
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          <KpiCard label="Gasto total" value={fmt(totals.spend, totals.currency)} highlight />
+          <KpiCard label="ROAS" value={totals.roas ? `${totals.roas.toFixed(2)}x` : "—"} />
+          <KpiCard label="Conversões" value={totals.conversions > 0 ? fmtNum(totals.conversions) : "—"} />
+          <KpiCard label="CTR" value={totals.ctr ? `${(totals.ctr * 100).toFixed(2)}%` : "—"} />
+        </div>
+      )}
+
+      {/* Table */}
+      <div className="bg-white/[0.02] ring-1 ring-white/[0.06] rounded-xl overflow-hidden">
+        <div className="px-5 py-3 border-b border-white/[0.05] flex items-center justify-between">
+          <p className="text-[12px] font-medium text-zinc-500">{campaigns.length} campanhas</p>
+          <div className="hidden md:flex gap-5 items-center">
+            {["Gasto","Cliques","Conv.","ROAS","CPA"].map(h => (
+              <span key={h} className="text-[10px] text-zinc-600 uppercase tracking-wider min-w-[72px] text-right">{h}</span>
+            ))}
+          </div>
+        </div>
+
+        {loading ? (
+          <div className="px-5 py-14 text-center text-[13px] text-zinc-600">Carregando...</div>
+        ) : error ? (
+          <div className="px-5 py-12 flex flex-col items-center gap-4 text-center">
+            <AlertTriangle size={18} className="text-amber-400" />
+            {error.toLowerCase().includes("não conectada") || error.toLowerCase().includes("conecte") ? (
+              <>
+                <div>
+                  <p className="text-[14px] font-medium text-white mb-1">Conta Google Ads não conectada</p>
+                  <p className="text-[12px] text-zinc-500">Vá em <strong className="text-zinc-300">Configurações → Google Ads</strong> e conecte sua conta.</p>
+                </div>
+                <button onClick={() => router.push("/configuracoes?tab=google")}
+                  className="flex items-center gap-1.5 px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-[12px] font-medium rounded-lg transition-colors">
+                  <Link2 size={12} /> Conectar Google Ads <ArrowRight size={12} />
+                </button>
+              </>
+            ) : (
+              <>
+                <p className="text-[13px] text-red-400">Erro ao carregar campanhas</p>
+                <p className="text-[11px] text-zinc-600 max-w-sm">{error}</p>
+              </>
+            )}
+          </div>
+        ) : campaigns.length === 0 ? (
+          <div className="px-5 py-14 text-center text-[13px] text-zinc-600">Nenhuma campanha encontrada.</div>
+        ) : (
+          <div className="divide-y divide-white/[0.04]">
+            {campaigns.map(c => {
+              const isActive = c.status === "ENABLED"
+              return (
+                <div key={c.id} className="flex items-center gap-4 px-5 py-3 hover:bg-white/[0.02] transition-colors">
+                  {/* Toggle */}
+                  <button onClick={() => toggle(c.id, c.status)} disabled={toggling === c.id}
+                    className={cn("shrink-0 w-8 h-4 rounded-full transition-colors relative",
+                      isActive ? "bg-blue-600" : "bg-zinc-700",
+                      toggling === c.id && "opacity-50"
+                    )}>
+                    <span className={cn("pointer-events-none absolute top-0.5 left-0.5 w-3 h-3 bg-white rounded-full shadow transition-transform",
+                      isActive ? "translate-x-4" : "translate-x-0"
+                    )} />
+                  </button>
+
+                  {/* Name */}
+                  <div className="flex-1 min-w-0">
+                    <p className="text-[13px] text-zinc-200 truncate">{c.name}</p>
+                    <div className="flex items-center gap-2 mt-0.5">
+                      <span className={cn("text-[10px] font-medium", isActive ? "text-emerald-400" : "text-zinc-600")}>
+                        {isActive ? "Ativa" : "Pausada"}
+                      </span>
+                      <span className="text-[10px] text-zinc-700">{c.channel_type?.replace("_", " ")}</span>
+                      {c.budget && <span className="text-[10px] text-zinc-700">Orç: {fmt(c.budget, c.currency)}/dia</span>}
+                    </div>
+                  </div>
+
+                  {/* Metrics */}
+                  <div className="hidden md:flex gap-5 items-center shrink-0">
+                    <span className="text-[12px] text-zinc-300 min-w-[72px] text-right">{fmt(c.spend, c.currency)}</span>
+                    <span className="text-[12px] text-zinc-400 min-w-[72px] text-right">{fmtNum(c.clicks)}</span>
+                    <span className="text-[12px] text-zinc-400 min-w-[72px] text-right">{c.conversions > 0 ? fmtNum(c.conversions) : "—"}</span>
+                    <span className="text-[12px] min-w-[72px] text-right" style={{ color: c.roas === null ? "#52525b" : c.roas >= 2 ? "#34d399" : c.roas >= 1 ? "#fbbf24" : "#f87171" }}>
+                      {c.roas !== null ? `${c.roas.toFixed(2)}x` : "—"}
+                    </span>
+                    <span className="text-[12px] text-zinc-400 min-w-[72px] text-right">
+                      {c.cpa !== null ? fmt(c.cpa, c.currency) : "—"}
+                    </span>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function CampanhasPage() {
   const router = useRouter()
+  const [platform, setPlatform] = useState<"meta" | "google">("meta")
   const [campaigns, setCampaigns] = useState<Campaign[]>([])
   const [page, setPage] = useState(1)
   const [insights, setInsights] = useState<Record<string, any>>({})
@@ -411,7 +553,16 @@ export default function CampanhasPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-[17px] font-semibold text-white">Campanhas</h1>
-          <p className="text-[12px] text-zinc-600 mt-0.5">Performance da conta Meta Ads</p>
+          <div className="flex items-center gap-1 mt-2 bg-white/[0.04] rounded-lg p-0.5 ring-1 ring-white/[0.06] w-fit">
+            {([{ id: "meta", label: "Meta Ads" }, { id: "google", label: "Google Ads" }] as const).map(p => (
+              <button key={p.id} onClick={() => setPlatform(p.id)}
+                className={cn("px-3 py-1.5 rounded-md text-[12px] font-medium transition-colors",
+                  platform === p.id ? "bg-white/[0.08] text-white" : "text-zinc-500 hover:text-zinc-300"
+                )}>
+                {p.label}
+              </button>
+            ))}
+          </div>
         </div>
         <div className="flex items-center gap-2 flex-wrap justify-end">
           <div className="flex items-center bg-white/[0.04] rounded-lg p-0.5 ring-1 ring-white/[0.06]">
@@ -436,6 +587,12 @@ export default function CampanhasPage() {
           )}
         </div>
       </div>
+
+      {/* Google Ads view */}
+      {platform === "google" && <GoogleCampaignsView preset={preset} />}
+
+      {/* Meta Ads content */}
+      {platform === "meta" && <>
 
       {/* Objective tabs */}
       <div className="flex items-center gap-1.5 flex-wrap">
@@ -603,6 +760,8 @@ export default function CampanhasPage() {
           )
         })()}
       </div>
+
+      </>}
     </div>
   )
 }
