@@ -58,7 +58,13 @@ async function gadsPost(path: string, body: unknown, accessToken: string, manage
   if (managerCustomerId) headers["login-customer-id"] = managerCustomerId
 
   const res = await fetch(`${ADS_BASE}${path}`, { method: "POST", headers, body: JSON.stringify(body) })
-  const data = await res.json()
+  let data: any
+  try {
+    data = await res.json()
+  } catch {
+    const text = await res.text().catch(() => "")
+    throw new Error(`Google Ads API ${res.status}: ${text.slice(0, 300)}`)
+  }
   if (!res.ok) {
     const msg = data?.error?.message ?? data?.error?.details?.[0]?.errors?.[0]?.message ?? JSON.stringify(data)
     throw new Error(msg)
@@ -90,8 +96,14 @@ export async function listAccessibleCustomers(accessToken: string): Promise<{ re
   const res = await fetch(`${ADS_BASE}/customers:listAccessibleCustomers`, {
     headers: { Authorization: `Bearer ${accessToken}`, "developer-token": devToken },
   })
-  const data = await res.json()
-  if (!res.ok) throw new Error(data?.error?.message ?? JSON.stringify(data))
+  let data: any
+  try {
+    data = await res.json()
+  } catch {
+    const text = await res.text().catch(() => "")
+    throw new Error(`Google Ads API ${res.status}: ${text.slice(0, 300)}`)
+  }
+  if (!res.ok) throw new Error(data?.error?.message ?? data?.error?.details?.[0]?.errors?.[0]?.message ?? JSON.stringify(data))
   return (data.resourceNames ?? []).map((r: string) => ({ resourceName: r, id: r.replace("customers/", "") }))
 }
 
