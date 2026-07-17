@@ -7,11 +7,17 @@ import {
   saveGoogleConnections,
 } from "@/lib/server/google-ads"
 
+// Format a raw customer ID as Google displays it: XXX-XXX-XXXX
+function fmtId(id: string): string {
+  const n = id.replace(/\D/g, "")
+  if (n.length === 10) return `${n.slice(0, 3)}-${n.slice(3, 6)}-${n.slice(6)}`
+  return n
+}
+
 export async function GET(req: NextRequest) {
   const origin = process.env.NEXT_PUBLIC_APP_URL ?? "https://gtpro.vendai.pro"
   const redirectUri = `${origin}/api/google/callback`
 
-  // Top-level catch so no unhandled rejection can crash the process
   try {
     const { searchParams } = req.nextUrl
     const code  = searchParams.get("code")
@@ -35,7 +41,6 @@ export async function GET(req: NextRequest) {
     if (oauthState && new Date(oauthState.expires_at) >= new Date()) {
       tenantId = oauthState.tenant_id as string
     } else {
-      // Fallback: provider column may not exist yet
       if (dbErr) console.warn("[google/callback] provider filter failed, trying without:", dbErr.message)
       const { data: fallback } = await supabase
         .from("oauth_states")
@@ -55,27 +60,50 @@ export async function GET(req: NextRequest) {
     console.log(`[google/callback] accessible customers: ${customers.length}`)
     if (!customers.length) throw new Error("Nenhuma conta Google Ads acessível encontrada")
 
+    type CDetail = { id: string; name: string; currencyCode: string; isManager: boolean }
+    const customerDetails: CDetail[] = []
     let managerCustomerId: string | undefined
-    const customerDetails: { id: string; name: string; currencyCode: string; isManager: boolean }[] = []
+    const failedIds: string[] = []
 
+    // Pass 1 — try each account individually (finds MCC which can use itself as login)
     for (const c of customers) {
       try {
-        const info = await getCustomerInfo(c.id, tokens.access_token, c.id)
+        const info = await getCustomerInfo(c.id, tokens.access_token)
         if (info) {
           if (info.manager) managerCustomerId = c.id
           customerDetails.push({
             id:           c.id,
-            name:         info.descriptiveName ?? `Conta ${c.id}`,
+            name:         info.descriptiveName || fmtId(c.id),
             currencyCode: info.currencyCode ?? "BRL",
             isManager:    !!info.manager,
           })
+        } else {
+          failedIds.push(c.id)
         }
-      } catch (e: any) {
-        console.warn(`[google/callback] could not get info for ${c.id}:`, e.message)
-        customerDetails.push({ id: c.id, name: `Conta ${c.id}`, currencyCode: "BRL", isManager: false })
+      } catch {
+        failedIds.push(c.id)
       }
     }
 
+    // Pass 2 — retry sub-accounts using the identified MCC as login-customer-id
+    if (failedIds.length > 0) {
+      console.log(`[google/callback] pass 2: ${failedIds.length} accounts, manager=${managerCustomerId}`)
+      for (const id of failedIds) {
+        try {
+          const info = await getCustomerInfo(id, tokens.access_token, managerCustomerId)
+          customerDetails.push({
+            id,
+            name:         info?.descriptiveName || fmtId(id),
+            currencyCode: info?.currencyCode ?? "BRL",
+            isManager:    false,
+          })
+        } catch {
+          customerDetails.push({ id, name: fmtId(id), currencyCode: "BRL", isManager: false })
+        }
+      }
+    }
+
+    // Save client accounts only; if none identified as manager, save all
     const clientAccounts = customerDetails.filter(c => !c.isManager)
     const toSave = clientAccounts.length ? clientAccounts : customerDetails
 

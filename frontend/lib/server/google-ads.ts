@@ -155,20 +155,28 @@ export async function listAccessibleCustomers(accessToken: string): Promise<{ re
 }
 
 
-export async function getCustomerInfo(customerId: string, accessToken: string, managerCustomerId?: string) {
+export async function getCustomerInfo(customerId: string, accessToken: string, loginCustomerId?: string) {
   const devToken = await getGoogleDeveloperToken()
-  const headers: Record<string, string> = {
-    Authorization:     `Bearer ${accessToken}`,
-    "developer-token": devToken,
-    "login-customer-id": managerCustomerId ?? customerId,
+  const base = { Authorization: `Bearer ${accessToken}`, "developer-token": devToken }
+
+  // Try progressively: no login-customer-id → self → provided manager
+  const attempts: Record<string, string>[] = [
+    { ...base },
+    { ...base, "login-customer-id": customerId },
+    ...(loginCustomerId && loginCustomerId !== customerId
+      ? [{ ...base, "login-customer-id": loginCustomerId }]
+      : []),
+  ]
+
+  for (const headers of attempts) {
+    try {
+      const data = await gadsRequest(`/customers/${customerId}`, "GET", headers)
+      if (data?.id || data?.resourceName) return data
+    } catch (e: any) {
+      console.warn(`[google-ads] getCustomerInfo ${customerId} (login=${headers["login-customer-id"] ?? "none"}):`, e.message)
+    }
   }
-  try {
-    // REST GET is simpler than GAQL and works without knowing the MCC upfront
-    return await gadsRequest(`/customers/${customerId}`, "GET", headers)
-  } catch (e: any) {
-    console.warn(`[google-ads] getCustomerInfo ${customerId}:`, e.message)
-    return null
-  }
+  return null
 }
 
 export async function createGoogleCampaign(tenantId: string, params: {
