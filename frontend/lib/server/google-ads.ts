@@ -3,7 +3,7 @@ import { decrypt, encrypt } from "./crypto"
 import { getGoogleClientId, getGoogleClientSecret, getGoogleDeveloperToken } from "./platform"
 
 const OAUTH_BASE  = "https://oauth2.googleapis.com"
-const ADS_BASE    = "https://googleads.googleapis.com/v18"
+const ADS_BASE    = "https://googleads.googleapis.com/v20"
 
 // ─── OAuth helpers ────────────────────────────────────────────────────────────
 
