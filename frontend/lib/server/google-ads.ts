@@ -156,9 +156,65 @@ export async function listAccessibleCustomers(accessToken: string): Promise<{ re
 
 
 export async function getCustomerInfo(customerId: string, accessToken: string, managerCustomerId?: string) {
-  const query = `SELECT customer.id, customer.descriptive_name, customer.currency_code, customer.manager FROM customer WHERE customer.id = ${customerId}`
-  const data  = await gadsPost(`/customers/${customerId}/googleAds:search`, { query }, accessToken, managerCustomerId)
-  return data.results?.[0]?.customer ?? null
+  const devToken = await getGoogleDeveloperToken()
+  const headers: Record<string, string> = {
+    Authorization:     `Bearer ${accessToken}`,
+    "developer-token": devToken,
+    "login-customer-id": managerCustomerId ?? customerId,
+  }
+  try {
+    // REST GET is simpler than GAQL and works without knowing the MCC upfront
+    return await gadsRequest(`/customers/${customerId}`, "GET", headers)
+  } catch (e: any) {
+    console.warn(`[google-ads] getCustomerInfo ${customerId}:`, e.message)
+    return null
+  }
+}
+
+export async function createGoogleCampaign(tenantId: string, params: {
+  name: string
+  dailyBudget: number  // em reais
+  channelType: "SEARCH" | "DISPLAY" | "PERFORMANCE_MAX"
+}) {
+  const { accessToken, conn } = await getTokens(tenantId)
+  const customerId = conn.customer_id
+  const mcc        = conn.manager_customer_id
+
+  // 1. Criar orçamento diário
+  const budgetRes = await gadsPost(
+    `/customers/${customerId}/campaignBudgets:mutate`,
+    { operations: [{ create: { name: `${params.name} Budget`, amountMicros: Math.round(params.dailyBudget * 1_000_000), deliveryMethod: "STANDARD" } }] },
+    accessToken, mcc,
+  )
+  const budgetRn = budgetRes.results?.[0]?.resourceName
+  if (!budgetRn) throw new Error("Falha ao criar orçamento da campanha")
+
+  // 2. Criar campanha com lance automático
+  const base: Record<string, any> = {
+    name:                    params.name,
+    status:                  "PAUSED",
+    advertisingChannelType:  params.channelType,
+    campaignBudget:          budgetRn,
+  }
+
+  if (params.channelType === "SEARCH") {
+    base.maximizeClicks = {}
+    base.networkSettings = { targetGoogleSearch: true, targetSearchNetwork: true, targetContentNetwork: false }
+  } else if (params.channelType === "PERFORMANCE_MAX") {
+    base.maximizeConversionValue = { targetRoas: 0 }
+  } else {
+    base.maximizeClicks = {}
+  }
+
+  const campaignRes = await gadsPost(
+    `/customers/${customerId}/campaigns:mutate`,
+    { operations: [{ create: base }] },
+    accessToken, mcc,
+  )
+  return {
+    resourceName: campaignRes.results?.[0]?.resourceName,
+    customerId,
+  }
 }
 
 export async function saveGoogleConnections(

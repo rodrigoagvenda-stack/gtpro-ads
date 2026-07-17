@@ -1,6 +1,6 @@
 import { NextRequest } from "next/server"
 import { getTenant, unauthorized } from "@/lib/server/auth"
-import { getGoogleCampaigns, toggleGoogleCampaign } from "@/lib/server/google-ads"
+import { getGoogleCampaigns, toggleGoogleCampaign, createGoogleCampaign } from "@/lib/server/google-ads"
 
 export async function GET(req: NextRequest) {
   const tenant = await getTenant(req)
@@ -9,6 +9,24 @@ export async function GET(req: NextRequest) {
     const datePreset = req.nextUrl.searchParams.get("date_preset") ?? "last_7d"
     const campaigns = await getGoogleCampaigns(tenant.tenant_id, datePreset)
     return Response.json(campaigns)
+  } catch (e: any) {
+    return Response.json({ error: e.message }, { status: 400 })
+  }
+}
+
+export async function POST(req: NextRequest) {
+  const tenant = await getTenant(req)
+  if (!tenant) return unauthorized()
+  try {
+    const { name, daily_budget, channel_type } = await req.json()
+    if (!name || !daily_budget || !channel_type)
+      return Response.json({ error: "name, daily_budget e channel_type são obrigatórios" }, { status: 400 })
+    const result = await createGoogleCampaign(tenant.tenant_id, {
+      name,
+      dailyBudget: Number(daily_budget),
+      channelType: channel_type,
+    })
+    return Response.json(result)
   } catch (e: any) {
     return Response.json({ error: e.message }, { status: 400 })
   }

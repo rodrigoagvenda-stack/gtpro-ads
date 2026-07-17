@@ -8,7 +8,7 @@ import KpiCard from "@/components/dashboard/KpiCard"
 import CampaignRow, { ALL_METRIC_DEFS, type MetricDef, type MetricKey } from "@/components/dashboard/CampaignRow"
 import type { Campaign } from "@/types"
 import { cn } from "@/lib/utils"
-import { AlertTriangle, RefreshCw, Key, Calendar, Link2, ArrowRight, SlidersHorizontal, Check } from "lucide-react"
+import { AlertTriangle, RefreshCw, Key, Calendar, Link2, ArrowRight, SlidersHorizontal, Check, Plus, X } from "lucide-react"
 
 function isTokenExpired(msg: string) {
   return msg.includes("190") || msg.includes("463") || msg.includes("Session has expired") || msg.includes("access token")
@@ -350,6 +350,84 @@ interface GoogleCampaign {
   roas: number | null; cpa: number | null; currency: string
 }
 
+const CHANNEL_TYPES = [
+  { value: "SEARCH",          label: "Search",          desc: "Anúncios em resultados de pesquisa" },
+  { value: "DISPLAY",         label: "Display",         desc: "Banners em sites parceiros" },
+  { value: "PERFORMANCE_MAX", label: "Performance Max", desc: "Campanhas automáticas em todos os canais" },
+] as const
+
+function NewGoogleCampaignModal({ onClose, onCreated }: { onClose: () => void; onCreated: () => void }) {
+  const [name, setName] = useState("")
+  const [budget, setBudget] = useState("")
+  const [channelType, setChannelType] = useState<"SEARCH" | "DISPLAY" | "PERFORMANCE_MAX">("SEARCH")
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault()
+    if (!name.trim() || !budget) return
+    setSaving(true); setError(null)
+    try {
+      await api.post("/google/campaigns", { name: name.trim(), daily_budget: Number(budget), channel_type: channelType })
+      onCreated()
+      onClose()
+    } catch (e: any) { setError(e.message) } finally { setSaving(false) }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+      <div className="w-full max-w-md bg-zinc-900 ring-1 ring-white/[0.1] rounded-2xl shadow-2xl">
+        <div className="flex items-center justify-between px-6 pt-5 pb-4 border-b border-white/[0.06]">
+          <h2 className="text-[15px] font-semibold text-white">Nova Campanha Google Ads</h2>
+          <button onClick={onClose} className="text-zinc-500 hover:text-zinc-300 transition-colors"><X size={16} /></button>
+        </div>
+        <form onSubmit={submit} className="px-6 py-5 space-y-4">
+          <div>
+            <label className="block text-[11px] text-zinc-500 mb-1.5">Nome da campanha</label>
+            <input value={name} onChange={e => setName(e.target.value)} required placeholder="Ex: Campanha Marca Julho"
+              className="w-full bg-white/[0.04] ring-1 ring-white/[0.08] rounded-lg px-3 py-2 text-[13px] text-white placeholder:text-zinc-600 focus:outline-none focus:ring-blue-500/50" />
+          </div>
+          <div>
+            <label className="block text-[11px] text-zinc-500 mb-1.5">Orçamento diário (R$)</label>
+            <input value={budget} onChange={e => setBudget(e.target.value)} required type="number" min="1" step="0.01" placeholder="50.00"
+              className="w-full bg-white/[0.04] ring-1 ring-white/[0.08] rounded-lg px-3 py-2 text-[13px] text-white placeholder:text-zinc-600 focus:outline-none focus:ring-blue-500/50" />
+          </div>
+          <div>
+            <label className="block text-[11px] text-zinc-500 mb-1.5">Tipo de campanha</label>
+            <div className="space-y-2">
+              {CHANNEL_TYPES.map(ct => (
+                <button key={ct.value} type="button" onClick={() => setChannelType(ct.value)}
+                  className={cn("w-full flex items-start gap-3 px-3 py-2.5 rounded-lg ring-1 transition-colors text-left",
+                    channelType === ct.value ? "bg-blue-600/10 ring-blue-500/40 text-white" : "bg-white/[0.03] ring-white/[0.06] text-zinc-400 hover:bg-white/[0.06]"
+                  )}>
+                  <div className={cn("w-3.5 h-3.5 mt-0.5 rounded-full border-2 shrink-0 transition-colors",
+                    channelType === ct.value ? "border-blue-500 bg-blue-500" : "border-zinc-600"
+                  )} />
+                  <div>
+                    <p className="text-[12px] font-medium leading-tight">{ct.label}</p>
+                    <p className="text-[11px] text-zinc-600 mt-0.5">{ct.desc}</p>
+                  </div>
+                </button>
+              ))}
+            </div>
+          </div>
+          {error && <p className="text-[12px] text-red-400">{error}</p>}
+          <div className="flex gap-2 pt-1">
+            <button type="button" onClick={onClose}
+              className="flex-1 px-4 py-2 bg-white/[0.04] ring-1 ring-white/[0.08] rounded-lg text-[13px] text-zinc-400 hover:text-zinc-200 transition-colors">
+              Cancelar
+            </button>
+            <button type="submit" disabled={saving || !name.trim() || !budget}
+              className="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 rounded-lg text-[13px] text-white font-medium transition-colors">
+              {saving ? "Criando..." : "Criar campanha"}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  )
+}
+
 function GoogleCampaignsView({ preset }: { preset: string }) {
   const router = useRouter()
   const [campaigns, setCampaigns] = useState<GoogleCampaign[]>([])
@@ -357,6 +435,8 @@ function GoogleCampaignsView({ preset }: { preset: string }) {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [toggling, setToggling] = useState<string | null>(null)
+  const [showCreate, setShowCreate] = useState(false)
+  const [refreshKey, setRefreshKey] = useState(0)
 
   useEffect(() => {
     setLoading(true); setError(null)
@@ -368,7 +448,7 @@ function GoogleCampaignsView({ preset }: { preset: string }) {
       setTotals(i)
       setLoading(false)
     }).catch(e => { setError(e.message); setLoading(false) })
-  }, [preset])
+  }, [preset, refreshKey])
 
   async function toggle(id: string, currentStatus: string) {
     const enable = currentStatus !== "ENABLED"
@@ -385,6 +465,13 @@ function GoogleCampaignsView({ preset }: { preset: string }) {
 
   return (
     <div className="space-y-6">
+      {showCreate && (
+        <NewGoogleCampaignModal
+          onClose={() => setShowCreate(false)}
+          onCreated={() => setRefreshKey(k => k + 1)}
+        />
+      )}
+
       {/* KPIs */}
       {totals && (
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
@@ -399,10 +486,16 @@ function GoogleCampaignsView({ preset }: { preset: string }) {
       <div className="bg-white/[0.02] ring-1 ring-white/[0.06] rounded-xl overflow-hidden">
         <div className="px-5 py-3 border-b border-white/[0.05] flex items-center justify-between">
           <p className="text-[12px] font-medium text-zinc-500">{campaigns.length} campanhas</p>
-          <div className="hidden md:flex gap-5 items-center">
-            {["Gasto","Cliques","Conv.","ROAS","CPA"].map(h => (
-              <span key={h} className="text-[10px] text-zinc-600 uppercase tracking-wider min-w-[72px] text-right">{h}</span>
-            ))}
+          <div className="flex items-center gap-4">
+            <div className="hidden md:flex gap-5 items-center">
+              {["Gasto","Cliques","Conv.","ROAS","CPA"].map(h => (
+                <span key={h} className="text-[10px] text-zinc-600 uppercase tracking-wider min-w-[72px] text-right">{h}</span>
+              ))}
+            </div>
+            <button onClick={() => setShowCreate(true)}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white text-[12px] font-medium rounded-lg transition-colors">
+              <Plus size={12} /> Nova campanha
+            </button>
           </div>
         </div>
 
@@ -430,14 +523,19 @@ function GoogleCampaignsView({ preset }: { preset: string }) {
             )}
           </div>
         ) : campaigns.length === 0 ? (
-          <div className="px-5 py-14 text-center text-[13px] text-zinc-600">Nenhuma campanha encontrada.</div>
+          <div className="px-5 py-14 flex flex-col items-center gap-4">
+            <p className="text-[13px] text-zinc-600">Nenhuma campanha encontrada.</p>
+            <button onClick={() => setShowCreate(true)}
+              className="flex items-center gap-1.5 px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-[12px] font-medium rounded-lg transition-colors">
+              <Plus size={12} /> Criar primeira campanha
+            </button>
+          </div>
         ) : (
           <div className="divide-y divide-white/[0.04]">
             {campaigns.map(c => {
               const isActive = c.status === "ENABLED"
               return (
                 <div key={c.id} className="flex items-center gap-4 px-5 py-3 hover:bg-white/[0.02] transition-colors">
-                  {/* Toggle */}
                   <button onClick={() => toggle(c.id, c.status)} disabled={toggling === c.id}
                     className={cn("shrink-0 w-8 h-4 rounded-full transition-colors relative",
                       isActive ? "bg-blue-600" : "bg-zinc-700",
@@ -447,20 +545,16 @@ function GoogleCampaignsView({ preset }: { preset: string }) {
                       isActive ? "translate-x-4" : "translate-x-0"
                     )} />
                   </button>
-
-                  {/* Name */}
                   <div className="flex-1 min-w-0">
                     <p className="text-[13px] text-zinc-200 truncate">{c.name}</p>
                     <div className="flex items-center gap-2 mt-0.5">
                       <span className={cn("text-[10px] font-medium", isActive ? "text-emerald-400" : "text-zinc-600")}>
                         {isActive ? "Ativa" : "Pausada"}
                       </span>
-                      <span className="text-[10px] text-zinc-700">{c.channel_type?.replace("_", " ")}</span>
+                      <span className="text-[10px] text-zinc-700">{c.channel_type?.replace(/_/g, " ")}</span>
                       {c.budget && <span className="text-[10px] text-zinc-700">Orç: {fmt(c.budget, c.currency)}/dia</span>}
                     </div>
                   </div>
-
-                  {/* Metrics */}
                   <div className="hidden md:flex gap-5 items-center shrink-0">
                     <span className="text-[12px] text-zinc-300 min-w-[72px] text-right">{fmt(c.spend, c.currency)}</span>
                     <span className="text-[12px] text-zinc-400 min-w-[72px] text-right">{fmtNum(c.clicks)}</span>
