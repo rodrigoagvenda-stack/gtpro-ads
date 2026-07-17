@@ -4,7 +4,7 @@ import { getGoogleClientId, getGoogleClientSecret, getGoogleDeveloperToken } fro
 
 const OAUTH_BASE  = "https://oauth2.googleapis.com"
 // Configurável via env GOOGLE_ADS_API_VERSION no Easypanel (ex: v26, v27)
-const GADS_VERSION_START = parseInt((process.env.GOOGLE_ADS_API_VERSION ?? "v26").replace("v", ""), 10)
+const GADS_VERSION_START = parseInt((process.env.GOOGLE_ADS_API_VERSION ?? "v21").replace("v", ""), 10)
 // Cache da versão resolvida para evitar retries desnecessários no mesmo processo
 let _resolvedVersion: number | null = null
 
@@ -81,7 +81,7 @@ async function gadsRequest(
   const start = _resolvedVersion ?? GADS_VERSION_START
   let version = start
 
-  while (version <= 40) {
+  while (version <= 30) {
     const url = `https://googleads.googleapis.com/v${version}${path}`
     const res = await fetch(url, { method, headers: extraHeaders, body })
     let data: any
@@ -110,7 +110,7 @@ async function gadsRequest(
     }
     return data
   }
-  throw new Error(`Nenhuma versão Google Ads API suportada (tentei v${start}–v40)`)
+  throw new Error(`Nenhuma versão Google Ads API suportada (tentei v${start}–v30). Acesse developers.google.com/google-ads/api/docs/release-notes para ver a versão atual e configure GOOGLE_ADS_API_VERSION no Easypanel.`)
 }
 
 // ─── API request helper ───────────────────────────────────────────────────────
