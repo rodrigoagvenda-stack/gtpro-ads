@@ -108,10 +108,10 @@ export async function listAccessibleCustomers(accessToken: string): Promise<{ re
     throw new Error(`Google Ads API ${res.status}: ${text.slice(0, 300)}`)
   }
   if (!res.ok) {
+    console.error(`[google-ads] listAccessibleCustomers full error ${res.status}:`, JSON.stringify(data))
     const msg = data?.error?.message
       ?? data?.error?.details?.[0]?.errors?.[0]?.message
       ?? JSON.stringify(data).slice(0, 400)
-    console.error(`[google-ads] listAccessibleCustomers error ${res.status}:`, msg)
     if (res.status === 404)
       throw new Error("Google Ads API 404: habilite a API do Google Ads em Google Cloud Console → APIs e serviços → Ativar APIs → 'Google Ads API'")
     throw new Error(msg)
