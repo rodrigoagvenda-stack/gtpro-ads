@@ -93,7 +93,8 @@ async function getTokens(tenantId: string): Promise<{ accessToken: string; conn:
 
 export async function listAccessibleCustomers(accessToken: string): Promise<{ resourceName: string; id: string }[]> {
   const devToken = await getGoogleDeveloperToken()
-  const res = await fetch(`${ADS_BASE}/customers:listAccessibleCustomers`, {
+  const url = `${ADS_BASE}/customers:listAccessibleCustomers`
+  const res = await fetch(url, {
     headers: { Authorization: `Bearer ${accessToken}`, "developer-token": devToken },
   })
   let data: any
@@ -101,9 +102,20 @@ export async function listAccessibleCustomers(accessToken: string): Promise<{ re
     data = await res.json()
   } catch {
     const text = await res.text().catch(() => "")
+    console.error(`[google-ads] listAccessibleCustomers ${res.status} non-JSON:`, text.slice(0, 500))
+    if (res.status === 404)
+      throw new Error("Google Ads API 404: habilite a API do Google Ads em Google Cloud Console → APIs e serviços → Ativar APIs → 'Google Ads API'")
     throw new Error(`Google Ads API ${res.status}: ${text.slice(0, 300)}`)
   }
-  if (!res.ok) throw new Error(data?.error?.message ?? data?.error?.details?.[0]?.errors?.[0]?.message ?? JSON.stringify(data))
+  if (!res.ok) {
+    const msg = data?.error?.message
+      ?? data?.error?.details?.[0]?.errors?.[0]?.message
+      ?? JSON.stringify(data).slice(0, 400)
+    console.error(`[google-ads] listAccessibleCustomers error ${res.status}:`, msg)
+    if (res.status === 404)
+      throw new Error("Google Ads API 404: habilite a API do Google Ads em Google Cloud Console → APIs e serviços → Ativar APIs → 'Google Ads API'")
+    throw new Error(msg)
+  }
   return (data.resourceNames ?? []).map((r: string) => ({ resourceName: r, id: r.replace("customers/", "") }))
 }
 
