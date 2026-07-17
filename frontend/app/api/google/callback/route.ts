@@ -24,7 +24,7 @@ export async function GET(req: NextRequest) {
     const supabase = createServiceClient()
 
     // Try with provider filter first (requires migration 022)
-    let tenantId: string | null = null
+    let tenantId: string
     const { data: oauthState, error: dbErr } = await supabase
       .from("oauth_states")
       .select("tenant_id, expires_at")
@@ -33,7 +33,7 @@ export async function GET(req: NextRequest) {
       .single()
 
     if (oauthState && new Date(oauthState.expires_at) >= new Date()) {
-      tenantId = oauthState.tenant_id
+      tenantId = oauthState.tenant_id as string
     } else {
       // Fallback: provider column may not exist yet
       if (dbErr) console.warn("[google/callback] provider filter failed, trying without:", dbErr.message)
@@ -44,7 +44,7 @@ export async function GET(req: NextRequest) {
         .single()
       if (!fallback || new Date(fallback.expires_at) < new Date())
         return Response.redirect(`${origin}/configuracoes?google=expired`, 302)
-      tenantId = fallback.tenant_id
+      tenantId = fallback.tenant_id as string
     }
 
     await supabase.from("oauth_states").delete().eq("state", state)
