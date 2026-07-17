@@ -46,6 +46,27 @@ async function refreshGoogleToken(refreshToken: string): Promise<string> {
   return data.access_token
 }
 
+// ─── Error extraction ─────────────────────────────────────────────────────────
+
+function extractGadsError(status: number, data: any, label: string): string {
+  const gadsErrors = data?.error?.details?.find((d: any) =>
+    d["@type"]?.includes("GoogleAdsFailure")
+  )?.errors ?? []
+
+  const codes = gadsErrors.map((e: any) => {
+    const codeEntry = Object.entries(e.errorCode ?? {})[0]
+    return codeEntry ? `${codeEntry[0]}:${codeEntry[1]}` : null
+  }).filter(Boolean)
+
+  const deepMsg = gadsErrors[0]?.message
+  const topMsg  = data?.error?.message ?? JSON.stringify(data).slice(0, 400)
+  const msg     = deepMsg ? `${deepMsg} (${topMsg})` : topMsg
+  const codeStr = codes.length ? ` [${codes.join(", ")}]` : ""
+
+  console.error(`[google-ads] ${label} ${status}:`, JSON.stringify(data))
+  return `${msg}${codeStr}`
+}
+
 // ─── API request helper ───────────────────────────────────────────────────────
 
 async function gadsPost(path: string, body: unknown, accessToken: string, managerCustomerId?: string) {
@@ -57,18 +78,17 @@ async function gadsPost(path: string, body: unknown, accessToken: string, manage
   }
   if (managerCustomerId) headers["login-customer-id"] = managerCustomerId
 
-  const res = await fetch(`${ADS_BASE}${path}`, { method: "POST", headers, body: JSON.stringify(body) })
+  const url = `${ADS_BASE}${path}`
+  const res = await fetch(url, { method: "POST", headers, body: JSON.stringify(body) })
   let data: any
   try {
     data = await res.json()
   } catch {
     const text = await res.text().catch(() => "")
+    console.error(`[google-ads] gadsPost ${res.status} non-JSON (${path}):`, text.slice(0, 500))
     throw new Error(`Google Ads API ${res.status}: ${text.slice(0, 300)}`)
   }
-  if (!res.ok) {
-    const msg = data?.error?.message ?? data?.error?.details?.[0]?.errors?.[0]?.message ?? JSON.stringify(data)
-    throw new Error(msg)
-  }
+  if (!res.ok) throw new Error(extractGadsError(res.status, data, `gadsPost ${path}`))
   return data
 }
 
@@ -94,6 +114,7 @@ async function getTokens(tenantId: string): Promise<{ accessToken: string; conn:
 export async function listAccessibleCustomers(accessToken: string): Promise<{ resourceName: string; id: string }[]> {
   const devToken = await getGoogleDeveloperToken()
   const url = `${ADS_BASE}/customers:listAccessibleCustomers`
+  console.log(`[google-ads] listAccessibleCustomers devTokenLen=${devToken?.length ?? 0} accessTokenLen=${accessToken?.length ?? 0}`)
   const res = await fetch(url, {
     headers: { Authorization: `Bearer ${accessToken}`, "developer-token": devToken },
   })
@@ -103,19 +124,9 @@ export async function listAccessibleCustomers(accessToken: string): Promise<{ re
   } catch {
     const text = await res.text().catch(() => "")
     console.error(`[google-ads] listAccessibleCustomers ${res.status} non-JSON:`, text.slice(0, 500))
-    if (res.status === 404)
-      throw new Error("Google Ads API 404: habilite a API do Google Ads em Google Cloud Console → APIs e serviços → Ativar APIs → 'Google Ads API'")
     throw new Error(`Google Ads API ${res.status}: ${text.slice(0, 300)}`)
   }
-  if (!res.ok) {
-    console.error(`[google-ads] listAccessibleCustomers full error ${res.status}:`, JSON.stringify(data))
-    const msg = data?.error?.message
-      ?? data?.error?.details?.[0]?.errors?.[0]?.message
-      ?? JSON.stringify(data).slice(0, 400)
-    if (res.status === 404)
-      throw new Error("Google Ads API 404: habilite a API do Google Ads em Google Cloud Console → APIs e serviços → Ativar APIs → 'Google Ads API'")
-    throw new Error(msg)
-  }
+  if (!res.ok) throw new Error(extractGadsError(res.status, data, "listAccessibleCustomers"))
   return (data.resourceNames ?? []).map((r: string) => ({ resourceName: r, id: r.replace("customers/", "") }))
 }
 
