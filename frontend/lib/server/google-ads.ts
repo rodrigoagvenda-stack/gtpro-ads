@@ -3,7 +3,10 @@ import { decrypt, encrypt } from "./crypto"
 import { getGoogleClientId, getGoogleClientSecret, getGoogleDeveloperToken } from "./platform"
 
 const OAUTH_BASE  = "https://oauth2.googleapis.com"
-const ADS_BASE    = "https://googleads.googleapis.com/v20"
+// Configurável via env GOOGLE_ADS_API_VERSION no Easypanel (ex: v26, v27)
+const GADS_VERSION_START = parseInt((process.env.GOOGLE_ADS_API_VERSION ?? "v26").replace("v", ""), 10)
+// Cache da versão resolvida para evitar retries desnecessários no mesmo processo
+let _resolvedVersion: number | null = null
 
 // ─── OAuth helpers ────────────────────────────────────────────────────────────
 
@@ -67,29 +70,60 @@ function extractGadsError(status: number, data: any, label: string): string {
   return `${msg}${codeStr}`
 }
 
+// ─── Version-aware fetch helper ───────────────────────────────────────────────
+
+async function gadsRequest(
+  path: string,
+  method: "GET" | "POST",
+  extraHeaders: Record<string, string>,
+  body?: string,
+): Promise<any> {
+  const start = _resolvedVersion ?? GADS_VERSION_START
+  let version = start
+
+  while (version <= 40) {
+    const url = `https://googleads.googleapis.com/v${version}${path}`
+    const res = await fetch(url, { method, headers: extraHeaders, body })
+    let data: any
+    try {
+      data = await res.json()
+    } catch {
+      const text = await res.text().catch(() => "")
+      console.error(`[google-ads] v${version} non-JSON ${res.status} (${path}):`, text.slice(0, 400))
+      if (res.status === 404) { version++; continue }
+      throw new Error(`Google Ads API ${res.status}: ${text.slice(0, 300)}`)
+    }
+    if (!res.ok) {
+      const isUnsupported = (data?.error?.details ?? []).some((d: any) =>
+        d.errors?.some((e: any) => e.errorCode?.requestError === "UNSUPPORTED_VERSION")
+      )
+      if (isUnsupported) {
+        console.warn(`[google-ads] v${version} unsupported, trying v${version + 1}`)
+        version++
+        continue
+      }
+      throw new Error(extractGadsError(res.status, data, `v${version}${path}`))
+    }
+    if (version !== start) {
+      console.log(`[google-ads] resolved version: v${version} (was v${start})`)
+      _resolvedVersion = version
+    }
+    return data
+  }
+  throw new Error(`Nenhuma versão Google Ads API suportada (tentei v${start}–v40)`)
+}
+
 // ─── API request helper ───────────────────────────────────────────────────────
 
 async function gadsPost(path: string, body: unknown, accessToken: string, managerCustomerId?: string) {
   const devToken = await getGoogleDeveloperToken()
   const headers: Record<string, string> = {
-    "Content-Type":  "application/json",
-    "Authorization": `Bearer ${accessToken}`,
+    "Content-Type":    "application/json",
+    "Authorization":   `Bearer ${accessToken}`,
     "developer-token": devToken,
   }
   if (managerCustomerId) headers["login-customer-id"] = managerCustomerId
-
-  const url = `${ADS_BASE}${path}`
-  const res = await fetch(url, { method: "POST", headers, body: JSON.stringify(body) })
-  let data: any
-  try {
-    data = await res.json()
-  } catch {
-    const text = await res.text().catch(() => "")
-    console.error(`[google-ads] gadsPost ${res.status} non-JSON (${path}):`, text.slice(0, 500))
-    throw new Error(`Google Ads API ${res.status}: ${text.slice(0, 300)}`)
-  }
-  if (!res.ok) throw new Error(extractGadsError(res.status, data, `gadsPost ${path}`))
-  return data
+  return gadsRequest(path, "POST", headers, JSON.stringify(body))
 }
 
 // ─── Token management ─────────────────────────────────────────────────────────
@@ -113,22 +147,13 @@ async function getTokens(tenantId: string): Promise<{ accessToken: string; conn:
 
 export async function listAccessibleCustomers(accessToken: string): Promise<{ resourceName: string; id: string }[]> {
   const devToken = await getGoogleDeveloperToken()
-  const url = `${ADS_BASE}/customers:listAccessibleCustomers`
-  console.log(`[google-ads] listAccessibleCustomers devTokenLen=${devToken?.length ?? 0} accessTokenLen=${accessToken?.length ?? 0}`)
-  const res = await fetch(url, {
-    headers: { Authorization: `Bearer ${accessToken}`, "developer-token": devToken },
+  const data = await gadsRequest("/customers:listAccessibleCustomers", "GET", {
+    Authorization:    `Bearer ${accessToken}`,
+    "developer-token": devToken,
   })
-  let data: any
-  try {
-    data = await res.json()
-  } catch {
-    const text = await res.text().catch(() => "")
-    console.error(`[google-ads] listAccessibleCustomers ${res.status} non-JSON:`, text.slice(0, 500))
-    throw new Error(`Google Ads API ${res.status}: ${text.slice(0, 300)}`)
-  }
-  if (!res.ok) throw new Error(extractGadsError(res.status, data, "listAccessibleCustomers"))
   return (data.resourceNames ?? []).map((r: string) => ({ resourceName: r, id: r.replace("customers/", "") }))
 }
+
 
 export async function getCustomerInfo(customerId: string, accessToken: string, managerCustomerId?: string) {
   const query = `SELECT customer.id, customer.descriptive_name, customer.currency_code, customer.manager FROM customer WHERE customer.id = ${customerId}`
