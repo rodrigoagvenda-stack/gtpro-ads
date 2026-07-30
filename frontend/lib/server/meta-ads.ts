@@ -890,14 +890,28 @@ export async function getCustomAudiences(tenantId: string) {
   return data.data ?? []
 }
 
+// Meta rejects event names with spaces, accents, or special chars (error 2654/1713151)
+// Standard events (PageView, ViewContent, Lead...) are whitelisted and pass through unchanged
+const META_STANDARD_EVENTS = new Set([
+  "PageView","ViewContent","Search","AddToCart","AddToWishlist","InitiateCheckout",
+  "AddPaymentInfo","Purchase","Lead","CompleteRegistration","Contact","CustomizeProduct",
+  "Donate","FindLocation","Schedule","StartTrial","SubmitApplication","Subscribe",
+])
+
+function sanitizeEventName(evt: string): string {
+  if (META_STANDARD_EVENTS.has(evt)) return evt
+  // Custom events: strip everything except alphanumeric and underscores, truncate to 50
+  return evt.replace(/[^a-zA-Z0-9_]/g, "_").replace(/_+/g, "_").slice(0, 50)
+}
+
 export async function createWebsiteAudience(tenantId: string, params: {
   name: string
   pixel_id: string
   retention_days: number
-  event?: string  // "ViewContent" | "Purchase" | "Lead" | "PageView" (default)
+  event?: string
 }) {
   const { token, adAccountId } = await getTokenAndAccount(tenantId)
-  const evt = params.event ?? "PageView"
+  const evt = sanitizeEventName(params.event ?? "PageView")
   const rule = {
     inclusions: {
       operator: "or",
@@ -908,11 +922,11 @@ export async function createWebsiteAudience(tenantId: string, params: {
       }],
     },
   }
+  // pixel_id at top-level is deprecated in Meta API v22+ — rule already contains the pixel
   return graphPost(`/act_${adAccountId}/customaudiences`, token, {
     name:        params.name,
     subtype:     "WEBSITE",
     description: "Criado pelo GTPRO",
-    pixel_id:    params.pixel_id,
     rule:        JSON.stringify(rule),
   })
 }
@@ -929,7 +943,6 @@ export async function createEngagementAudience(tenantId: string, params: {
     name:        params.name,
     subtype:     "ENGAGEMENT",
     description: "Criado pelo GTPRO",
-    retention_days: params.retention_days,
     rule: JSON.stringify({
       inclusions: {
         operator: "or",
