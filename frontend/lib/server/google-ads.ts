@@ -345,12 +345,54 @@ export async function getGoogleCampaigns(tenantId: string, datePreset = "last_7d
 
 export async function toggleGoogleCampaign(tenantId: string, campaignId: string, enable: boolean) {
   const { accessToken, conn } = await getTokens(tenantId)
-  return gadsPost(
-    `/customers/${conn.customer_id}/campaigns:mutate`,
-    { operations: [{ update: { resourceName: `customers/${conn.customer_id}/campaigns/${campaignId}`, status: enable ? "ENABLED" : "PAUSED" }, updateMask: "status" }] },
-    accessToken,
-    conn.manager_customer_id,
+  const customerId = conn.customer_id
+  const mcc        = conn.manager_customer_id
+  const status     = enable ? "ENABLED" : "PAUSED"
+
+  // 1. Atualiza a campanha
+  await gadsPost(
+    `/customers/${customerId}/campaigns:mutate`,
+    { operations: [{ update: { resourceName: `customers/${customerId}/campaigns/${campaignId}`, status }, updateMask: "status" }] },
+    accessToken, mcc,
   )
+
+  // 2. Busca ad groups da campanha
+  const agData = await gadsPost(
+    `/customers/${customerId}/googleAds:search`,
+    { query: `SELECT ad_group.id, ad_group.resource_name FROM ad_group WHERE campaign.id = ${campaignId} AND ad_group.status != 'REMOVED'` },
+    accessToken, mcc,
+  )
+  const adGroups: { id: string; resourceName: string }[] = (agData.results ?? []).map((r: any) => ({
+    id: r.adGroup.id,
+    resourceName: r.adGroup.resourceName,
+  }))
+
+  if (!adGroups.length) return { ok: true, adGroups: 0 }
+
+  // 3. Atualiza todos os ad groups
+  await gadsPost(
+    `/customers/${customerId}/adGroups:mutate`,
+    { operations: adGroups.map(ag => ({ update: { resourceName: ag.resourceName, status }, updateMask: "status" })) },
+    accessToken, mcc,
+  )
+
+  // 4. Busca e atualiza todos os anúncios da campanha
+  const adsData = await gadsPost(
+    `/customers/${customerId}/googleAds:search`,
+    { query: `SELECT ad_group_ad.resource_name FROM ad_group_ad WHERE campaign.id = ${campaignId} AND ad_group_ad.status != 'REMOVED'` },
+    accessToken, mcc,
+  )
+  const adResourceNames: string[] = (adsData.results ?? []).map((r: any) => r.adGroupAd.resourceName)
+
+  if (adResourceNames.length) {
+    await gadsPost(
+      `/customers/${customerId}/adGroupAds:mutate`,
+      { operations: adResourceNames.map(rn => ({ update: { resourceName: rn, status }, updateMask: "status" })) },
+      accessToken, mcc,
+    )
+  }
+
+  return { ok: true, adGroups: adGroups.length, ads: adResourceNames.length }
 }
 
 export async function updateGoogleCampaignBudget(tenantId: string, budgetId: string, amountMicros: number) {

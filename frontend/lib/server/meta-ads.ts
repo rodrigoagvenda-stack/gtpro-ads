@@ -340,7 +340,33 @@ export async function deleteCampaign(tenantId: string, campaignId: string) {
 
 export async function toggleCampaign(tenantId: string, campaignId: string, status: string, connectionId?: string) {
   const { token } = await getTokenAndAccount(tenantId, connectionId)
-  return graphPost(`/${campaignId}`, token, { status })
+
+  // 1. Atualiza a campanha
+  await graphPost(`/${campaignId}`, token, { status })
+
+  // 2. Busca todos os ad sets da campanha
+  const adSetsData = await graphGet(`/${campaignId}/adsets`, {
+    access_token: token,
+    fields: "id",
+    limit: "50",
+  })
+  const adSetIds: string[] = (adSetsData.data ?? []).map((a: any) => a.id)
+
+  // 3. Atualiza ad sets e seus anúncios em paralelo
+  await Promise.all(adSetIds.map(async (adSetId) => {
+    await graphPost(`/${adSetId}`, token, { status })
+
+    const adsData = await graphGet(`/${adSetId}/ads`, {
+      access_token: token,
+      fields: "id",
+      limit: "50",
+    })
+    const adIds: string[] = (adsData.data ?? []).map((a: any) => a.id)
+
+    await Promise.all(adIds.map(adId => graphPost(`/${adId}`, token, { status })))
+  }))
+
+  return { ok: true, adSets: adSetIds.length }
 }
 
 export async function updateBudget(tenantId: string, campaignId: string, dailyBudget?: number, lifetimeBudget?: number, connectionId?: string) {
