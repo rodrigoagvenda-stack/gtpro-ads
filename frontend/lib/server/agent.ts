@@ -279,6 +279,15 @@ INTEGRIDADE DE DADOS — REGRA ABSOLUTA
 - Se chamar get_campaigns e depois get_account_insights, os dois podem retornar valores diferentes para o mesmo período. Use get_campaigns como fonte principal para análise de campanhas ativas.
 
 ────────────────────────────────────────
+JANELA DE TEMPO — REGRA ABSOLUTA
+────────────────────────────────────────
+- Toda métrica derivada (CPL, CPA, custo/conversa, ROAS) deve usar SOMENTE campos do MESMO objeto retornado pela MESMA chamada de ferramenta, com o MESMO date_preset ou time_range.
+- NUNCA divida spend de uma chamada por conversas/leads/compras de outra chamada com preset diferente.
+- Se precisar mudar o período de análise, re-chame get_campaigns ou get_campaign_insights com o novo preset e use SOMENTE os dados dessa nova chamada — descarte os números anteriores.
+- O sufixo "_7d" em "messaging_conversation_started_7d" é o NOME DA JANELA DE ATRIBUIÇÃO do Meta (crédita conversas iniciadas em até 7 dias após o clique). Não é um filtro de período. O período de relatório é sempre o date_preset que você passou.
+- Cada objeto de métricas tem um campo _period que indica o período de origem. NUNCA combine campos de objetos com _period diferentes em um único cálculo.
+
+────────────────────────────────────────
 REGRAS GERAIS
 ────────────────────────────────────────
 - Saudações e perguntas simples: responda sem chamar ferramentas
@@ -300,7 +309,7 @@ const TOOLS: Anthropic.Tool[] = [
 
   // ── Campaigns — Read
   { name: "get_campaigns",          description: "Lista todas as campanhas com métricas e orçamentos.", input_schema: { ...o, properties: { date_preset: s } } },
-  { name: "get_campaign_insights",  description: "Métricas detalhadas de uma campanha específica.", input_schema: { ...o, properties: { campaign_id: s, date_preset: s }, required: ["campaign_id"] } },
+  { name: "get_campaign_insights",  description: "Métricas detalhadas de uma campanha específica. Use since+until para janela exata (YYYY-MM-DD), ou date_preset para janelas predefinidas. Nunca misture os dois.", input_schema: { ...o, properties: { campaign_id: s, date_preset: s, since: s, until: s }, required: ["campaign_id"] } },
   { name: "get_insights_breakdown", description: "Insights com breakdown por age, gender, placement, device, region etc.", input_schema: { ...o, properties: { breakdown: s, date_preset: s }, required: ["breakdown"] } },
   { name: "get_account_insights",   description: "Métricas agregadas da conta inteira.", input_schema: { ...o, properties: { date_preset: s } } },
 
@@ -314,7 +323,7 @@ const TOOLS: Anthropic.Tool[] = [
   // ── Ad Sets — Read
   { name: "get_adsets",         description: "Lista os conjuntos de anúncios de uma campanha.", input_schema: { ...o, properties: { campaign_id: s }, required: ["campaign_id"] } },
   { name: "get_adset",          description: "Detalhes de um conjunto de anúncios específico, incluindo targeting.", input_schema: { ...o, properties: { adset_id: s }, required: ["adset_id"] } },
-  { name: "get_adset_insights", description: "Métricas detalhadas de um conjunto de anúncios.", input_schema: { ...o, properties: { adset_id: s, date_preset: s }, required: ["adset_id"] } },
+  { name: "get_adset_insights", description: "Métricas detalhadas de um conjunto de anúncios. Use since+until para janela exata (YYYY-MM-DD), ou date_preset para janelas predefinidas. Nunca misture os dois.", input_schema: { ...o, properties: { adset_id: s, date_preset: s, since: s, until: s }, required: ["adset_id"] } },
 
   // ── Ad Sets — Write
   { name: "create_adset", description: "Cria um novo conjunto de anúncios. OBRIGATÓRIO: targeting com geo_locations (use search_geo para obter o key de cidades) e advantage_audience (0 = público manual, 1 = Advantage+ automático — SEMPRE perguntar ao usuário). Para LEAD_GENERATION/CONVERSATIONS/POST_ENGAGEMENT incluir page_id. Para OFFSITE_CONVERSIONS incluir pixel_id. Para CONVERSATIONS incluir destination_type='WHATSAPP'. campaign_objective ajuda a inferir optimization_goal automaticamente. CBO: NÃO passe daily_budget nem lifetime_budget (orçamento já está na campanha). ABO: passe daily_budget ou lifetime_budget. NUNCA defina bid_amount.", input_schema: { ...o, properties: { campaign_id: s, name: s, campaign_objective: s, optimization_goal: s, billing_event: s, daily_budget: n, lifetime_budget: n, targeting: { type: "object" as const }, advantage_audience: { type: "number" as const, enum: [0, 1], description: "0 = público manual (respeita interesses/geo), 1 = Advantage+ (Meta expande automaticamente)" }, page_id: s, pixel_id: s, custom_event_type: s, destination_type: s, promoted_object: { type: "object" as const }, start_time: s, end_time: s }, required: ["campaign_id", "name", "targeting", "advantage_audience"] } },
@@ -325,7 +334,7 @@ const TOOLS: Anthropic.Tool[] = [
   // ── Ads — Read
   { name: "get_ads",          description: "Lista os anúncios de uma campanha com criativos.", input_schema: { ...o, properties: { campaign_id: s }, required: ["campaign_id"] } },
   { name: "get_ads_by_adset", description: "Lista os anúncios de um conjunto de anúncios.", input_schema: { ...o, properties: { adset_id: s }, required: ["adset_id"] } },
-  { name: "get_ad_insights",  description: "Métricas detalhadas de um anúncio específico.", input_schema: { ...o, properties: { ad_id: s, date_preset: s }, required: ["ad_id"] } },
+  { name: "get_ad_insights",  description: "Métricas detalhadas de um anúncio específico. Use since+until para janela exata (YYYY-MM-DD), ou date_preset para janelas predefinidas. Nunca misture os dois.", input_schema: { ...o, properties: { ad_id: s, date_preset: s, since: s, until: s }, required: ["ad_id"] } },
 
   // ── Ads — Write
   { name: "create_ad", description: "Cria um anúncio completo com criativo. UTM é injetado automaticamente. Para imagem: forneça image_hash + link_url. Para vídeo: forneça video_id + link_url. Para LEAD_GENERATION: forneça lead_gen_form_id + optimization_goal='LEAD_GENERATION'. Para WhatsApp (CTWA): cta='WHATSAPP_MESSAGE' — o link api.whatsapp.com/send é injetado automaticamente, NÃO passe link_url; opcionalmente passe page_welcome_message com a mensagem de abertura da conversa. page_id é sempre obrigatório exceto quando reusando creative_id.", input_schema: { ...o, properties: { adset_id: s, name: s, page_id: s, headline: s, body: s, link_url: s, cta: s, image_hash: s, video_id: s, page_welcome_message: s, lead_gen_form_id: s, optimization_goal: s, instagram_actor_id: s, caption: s, description: s, utm_tags: s, creative_id: s, status: s }, required: ["adset_id", "name"] } },
@@ -374,7 +383,7 @@ async function executeTool(name: string, input: Record<string, any>, tenantId: s
   if (name === "get_account_info")       return getAccountInfo(tenantId)
   if (name === "get_campaigns")          return getCampaigns(tenantId, input.date_preset ?? "last_7d")
   if (name === "get_account_insights")   return getInsights(tenantId, input.date_preset)
-  if (name === "get_campaign_insights")  return getCampaignInsights(tenantId, input.campaign_id, input.date_preset)
+  if (name === "get_campaign_insights")  return getCampaignInsights(tenantId, input.campaign_id, input.date_preset, input.since, input.until)
   if (name === "get_insights_breakdown") return getInsightsByBreakdown(tenantId, input.breakdown, input.date_preset)
   if (name === "create_campaign")        return createCampaign(tenantId, input)
   if (name === "update_campaign") {
@@ -386,7 +395,7 @@ async function executeTool(name: string, input: Record<string, any>, tenantId: s
   if (name === "toggle_campaign")        return toggleCampaign(tenantId, input.campaign_id, input.status)
   if (name === "get_adsets")         return getAdSets(tenantId, input.campaign_id)
   if (name === "get_adset")          return getAdSetById(tenantId, input.adset_id)
-  if (name === "get_adset_insights") return getAdSetInsights(tenantId, input.adset_id, input.date_preset)
+  if (name === "get_adset_insights") return getAdSetInsights(tenantId, input.adset_id, input.date_preset, input.since, input.until)
   if (name === "create_adset")       return createAdSet(tenantId, input)
   if (name === "update_adset") {
     const { adset_id, ...params } = input
@@ -396,7 +405,7 @@ async function executeTool(name: string, input: Record<string, any>, tenantId: s
   if (name === "delete_adset")       return deleteAdSet(tenantId, input.adset_id)
   if (name === "get_ads")            return getAds(tenantId, input.campaign_id)
   if (name === "get_ads_by_adset")   return getAdsByAdSet(tenantId, input.adset_id)
-  if (name === "get_ad_insights")    return getAdInsights(tenantId, input.ad_id, input.date_preset)
+  if (name === "get_ad_insights")    return getAdInsights(tenantId, input.ad_id, input.date_preset, input.since, input.until)
   if (name === "update_ad") {
     const { ad_id, ...params } = input
     return updateAd(tenantId, ad_id, params)

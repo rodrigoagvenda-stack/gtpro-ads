@@ -159,6 +159,8 @@ export async function getAccountInfo(tenantId: string) {
 export async function getCampaigns(tenantId: string, datePreset = "last_7d", connectionId?: string, since?: string, until?: string) {
   const { token, adAccountId } = await getTokenAndAccount(tenantId, connectionId)
   const insightFields = "spend,impressions,clicks,reach,ctr,cpc,cpm,frequency,actions,action_values,purchase_roas"
+  // Tag the period so callers can detect cross-period metric mixing
+  const periodTag = since && until ? `${since}_to_${until}` : datePreset
   const insightParam = since && until
     ? `insights.time_range({"since":"${since}","until":"${until}"}){${insightFields}}`
     : `insights.date_preset(${datePreset}){${insightFields}}`
@@ -244,6 +246,9 @@ export async function getCampaigns(tenantId: string, datePreset = "last_7d", con
         page_likes,
         follows,
         roas: roas ?? roasFallback,
+        // Period provenance — every derived metric (CPL, CPA, CPC_conv) used values
+        // from this single insights call. Do NOT divide metrics across different _period tags.
+        _period: periodTag,
       },
     }
   })
@@ -793,28 +798,47 @@ export async function getInsights(tenantId: string, datePreset = "last_7d", sinc
   return data.data?.[0] ?? {}
 }
 
-export async function getCampaignInsights(tenantId: string, campaignId: string, datePreset = "last_7d") {
+export async function getCampaignInsights(tenantId: string, campaignId: string, datePreset = "last_7d", since?: string, until?: string) {
   const token = await getToken(tenantId)
-  const data = await graphGet(`/${campaignId}/insights`, {
-    access_token: token, fields: INSIGHT_FIELDS, date_preset: datePreset,
-  })
-  return data.data?.[0] ?? {}
+  const params: Record<string, string> = { access_token: token, fields: INSIGHT_FIELDS }
+  if (since && until) {
+    params.time_range = JSON.stringify({ since, until })
+  } else {
+    params.date_preset = datePreset
+  }
+  const data = await graphGet(`/${campaignId}/insights`, params)
+  const row  = data.data?.[0] ?? {}
+  // Attach period provenance so callers can detect cross-period metric mixing
+  row._period = since && until ? `${since}_to_${until}` : datePreset
+  return row
 }
 
-export async function getAdSetInsights(tenantId: string, adSetId: string, datePreset = "last_7d") {
+export async function getAdSetInsights(tenantId: string, adSetId: string, datePreset = "last_7d", since?: string, until?: string) {
   const token = await getToken(tenantId)
-  const data = await graphGet(`/${adSetId}/insights`, {
-    access_token: token, fields: INSIGHT_FIELDS, date_preset: datePreset,
-  })
-  return data.data?.[0] ?? {}
+  const params: Record<string, string> = { access_token: token, fields: INSIGHT_FIELDS }
+  if (since && until) {
+    params.time_range = JSON.stringify({ since, until })
+  } else {
+    params.date_preset = datePreset
+  }
+  const data = await graphGet(`/${adSetId}/insights`, params)
+  const row  = data.data?.[0] ?? {}
+  row._period = since && until ? `${since}_to_${until}` : datePreset
+  return row
 }
 
-export async function getAdInsights(tenantId: string, adId: string, datePreset = "last_7d") {
+export async function getAdInsights(tenantId: string, adId: string, datePreset = "last_7d", since?: string, until?: string) {
   const token = await getToken(tenantId)
-  const data = await graphGet(`/${adId}/insights`, {
-    access_token: token, fields: INSIGHT_FIELDS, date_preset: datePreset,
-  })
-  return data.data?.[0] ?? {}
+  const params: Record<string, string> = { access_token: token, fields: INSIGHT_FIELDS }
+  if (since && until) {
+    params.time_range = JSON.stringify({ since, until })
+  } else {
+    params.date_preset = datePreset
+  }
+  const data = await graphGet(`/${adId}/insights`, params)
+  const row  = data.data?.[0] ?? {}
+  row._period = since && until ? `${since}_to_${until}` : datePreset
+  return row
 }
 
 export async function getInsightsByBreakdown(tenantId: string, breakdown: string, datePreset = "last_7d") {
