@@ -1,5 +1,6 @@
 import { createServiceClient } from "./supabase"
 import { getCampaigns, getInsights } from "./meta-ads"
+import { checkGoogleAlerts } from "./google-ads"
 import { sendText } from "./whatsapp"
 
 // Objetivos válidos na Meta API por categoria
@@ -13,13 +14,14 @@ export async function checkAndNotifyAlerts(tenantId: string): Promise<{ created:
 
   const { data: cfg } = await supabase
     .from("agent_configs")
-    .select("roas_minimo,cpl_maximo,whatsapp_number")
+    .select("roas_minimo,cpl_maximo,whatsapp_number,budget_mensal")
     .eq("tenant_id", tenantId)
     .single()
 
-  const roasMin  = cfg?.roas_minimo ?? 2
-  const cplMax   = cfg?.cpl_maximo  ?? 50
-  const whaPhone = cfg?.whatsapp_number ? (cfg.whatsapp_number as string).replace(/\D/g, "") : null
+  const roasMin       = cfg?.roas_minimo   ?? 2
+  const cplMax        = cfg?.cpl_maximo    ?? 50
+  const budgetMensal  = cfg?.budget_mensal ? Number(cfg.budget_mensal) : 0
+  const whaPhone      = cfg?.whatsapp_number ? (cfg.whatsapp_number as string).replace(/\D/g, "") : null
 
   let campaigns: any[] = []
   let accountInsights: any = {}
@@ -86,6 +88,29 @@ export async function checkAndNotifyAlerts(tenantId: string): Promise<{ created:
       await upsertAlert("queda_performance", `Campanha "${c.name}" com CTR baixo: ${m.ctr.toFixed(2)}%.`, c.id)
     }
   }
+
+  // Feature #09: Monthly budget alerts (70% / 90% / 100%)
+  if (budgetMensal > 0) {
+    try {
+      const monthlyInsights = await getInsights(tenantId, "this_month")
+      const monthlySpend    = Number(monthlyInsights.spend ?? 0)
+      const pct             = monthlySpend / budgetMensal
+      if (pct >= 1.0)
+        await upsertAlert("budget_mensal_100", `Budget mensal de R$${budgetMensal} totalmente consumido. Gasto: R$${monthlySpend.toFixed(2)}.`)
+      else if (pct >= 0.9)
+        await upsertAlert("budget_mensal_90", `90% do budget mensal atingido. Gasto: R$${monthlySpend.toFixed(2)} de R$${budgetMensal}.`)
+      else if (pct >= 0.7)
+        await upsertAlert("budget_mensal_70", `70% do budget mensal atingido. Gasto: R$${monthlySpend.toFixed(2)} de R$${budgetMensal}.`)
+    } catch (e: any) { errors.push(`budget_mensal: ${e.message}`) }
+  }
+
+  // Feature #10: Google Ads alerts
+  try {
+    const googleAlerts = await checkGoogleAlerts(tenantId)
+    for (const ga of googleAlerts) {
+      await upsertAlert(ga.type, ga.message)
+    }
+  } catch (e: any) { errors.push(`google_alerts: ${e.message}`) }
 
   return { created, errors }
 }

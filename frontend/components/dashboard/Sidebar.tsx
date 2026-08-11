@@ -3,7 +3,7 @@
 import Link from "next/link"
 import Image from "next/image"
 import { usePathname, useRouter } from "next/navigation"
-import { Megaphone, Bot, FileText, Bell, Settings, LogOut, Zap, Link2, Home, Users, Building2, Shield, Images, MessageCircle } from "lucide-react"
+import { Megaphone, Bot, FileText, Bell, Settings, LogOut, Zap, Link2, Home, Users, Building2, Shield, Images, MessageCircle, HeartPulse } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { createClient } from "@/lib/supabase"
 import { useEffect, useState } from "react"
@@ -30,8 +30,9 @@ const NAV_GROUPS: NavGroup[] = [
   {
     label: "Análise",
     items: [
-      { href: "/relatorios", label: "Relatórios", icon: FileText },
-      { href: "/alertas",    label: "Alertas",    icon: Bell     },
+      { href: "/relatorios",  label: "Relatórios",  icon: FileText    },
+      { href: "/alertas",     label: "Alertas",     icon: Bell        },
+      { href: "/diagnostico", label: "Diagnóstico", icon: HeartPulse  },
     ],
   },
   {

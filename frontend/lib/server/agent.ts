@@ -2,6 +2,7 @@ import Anthropic from "@anthropic-ai/sdk"
 import { getAnthropicKey } from "./platform"
 import { createServiceClient } from "./supabase"
 import { sendText } from "./whatsapp"
+import { createAsaasCharge } from "./asaas"
 import {
   getCampaigns, getInsights, getCampaignInsights, getAdSetInsights, getAdInsights, getInsightsByBreakdown,
   createCampaign, updateCampaign, duplicateCampaign, deleteCampaign, toggleCampaign,
@@ -92,7 +93,10 @@ NOMENCLATURA — OBRIGATÓRIO
 ────────────────────────────────────────
 - Se houver template configurado, SEMPRE aplique ao criar campanhas, conjuntos e anúncios
 - Substitua variáveis pelos valores reais: [OBJETIVO], [PÚBLICO], [DATA], [NICHO]
-- Sem template: use [OBJETIVO] - [PÚBLICO-ALVO] - [DATA] (ex: "LEAD - Mulheres SP 25-55 - Jun25")
+- Sem template: use formato [OBJETIVO] - [PÚBLICO-ALVO] - [DATA DD/MM] (ex: "LEAD - Mulheres SP 25-55 - 05/08")
+- Conjuntos: mesmo padrão + sufixo conjunto (ex: "LEAD - Mulheres SP 25-55 - 05/08 | Conj.1")
+- Anúncios: mesmo padrão + sufixo anúncio (ex: "LEAD - Mulheres SP 25-55 - 05/08 | Anuncio 1")
+- A data usada é a data de início da campanha (start_time) ou hoje se não agendada
 
 ────────────────────────────────────────
 PAGE_ID — REGRA CRÍTICA
@@ -232,9 +236,11 @@ ORDEM DE COLETA (uma por vez):
 4. Localização — "Quais cidades? Vou buscar o targeting correto."
 5. Público — "Qual é o público-alvo? Interesses, idade, gênero?"
 6. Advantage+ Audience — "Quer usar Advantage+ Audience? (Sim = Meta expande o público automaticamente / Não = usa só o targeting manual definido)"
-7. Criativo — "Tem a imagem ou vídeo do anúncio? Use o clipe de papel aqui no chat para fazer o upload." (NUNCA peça image_hash ou video_id diretamente — o usuário não sabe o que é isso; o sistema converte o arquivo e te manda o hash automaticamente)
-8. Copy — (se não tiver) gere 3 opções e peça para o usuário escolher
-9. RESUMO — apresente tudo estruturado e pergunte "Posso criar?"
+7. Agendamento — "Quando quer ativar a campanha? (Hoje / Data específica DD/MM/AAAA / Só quando você confirmar manualmente)" — Se data informada, converta para ISO 8601 e passe em start_time no create_adset. Se "hoje" ou "manual", não defina start_time.
+8. Criativo — "Tem a imagem ou vídeo do anúncio? Use o clipe de papel aqui no chat para fazer o upload." (NUNCA peça image_hash ou video_id diretamente — o usuário não sabe o que é isso; o sistema converte o arquivo e te manda o hash automaticamente)
+   — Se objetivo for OUTCOME_MESSAGES/WhatsApp: pergunte também "Qual mensagem o usuário receberá ao clicar? (ex: 'Olá! Vim pelo anúncio e quero saber mais.')" e passe em page_welcome_message
+9. Copy — (se não tiver) gere 3 opções e peça para o usuário escolher
+10. RESUMO — apresente tudo estruturado e pergunte "Posso criar?"
 
 Só avança para o passo seguinte após o usuário responder o atual.
 Se o usuário já forneceu alguma informação no início, pule essa etapa e continue na próxima que falta.
@@ -253,6 +259,24 @@ Quando pedir copy ou chegar nessa etapa:
 - 3 headlines (máx 40 caracteres)
 - 3 textos primary (máx 125 chars feed / 90 chars stories)
 - Por objetivo: LEADS → dor/solução + CTA direto | MESSAGES → conversa natural | SALES → benefício + urgência | TRAFFIC → curiosidade + benefício
+
+────────────────────────────────────────
+COBRANÇAS (BOLETO / PIX) — ASAAS
+────────────────────────────────────────
+Quando o usuário pedir para gerar boleto, cobrança ou link de pagamento:
+1. Solicite (uma por vez): nome do cliente, WhatsApp do cliente, descrição, valor, data de vencimento (DD/MM/AAAA), tipo (Boleto ou PIX)
+2. Converta a data para YYYY-MM-DD antes de passar ao generate_charge
+3. Após gerar, confirme: "Cobrança criada e link enviado por WhatsApp: [link]"
+4. NUNCA pergunte CPF — só solicite se o cliente pedir nota fiscal ou o sistema exigir
+
+────────────────────────────────────────
+INTEGRIDADE DE DADOS — REGRA ABSOLUTA
+────────────────────────────────────────
+- NUNCA some métricas de campanhas diferentes para produzir um "total" sem declarar que é uma soma manual.
+- Métricas de alcance (Reach) e conversas/trocas têm deduplicação cross-campanha pelo Meta: a soma por campanha SERÁ maior que o total da conta. Isso é correto — explique ao usuário se ele perceber.
+- Se apresentar um total e a soma das partes não bater, DECLARE EXPLICITAMENTE: "esses totais vêm da API com deduplicação" ou "somo individualmente: X+Y+Z = W".
+- Ao mostrar "Investimento total: R$X" em uma análise multi-campanha, CONFIRME que X = soma das campanhas listadas — nunca misture com o total da conta (que inclui pausadas).
+- Se chamar get_campaigns e depois get_account_insights, os dois podem retornar valores diferentes para o mesmo período. Use get_campaigns como fonte principal para análise de campanhas ativas.
 
 ────────────────────────────────────────
 REGRAS GERAIS
@@ -337,9 +361,12 @@ const TOOLS: Anthropic.Tool[] = [
 
   // ── Internal
   { name: "create_alert", description: "Registra um alerta interno no sistema.", input_schema: { ...o, properties: { type: { type: "string", enum: ["roas_baixo", "cpl_alto", "budget_esgotado", "campanha_rejeitada", "queda_performance"] }, message: s, campaign_id: s }, required: ["type", "message"] } },
+
+  // ── Asaas (boleto / PIX)
+  { name: "generate_charge", description: "Gera cobrança (boleto ou PIX) via Asaas e envia link por WhatsApp. Use quando o usuário pedir para gerar boleto, cobrança ou link de pagamento para um cliente.", input_schema: { ...o, properties: { customer_name: s, customer_phone: s, customer_cpf: s, description: s, value: n, due_date: s, billing_type: { type: "string", enum: ["BOLETO", "PIX", "CREDIT_CARD"], description: "Tipo de pagamento. Default: BOLETO" } }, required: ["customer_name", "customer_phone", "description", "value", "due_date"] } },
 ]
 
-const WRITE_TOOLS = new Set(["create_campaign","update_campaign","duplicate_campaign","delete_campaign","toggle_campaign","create_adset","update_adset","duplicate_adset","delete_adset","create_ad","update_ad","duplicate_ad","delete_ad","create_lookalike_audience","create_website_audience","create_engagement_audience"])
+const WRITE_TOOLS = new Set(["create_campaign","update_campaign","duplicate_campaign","delete_campaign","toggle_campaign","create_adset","update_adset","duplicate_adset","delete_adset","create_ad","update_ad","duplicate_ad","delete_ad","create_lookalike_audience","create_website_audience","create_engagement_audience","generate_charge"])
 
 async function executeTool(name: string, input: Record<string, any>, tenantId: string) {
   const supabase = createServiceClient()
@@ -441,6 +468,29 @@ async function executeTool(name: string, input: Record<string, any>, tenantId: s
       try { await sendText(phone, `🔔 *Alerta GTPRO*\n\n${input.message}`) } catch {}
     }
     return data
+  }
+
+  if (name === "generate_charge") {
+    const charge = await createAsaasCharge(tenantId, {
+      customer_name:  input.customer_name,
+      customer_phone: input.customer_phone,
+      customer_cpf:   input.customer_cpf,
+      description:    input.description,
+      value:          input.value,
+      due_date:       input.due_date,
+      billing_type:   input.billing_type ?? "BOLETO",
+    })
+    // Send link via WhatsApp if configured
+    const { data: ac } = await supabase.from("agent_configs").select("whatsapp_number").eq("tenant_id", tenantId).single()
+    if (ac?.whatsapp_number) {
+      const phone = (ac.whatsapp_number as string).replace(/\D/g, "")
+      const link  = charge.invoice_url ?? charge.barcode_url ?? charge.pix_url ?? ""
+      if (link) {
+        const label = charge.billing_type === "PIX" ? "PIX" : "Boleto"
+        try { await sendText(phone, `💰 *${label} gerado via GTPRO*\n\nCliente: ${input.customer_name}\nValor: R$ ${Number(input.value).toFixed(2)}\nVencimento: ${input.due_date}\n\n${link}`) } catch {}
+      }
+    }
+    return charge
   }
 
   throw new Error(`Ferramenta desconhecida: ${name}`)

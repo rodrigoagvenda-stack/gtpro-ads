@@ -218,6 +218,8 @@ const TOOL_LABELS: Record<string, string> = {
   get_pixels: "Verificando pixels", get_audiences: "Carregando públicos",
   create_lookalike_audience: "Criando lookalike", create_website_audience: "Criando público website",
   get_account_info: "Carregando conta", check_whatsapp_status: "Verificando WhatsApp", generate_utm: "Gerando UTM",
+  generate_charge: "Gerando cobrança", search_geo: "Buscando localização", search_interests: "Buscando interesses",
+  create_alert: "Registrando alerta",
 }
 
 const MODELS = [
@@ -386,16 +388,19 @@ export default function AgentePage() {
   const [logsOpen, setLogsOpen]             = useState(false)
   const [logsLoading, setLogsLoading]       = useState(false)
   const [uploading, setUploading]           = useState(false)
+  const [uploadProgress, setUploadProgress] = useState<number | null>(null)
   const [wizardOpen, setWizardOpen]           = useState(false)
   const [textModeOpen, setTextModeOpen]       = useState(false)
   const [createPickerOpen, setCreatePickerOpen] = useState(false)
   const [activeAction, setActiveAction]       = useState<ActiveAction>(null)
 
-  const bottomRef   = useRef<HTMLDivElement>(null)
-  const textareaRef = useRef<HTMLTextAreaElement>(null)
-  const skillsRef   = useRef<HTMLDivElement>(null)
-  const fileRef     = useRef<HTMLInputElement>(null)
-  const abortRef    = useRef<AbortController | null>(null)
+  const bottomRef      = useRef<HTMLDivElement>(null)
+  const textareaRef    = useRef<HTMLTextAreaElement>(null)
+  const skillsRef      = useRef<HTMLDivElement>(null)
+  const fileRef        = useRef<HTMLInputElement>(null)
+  const abortRef       = useRef<AbortController | null>(null)
+  const streamBufRef   = useRef("")
+  const rAFRef         = useRef<number | null>(null)
 
   useEffect(() => {
     api.skills.list().then((d: any[]) => setSkills(Array.isArray(d) ? d : [])).catch(() => {})
@@ -460,12 +465,20 @@ export default function AgentePage() {
       await api.agent.queryStream(text, model, history, (chunk: any) => {
         if (chunk.type === "text") {
           setIsStreaming(true)
-          setMessages(p => {
-            const msgs = [...p]
-            const last = msgs[msgs.length - 1]
-            if (last?.role === "assistant") msgs[msgs.length - 1] = { ...last, content: last.content + chunk.delta }
-            return msgs
-          })
+          streamBufRef.current += chunk.delta
+          if (!rAFRef.current) {
+            rAFRef.current = requestAnimationFrame(() => {
+              const buf = streamBufRef.current
+              streamBufRef.current = ""
+              rAFRef.current = null
+              if (buf) setMessages(p => {
+                const msgs = [...p]
+                const last = msgs[msgs.length - 1]
+                if (last?.role === "assistant") msgs[msgs.length - 1] = { ...last, content: last.content + buf }
+                return msgs
+              })
+            })
+          }
         } else if (chunk.type === "tool_start") {
           setActiveTools(p => [...p.filter(t => t.name !== chunk.name), { name: chunk.name, status: "running" }])
         } else if (chunk.type === "tool_done") {
@@ -518,25 +531,43 @@ export default function AgentePage() {
         return msgs
       })
     } finally {
+      if (rAFRef.current) { cancelAnimationFrame(rAFRef.current); rAFRef.current = null }
+      const rem = streamBufRef.current; streamBufRef.current = ""
+      if (rem) setMessages(p => {
+        const msgs = [...p]
+        const last = msgs[msgs.length - 1]
+        if (last?.role === "assistant") msgs[msgs.length - 1] = { ...last, content: last.content + rem }
+        return msgs
+      })
       setLoading(false); setIsStreaming(false); setActiveTools([])
     }
   }, [loading, messages, model])
 
   async function handleFileUpload(file: File) {
     setUploading(true)
+    setUploadProgress(0)
     try {
       const form = new FormData()
       form.append("file", file)
       form.append("name", file.name)
       const { createClient } = await import("@/lib/supabase")
       const token = (await createClient().auth.getSession()).data.session?.access_token
-      const res = await fetch("/api/meta/media", {
-        method: "POST",
-        headers: { Authorization: `Bearer ${token}` },
-        body: form,
+      const data = await new Promise<any>((resolve, reject) => {
+        const xhr = new XMLHttpRequest()
+        xhr.open("POST", "/api/meta/media")
+        if (token) xhr.setRequestHeader("Authorization", `Bearer ${token}`)
+        xhr.upload.onprogress = (e) => {
+          if (e.lengthComputable) setUploadProgress(Math.round((e.loaded / e.total) * 100))
+        }
+        xhr.onload = () => {
+          setUploadProgress(null)
+          const parsed = (() => { try { return JSON.parse(xhr.responseText) } catch { return {} } })()
+          if (xhr.status >= 200 && xhr.status < 300) resolve(parsed)
+          else reject(new Error(parsed.error || "Erro no upload"))
+        }
+        xhr.onerror = () => reject(new Error("Erro de rede"))
+        xhr.send(form)
       })
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.error)
       const isVideo = file.type.startsWith("video/")
       const info    = isVideo
         ? `Mídia enviada: "${file.name}" (vídeo, ID: ${data.meta_video_id})`
@@ -546,7 +577,10 @@ export default function AgentePage() {
         mediaUpload: { name: file.name, type: isVideo ? "video" : "image", hash: data.meta_hash, videoId: data.meta_video_id },
       }])
       await send(`Fiz o upload da mídia "${file.name}". ${isVideo ? `O video_id é ${data.meta_video_id}` : `O image_hash é ${data.meta_hash}`}. Pode usar no criativo.`)
-    } catch (e: any) { alert(`Erro no upload: ${e.message}`) }
+    } catch (e: any) {
+      setUploadProgress(null)
+      alert(`Erro no upload: ${e.message}`)
+    }
     finally { setUploading(false) }
   }
 
@@ -1045,8 +1079,20 @@ export default function AgentePage() {
                   <button onClick={() => fileRef.current?.click()} disabled={loading || uploading}
                     className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[12px] font-medium text-zinc-600 hover:text-zinc-300 hover:bg-white/[0.05] transition-all disabled:opacity-40">
                     {uploading ? <Upload size={12} className="animate-bounce" /> : <Paperclip size={12} />}
-                    <span>{uploading ? "Enviando…" : "Mídia"}</span>
+                    <span>
+                      {uploading && uploadProgress !== null
+                        ? `${uploadProgress}%`
+                        : uploading ? "Enviando…" : "Mídia"}
+                    </span>
                   </button>
+                  {uploading && uploadProgress !== null && uploadProgress < 100 && (
+                    <div className="flex items-center gap-1.5">
+                      <div className="w-16 h-1 rounded-full bg-white/[0.06] overflow-hidden">
+                        <div className="h-full bg-violet-500 rounded-full transition-all duration-150"
+                          style={{ width: `${uploadProgress}%` }} />
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 <div className="flex items-center gap-2">

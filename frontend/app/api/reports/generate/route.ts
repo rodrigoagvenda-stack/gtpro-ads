@@ -374,6 +374,12 @@ export async function POST(req: NextRequest) {
       : ""
 
     const now    = new Date()
+    const extractedAt = now.toLocaleString("pt-BR", {
+      day: "2-digit", month: "2-digit", year: "numeric",
+      hour: "2-digit", minute: "2-digit",
+      timeZone: "America/Sao_Paulo",
+    }).replace(",", " às")
+
     const presetDays: Record<string, number> = { last_7d: 7, last_14d: 14, last_30d: 30, last_90d: 90, this_month: 30, last_month: 30 }
     const fmtDate = (d: Date) => d.toLocaleDateString("pt-BR", { day: "numeric", month: "long", year: "numeric" })
     let days: number
@@ -412,8 +418,9 @@ export async function POST(req: NextRequest) {
     const resultLabel   = RESULT_LABEL[objective]   ?? "Resultados"
     const kpiPrincipal  = KPI_PRINCIPAL[objective]  ?? "KPI principal"
 
-    const acc: any = accountInsights
-    const accountSummary = `Conta (30 dias): Gasto R$${Number(acc.spend ?? 0).toFixed(2)} | Impressões ${Number(acc.impressions ?? 0).toLocaleString("pt-BR")} | Alcance ${Number(acc.reach ?? 0).toLocaleString("pt-BR")} | Cliques ${Number(acc.clicks ?? 0).toLocaleString("pt-BR")} | CTR ${Number(acc.ctr ?? 0).toFixed(2)}%`
+    // accountInsights is fetched but NOT injected into the AI prompt — it contains account-level
+    // aggregates that include paused/archived campaigns and apply cross-campaign deduplication,
+    // which would create reconciliation discrepancies vs the per-campaign totals below.
 
     const config    = configResult.data ?? {}
     const configStr = `Objetivo: ${config.objetivo_principal ?? "não definido"} | ROAS mín: ${config.roas_minimo ?? "—"} | CPL máx: R$${config.cpl_maximo ?? "—"} | Budget mensal: R$${config.budget_mensal ?? "—"}`
@@ -546,6 +553,7 @@ Tabela: Criativo | Copy (trecho) | CTR | ${resultLabel} | Taxa clique→resultad
       gestora ? `**Gestora:** ${gestora}` : "",
       gerente ? `**Gerente:** ${gerente}` : "",
       `**Período:** ${periodLabel}`,
+      `**Dados extraídos em:** ${extractedAt}`,
       `**Canais:** Campanhas de divulgação · Instagram · Meta Ads`,
     ].filter(Boolean).join("\n")
 
@@ -554,15 +562,34 @@ Tabela: Criativo | Copy (trecho) | CTR | ${resultLabel} | Taxa clique→resultad
       ? `*Relatório produzido por ${agencyName} · ${signatureExtra}*`
       : `*Relatório produzido por ${agencyName}*`
 
-    const prompt = `Você é especialista em Meta Ads. Gere o relatório COMPLETO abaixo seguindo EXATAMENTE a estrutura fornecida. Use SOMENTE os dados reais fornecidos. Sem introduções, sem explicar o que vai fazer, sem repetir dados entre seções.
+    // Reconciliation: detect potential discrepancy vs account-level API
+    const apiSpend       = Number(accountInsights?.spend ?? 0)
+    const reconSpendDiff = apiSpend > 0 ? Math.abs(apiSpend - totalSpend) : 0
+    const spendDiffNote  = reconSpendDiff > 1
+      ? `\n- DIVERGÊNCIA DE GASTO DETECTADA: A API da conta reporta R$${apiSpend.toFixed(2)} enquanto a soma das campanhas ativas listadas é R$${totalSpend.toFixed(2)} (diferença: R$${reconSpendDiff.toFixed(2)}). Isso indica que existem campanhas com gasto no período que NÃO estão na lista acima (pausadas, arquivadas ou de outro objetivo). O relatório usa SOMENTE a soma das campanhas listadas.`
+      : ""
+    const reconNote = active.length > 1 && (totalConversas > 0 || totalReach > 0 || spendDiffNote) ? `
+NOTA DE METODOLOGIA (inclua no relatório, na seção Conclusão, como parágrafo separado, se algum item abaixo for relevante):
+- Os totais de Alcance e Conversas WA são a SOMA das campanhas individuais. O Meta Ads aplica deduplicação cross-campanha nos seus relatórios internos (um usuário atingido por 2 campanhas conta 2x na soma por campanha, mas 1x no total da conta). Por isso a soma das campanhas individuais pode ser maior que o Gerenciador de Anúncios — comportamento esperado da API do Meta.${spendDiffNote}
+` : spendDiffNote ? `\nNOTA: ${spendDiffNote}\n` : ""
+
+    const prompt = `Você é especialista em Meta Ads. Gere o relatório COMPLETO abaixo seguindo EXATAMENTE a estrutura fornecida.
+
+REGRA ABSOLUTA DE DADOS — LEIA ANTES DE TUDO:
+1. Use SOMENTE os números de "TOTAIS PRÉ-CALCULADOS" e das linhas de "CAMPANHAS individuais" abaixo.
+2. NUNCA recalcule totais por conta própria. Se um total é pedido, copie exatamente de TOTAIS PRÉ-CALCULADOS.
+3. NUNCA invente ou arredonde números que não estejam nos dados fornecidos.
+4. Se um dado não estiver disponível nas fontes abaixo, escreva "—" — nunca estime.
+5. Os valores em negrito nas seções de Visão Geral são hardcoded no template — copie-os EXATAMENTE, sem modificar vírgulas, pontos ou casas decimais.
+Violação desta regra invalida o relatório inteiro.
 
 DADOS DA CONTA:
 Configurações: ${configStr}
-Conta (agregado): ${accountSummary}
+Dados extraídos da API em: ${extractedAt} (horário de Brasília)
 Objetivo analisado: ${objLabel} | KPI: ${kpiPrincipal}
 Número de campanhas ativas: ${campaignCount}
-
-TOTAIS PRÉ-CALCULADOS:
+${reconNote}
+TOTAIS PRÉ-CALCULADOS (soma das campanhas listadas abaixo — use SOMENTE estes):
 - Impressões: ${totalImpressions.toLocaleString("pt-BR")}
 - Alcance: ${totalReach.toLocaleString("pt-BR")}
 - Cliques/interações: ${totalClicks.toLocaleString("pt-BR")}
@@ -574,7 +601,7 @@ TOTAIS PRÉ-CALCULADOS:
 - Investimento diário médio: R$ ${dailySpend.toFixed(2).replace(".", ",")}
 - Pessoas alcançadas por dia: ${Math.round(dailyReach)}${custoSeguidores != null ? `\n- Custo por seguidor: R$ ${custoSeguidores.toFixed(2).replace(".", ",")}` : ""}
 
-CAMPANHAS (dados individuais):
+CAMPANHAS (dados individuais — fonte única para análises):
 ${campaignRows}
 ${adRows ? `
 CRIATIVOS — dados individuais por anúncio (use nas análises de Criativo e Copy):
@@ -591,15 +618,17 @@ ${headerLines}
 
 ## 01 · Visão Geral — Principais Resultados
 
+INSTRUÇÃO: Copie esta tabela EXATAMENTE. Não altere nenhum número. Preencha apenas os campos marcados com [].
+
 | Indicador | Resultado |
 |---|---|
 | Pessoas impactadas | +${totalImpressions.toLocaleString("pt-BR")} impressões |
 | Cliques e interações | ${totalClicks.toLocaleString("pt-BR")} |
-| [Resultado principal: Leads/Conversas/Compras/Seguidores/Engajamentos — use o mais relevante para o objetivo] | [valor correspondente] |
+| [Resultado principal: Leads/Conversas/Compras/Seguidores/Engajamentos] | [valor de TOTAIS PRÉ-CALCULADOS acima — não recalcule] |
 | Investimento total | R$ ${totalSpend.toFixed(2).replace(".", ",")} |
 | Custo médio por clique | R$ ${totalClicks > 0 ? (totalSpend / totalClicks).toFixed(2).replace(".", ",") : "—"} |
 | Melhor CPC | R$ ${bestCpc > 0 ? bestCpc.toFixed(2).replace(".", ",") : "—"} |
-| Custo por [resultado principal] | [calcule com base nos totais] |${custoSeguidores != null ? `\n| Custo por seguidor | R$ ${custoSeguidores.toFixed(2).replace(".", ",")} |` : ""}
+| Custo por [resultado principal] | [calcule: Investimento total ÷ Resultado principal, usando os valores exatos acima] |${custoSeguidores != null ? `\n| Custo por seguidor | R$ ${custoSeguidores.toFixed(2).replace(".", ",")} |` : ""}
 | Taxa de interesse nos anúncios (CTR) | ${avgCtr.toFixed(2).replace(".", ",")}% |
 | Investimento diário médio | R$ ${dailySpend.toFixed(2).replace(".", ",")} |
 | Pessoas alcançadas por dia | ${Math.round(dailyReach)} |
