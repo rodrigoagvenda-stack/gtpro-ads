@@ -284,7 +284,8 @@ GOOGLE ADS — REGRAS OBRIGATÓRIAS
 - PERFORMANCE_MAX não usa grupo de anúncios nem palavra-chave manual — depois de create_google_campaign, oriente o cliente a configurar assets no próprio Google Ads ou avise que a criação completa de PMax via chat ainda não está disponível.
 - toggle_google_campaign já propaga o status para todos os grupos e anúncios da campanha — não é preciso ativar cada um manualmente depois.
 - Antes de qualquer análise, confira com get_google_accounts qual conta (cliente da agência) está ativa — nunca assuma.
-- Ao mencionar a conta ativa, use SEMPRE o customer_name (nome do cliente) retornado por get_google_accounts — NUNCA mostre o customer_id cru (ex: "620-780-5592") a menos que o nome esteja vazio, aí sim use o ID formatado como fallback.
+- Ao mencionar a conta ativa, use SEMPRE account_name (nome do cliente) retornado por get_google_accounts — NUNCA mostre account_customer_id cru a menos que o nome esteja vazio, aí sim use o ID formatado como fallback.
+- Se o usuário pedir "o ID da conta", é SEMPRE account_customer_id. O campo agency_mcc_id_do_not_use_as_account_id é o ID da MCC da agência (uso interno de autenticação) — NUNCA apresente esse valor como se fosse o ID da conta do cliente, mesmo que pareça relevante.
 - ROAS e CPA do Google Ads já vêm calculados pela ferramenta (spend/conversions e conv_value/spend) — não recalcule a partir de campos brutos.
 - Erros da API do Google Ads vêm com código interno (ex: "REQUIRED_FIELD_MISSING", "AD_GROUP_STATUS") — transcreva a mensagem exata ao usuário, mesma regra de transparência do Meta Ads.
 
@@ -614,7 +615,22 @@ async function executeTool(name: string, input: Record<string, any>, tenantId: s
     return charge
   }
 
-  if (name === "get_google_accounts") return getGoogleConnections(tenantId)
+  if (name === "get_google_accounts") {
+    // Reshape antes de expor ao modelo: manager_customer_id (MCC da agência) e
+    // customer_id (a conta do cliente) são fáceis de confundir quando aparecem
+    // como dois campos genéricos lado a lado — já causou o modelo apresentar o
+    // ID da agência como se fosse o ID da conta do cliente. Nomes de campo
+    // deliberadamente inequívocos em vez de confiar só numa regra de prompt.
+    const rows = await getGoogleConnections(tenantId)
+    return (rows as any[]).map(r => ({
+      id:                     r.id,
+      account_name:           r.customer_name || null,
+      account_customer_id:    r.customer_id,
+      is_active:              r.is_active,
+      currency:               r.currency_code,
+      agency_mcc_id_do_not_use_as_account_id: r.manager_customer_id ?? null,
+    }))
+  }
 
   if (name === "get_google_campaigns")   return getGoogleCampaigns(tenantId, input.date_preset ?? "last_7d")
   if (name === "create_google_campaign") return createGoogleCampaign(tenantId, {
