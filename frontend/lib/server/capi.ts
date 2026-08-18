@@ -35,6 +35,7 @@ async function getPixelAndToken(tenantId: string) {
     .from("meta_connections")
     .select("pixel_id, access_token_encrypted")
     .eq("tenant_id", tenantId)
+    .eq("active", true)
     .eq("is_active", true)
     .single()
   if (!data?.pixel_id || !data.access_token_encrypted) return null
@@ -44,7 +45,10 @@ async function getPixelAndToken(tenantId: string) {
 export async function sendCAPIEvent(tenantId: string, event: CAPIPayload): Promise<boolean> {
   try {
     const conn = await getPixelAndToken(tenantId)
-    if (!conn) return false
+    if (!conn) {
+      console.warn(`[capi] tenant=${tenantId} sem pixel_id/conexão ativa — evento ${event.eventName} não enviado`)
+      return false
+    }
 
     const userData: Record<string, string> = {}
     if (event.email)     userData.em = sha256(event.email)
@@ -73,8 +77,13 @@ export async function sendCAPIEvent(tenantId: string, event: CAPIPayload): Promi
       body: JSON.stringify({ data: [eventData] }),
     })
 
+    if (!res.ok) {
+      const raw = await res.text().catch(() => "")
+      console.error(`[capi] tenant=${tenantId} evento=${event.eventName} FAILED status=${res.status}:`, raw)
+    }
     return res.ok
-  } catch {
+  } catch (e: any) {
+    console.error(`[capi] tenant=${tenantId} evento=${event.eventName} exception:`, e?.message ?? e)
     return false
   }
 }

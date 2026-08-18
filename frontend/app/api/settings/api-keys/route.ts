@@ -30,7 +30,7 @@ export async function POST(req: NextRequest) {
   if (!tenant) return unauthorized()
   const qp = req.nextUrl.searchParams
   let name: string | undefined = qp.get("name") ?? undefined
-  let scope: string = qp.get("scope") ?? "read_write"
+  let scope: string = qp.get("scope") ?? "read"
   let ad_account_ids: string[] | null = null
   const ct = req.headers.get("content-type") ?? ""
   if (ct.includes("application/json")) {

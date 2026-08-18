@@ -23,7 +23,7 @@ export async function GET(req: NextRequest) {
     .from("chat_messages")
     .select("id, role, content, tools_used, actions, model, created_at")
     .eq("tenant_id", tenant.tenant_id)
-    .order("created_at", { ascending: true })
+    .order("created_at", { ascending: false })
     .limit(200)
 
   // Filter by active account if known — each account has its own history
@@ -32,7 +32,8 @@ export async function GET(req: NextRequest) {
   }
 
   const { data } = await (q as any)
-  return Response.json(data ?? [])
+  // Query pulls the 200 most recent rows newest-first — reverse to chronological order for the chat UI
+  return Response.json((data ?? []).reverse())
 }
 
 export async function DELETE(req: NextRequest) {

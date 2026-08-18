@@ -24,7 +24,6 @@ export async function getTenant(req: NextRequest): Promise<TenantContext | null>
     const { data: { user } } = await supabase.auth.getUser(token)
     if (user) {
       let tenantId: string | undefined = user.app_metadata?.tenant_id
-      const source = tenantId ? "app_metadata" : "unknown"
 
       // Se não está no app_metadata, busca na tabela tenant_members
       if (!tenantId) {
@@ -34,15 +33,12 @@ export async function getTenant(req: NextRequest): Promise<TenantContext | null>
           .eq("id", user.id)
           .single()
         tenantId = member?.tenant_id
-        console.log(`[auth] user=${user.id} app_metadata.tenant_id=null → tenant_members lookup → tenant_id=${tenantId ?? "NOT FOUND"}`)
-      } else {
-        console.log(`[auth] user=${user.id} tenant_id=${tenantId} source=${source}`)
       }
 
       if (tenantId) {
         ctx = { tenant_id: tenantId, auth_type: "jwt", user_id: user.id, user_email: user.email }
       } else {
-        console.log(`[auth] user=${user.id} NO tenant_id resolved — returning null`)
+        console.warn(`[auth] user=${user.id} sem tenant_id resolvido (nem app_metadata nem tenant_members)`)
       }
     }
   } catch {}

@@ -102,9 +102,12 @@ export async function POST(req: NextRequest) {
     value:          body.value ?? null,
   }).then(sent => {
     if (sent) {
-      supabase.from("leads").update({ capi_lead_sent: true }).eq("id", lead.id).then(() => {})
+      supabase.from("leads").update({ capi_lead_sent: true }).eq("id", lead.id).then(
+        () => {},
+        (e: any) => console.error(`[webhook/leads] capi_lead_sent update failed lead=${lead.id}:`, e?.message ?? e)
+      )
     }
-  })
+  }, (e: any) => console.error(`[webhook/leads] sendCAPIEvent failed lead=${lead.id}:`, e?.message ?? e))
 
   return Response.json({ success: true, id: lead.id })
 }

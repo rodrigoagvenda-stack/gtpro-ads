@@ -11,7 +11,14 @@ import {
   getPixels, getPixelStats, getCustomConversions,
   getCustomAudiences, createLookalikeAudience, createWebsiteAudience, createEngagementAudience,
   getAccountInfo, searchGeoLocation, getPages, searchInterests,
+  runWithMetaConnection,
 } from "./meta-ads"
+import {
+  getGoogleCampaigns, createGoogleCampaign, toggleGoogleCampaign, updateGoogleCampaignBudget,
+  getGoogleInsights, getAdGroups, createAdGroup, updateAdGroupStatus,
+  getKeywords, createKeywords, addNegativeKeywords,
+  createResponsiveSearchAd, updateAdStatus, getGoogleConnections,
+} from "./google-ads"
 
 // ─── Streaming chunk types ────────────────────────────────────────────────────
 
@@ -26,7 +33,7 @@ export type AgentChunk =
 
 // ─── System prompt ────────────────────────────────────────────────────────────
 
-const SYSTEM_PROMPT = `Você é o GTPRO, especialista em Meta Ads com acesso completo à API. Cria, edita e otimiza campanhas de verdade — não apenas sugere.
+const SYSTEM_PROMPT = `Você é o GTPRO, especialista em Meta Ads e Google Ads com acesso completo às APIs. Cria, edita e otimiza campanhas de verdade — não apenas sugere.
 
 ────────────────────────────────────────
 FORMATAÇÃO
@@ -261,6 +268,26 @@ Quando pedir copy ou chegar nessa etapa:
 - Por objetivo: LEADS → dor/solução + CTA direto | MESSAGES → conversa natural | SALES → benefício + urgência | TRAFFIC → curiosidade + benefício
 
 ────────────────────────────────────────
+GOOGLE ADS — REGRAS OBRIGATÓRIAS
+────────────────────────────────────────
+- Toda campanha nasce PAUSED, todo grupo de anúncios nasce ENABLED (o pai pausado já impede veiculação), todo anúncio nasce PAUSED. Só ative quando o usuário confirmar.
+- Orçamento (daily_budget) é SEMPRE em reais (BRL) — o código converte para micros automaticamente. NUNCA envie o valor já convertido.
+- Fluxo obrigatório de criação, uma pergunta por vez, mesma disciplina do Meta Ads:
+  1. Objetivo/nicho do cliente e canal — SEARCH (busca, precisa de palavras-chave), DISPLAY (rede de display) ou PERFORMANCE_MAX (automatizada, sem grupo/palavra-chave manual)
+  2. Nome da campanha e orçamento diário
+  3. create_google_campaign → guarde o campaign_resource_name retornado
+  4. Para SEARCH/DISPLAY: pergunte o nome do grupo de anúncios → create_google_adgroup com o campaign_resource_name
+  5. Para SEARCH: pergunte as palavras-chave (com termos que o cliente já usa) e o match type desejado (padrão PHRASE se não especificado) → create_google_keywords com o adgroup_resource_name retornado. Pergunte também se há termos a excluir (palavras-chave negativas)
+  6. Peça a URL de destino, 3 a 15 headlines (máx. 30 caracteres) e 2 a 4 descriptions (máx. 90 caracteres) — se o usuário não tiver copy pronta, gere opções e peça confirmação
+  7. create_google_ad com esse material
+  8. Resuma a estrutura completa (campanha → grupo → palavras-chave → anúncio) e pergunte se pode ativar
+- PERFORMANCE_MAX não usa grupo de anúncios nem palavra-chave manual — depois de create_google_campaign, oriente o cliente a configurar assets no próprio Google Ads ou avise que a criação completa de PMax via chat ainda não está disponível.
+- toggle_google_campaign já propaga o status para todos os grupos e anúncios da campanha — não é preciso ativar cada um manualmente depois.
+- Antes de qualquer análise, confira com get_google_accounts qual conta (cliente da agência) está ativa — nunca assuma.
+- ROAS e CPA do Google Ads já vêm calculados pela ferramenta (spend/conversions e conv_value/spend) — não recalcule a partir de campos brutos.
+- Erros da API do Google Ads vêm com código interno (ex: "REQUIRED_FIELD_MISSING", "AD_GROUP_STATUS") — transcreva a mensagem exata ao usuário, mesma regra de transparência do Meta Ads.
+
+────────────────────────────────────────
 COBRANÇAS (BOLETO / PIX) — ASAAS
 ────────────────────────────────────────
 Quando o usuário pedir para gerar boleto, cobrança ou link de pagamento:
@@ -373,12 +400,81 @@ const TOOLS: Anthropic.Tool[] = [
 
   // ── Asaas (boleto / PIX)
   { name: "generate_charge", description: "Gera cobrança (boleto ou PIX) via Asaas e envia link por WhatsApp. Use quando o usuário pedir para gerar boleto, cobrança ou link de pagamento para um cliente.", input_schema: { ...o, properties: { customer_name: s, customer_phone: s, customer_cpf: s, description: s, value: n, due_date: s, billing_type: { type: "string", enum: ["BOLETO", "PIX", "CREDIT_CARD"], description: "Tipo de pagamento. Default: BOLETO" } }, required: ["customer_name", "customer_phone", "description", "value", "due_date"] } },
+
+  // ── Google Ads — Account
+  { name: "get_google_accounts", description: "Lista as contas Google Ads conectadas (MCC/clientes) e qual está ativa no momento.", input_schema: { ...o, properties: {} } },
+
+  // ── Google Ads — Campaigns
+  { name: "get_google_campaigns",   description: "Lista campanhas do Google Ads com métricas (spend, conversões, ROAS, CPA) e orçamento.", input_schema: { ...o, properties: { date_preset: { type: "string", enum: ["last_7d", "last_14d", "last_30d", "last_90d", "this_month", "last_month"] } } } },
+  { name: "create_google_campaign", description: "Cria uma campanha do Google Ads (SEARCH, DISPLAY ou PERFORMANCE_MAX), sempre como PAUSED. Depois de criar, é preciso criar ao menos um grupo de anúncios (create_google_adgroup) e, para SEARCH, palavras-chave (create_google_keywords) e um anúncio (create_google_ad).", input_schema: { ...o, properties: { name: s, daily_budget: { ...n, description: "Orçamento diário em reais (BRL)" }, channel_type: { type: "string", enum: ["SEARCH", "DISPLAY", "PERFORMANCE_MAX"] } }, required: ["name", "daily_budget", "channel_type"] } },
+  { name: "toggle_google_campaign", description: "Ativa ou pausa uma campanha do Google Ads — propaga o status para todos os grupos de anúncios e anúncios da campanha.", input_schema: { ...o, properties: { campaign_id: s, enable: b }, required: ["campaign_id", "enable"] } },
+  { name: "update_google_campaign_budget", description: "Atualiza o orçamento diário de uma campanha do Google Ads.", input_schema: { ...o, properties: { budget_resource_name: s, daily_budget: { ...n, description: "Novo orçamento diário em reais (BRL)" } }, required: ["budget_resource_name", "daily_budget"] } },
+  { name: "get_google_insights",    description: "Métricas agregadas da conta Google Ads inteira para um período, com série diária.", input_schema: { ...o, properties: { date_preset: { type: "string", enum: ["last_7d", "last_14d", "last_30d", "last_90d", "this_month", "last_month"] } } } },
+
+  // ── Google Ads — Ad Groups
+  { name: "get_google_adgroups",    description: "Lista os grupos de anúncios de uma campanha do Google Ads com métricas.", input_schema: { ...o, properties: { campaign_id: s, date_preset: s }, required: ["campaign_id"] } },
+  { name: "create_google_adgroup",  description: "Cria um grupo de anúncios dentro de uma campanha do Google Ads. Use o campaign_resource_name retornado por create_google_campaign ou get_google_campaigns.", input_schema: { ...o, properties: { campaign_resource_name: s, name: s, cpc_bid: { ...n, description: "Lance manual por clique em reais (opcional — omitir usa lance automático da campanha)" } }, required: ["campaign_resource_name", "name"] } },
+  { name: "toggle_google_adgroup",  description: "Ativa ou pausa um grupo de anúncios do Google Ads.", input_schema: { ...o, properties: { adgroup_resource_name: s, enable: b }, required: ["adgroup_resource_name", "enable"] } },
+
+  // ── Google Ads — Keywords
+  { name: "get_google_keywords",    description: "Lista as palavras-chave de um grupo de anúncios com métricas e quality score.", input_schema: { ...o, properties: { adgroup_id: s, date_preset: s }, required: ["adgroup_id"] } },
+  { name: "create_google_keywords", description: "Adiciona palavras-chave a um grupo de anúncios do Google Ads. match_type: EXACT (exata), PHRASE (frase) ou BROAD (ampla) — padrão PHRASE.", input_schema: { ...o, properties: { adgroup_resource_name: s, keywords: { type: "array", items: { type: "object", properties: { text: s, match_type: { type: "string", enum: ["EXACT", "PHRASE", "BROAD"] } }, required: ["text"] } } }, required: ["adgroup_resource_name", "keywords"] } },
+  { name: "add_google_negative_keywords", description: "Adiciona palavras-chave negativas a um grupo de anúncios, para excluir buscas irrelevantes.", input_schema: { ...o, properties: { adgroup_resource_name: s, keywords: { type: "array", items: { type: "object", properties: { text: s, match_type: { type: "string", enum: ["EXACT", "PHRASE", "BROAD"] } }, required: ["text"] } } }, required: ["adgroup_resource_name", "keywords"] } },
+
+  // ── Google Ads — Ads
+  { name: "create_google_ad", description: "Cria um Responsive Search Ad (RSA) num grupo de anúncios. Exige 3–15 headlines (máx. 30 caracteres cada) e 2–4 descriptions (máx. 90 caracteres cada). Sempre criado como PAUSED.", input_schema: { ...o, properties: { adgroup_resource_name: s, headlines: { type: "array", items: s }, descriptions: { type: "array", items: s }, final_url: s, path1: s, path2: s }, required: ["adgroup_resource_name", "headlines", "descriptions", "final_url"] } },
+  { name: "toggle_google_ad", description: "Ativa ou pausa um anúncio do Google Ads.", input_schema: { ...o, properties: { ad_resource_name: s, enable: b }, required: ["ad_resource_name", "enable"] } },
 ]
 
-const WRITE_TOOLS = new Set(["create_campaign","update_campaign","duplicate_campaign","delete_campaign","toggle_campaign","create_adset","update_adset","duplicate_adset","delete_adset","create_ad","update_ad","duplicate_ad","delete_ad","create_lookalike_audience","create_website_audience","create_engagement_audience","generate_charge"])
+const WRITE_TOOLS = new Set([
+  "create_campaign","update_campaign","duplicate_campaign","delete_campaign","toggle_campaign",
+  "create_adset","update_adset","duplicate_adset","delete_adset","create_ad","update_ad","duplicate_ad","delete_ad",
+  "create_lookalike_audience","create_website_audience","create_engagement_audience","generate_charge",
+  "create_google_campaign","toggle_google_campaign","update_google_campaign_budget",
+  "create_google_adgroup","toggle_google_adgroup",
+  "create_google_keywords","add_google_negative_keywords",
+  "create_google_ad","toggle_google_ad",
+])
+
+// Guards against duplicate creation if the model retries a write after a transient
+// error (or a dropped client connection masks a server-side success). Reuses the
+// agent_logs trail already written by logAction — no new table needed.
+const DEDUPE_WINDOW_MS = 30_000
+const DEDUPE_TOOLS = new Set([
+  "create_campaign", "create_adset", "create_ad",
+  "create_google_campaign", "create_google_adgroup", "create_google_ad",
+])
+
+async function findRecentDuplicate(tenantId: string, name: string, input: Record<string, any>): Promise<any | null> {
+  const supabase = createServiceClient()
+  const since = new Date(Date.now() - DEDUPE_WINDOW_MS).toISOString()
+  const { data } = await supabase
+    .from("agent_logs")
+    .select("params, result")
+    .eq("tenant_id", tenantId)
+    .eq("action", name)
+    .eq("status", "success")
+    .gte("created_at", since)
+    .order("created_at", { ascending: false })
+    .limit(5)
+  const fingerprint = JSON.stringify(input)
+  const match = (data ?? []).find((row: any) => JSON.stringify(row.params) === fingerprint)
+  return match?.result ?? null
+}
 
 async function executeTool(name: string, input: Record<string, any>, tenantId: string) {
   const supabase = createServiceClient()
+
+  if (DEDUPE_TOOLS.has(name)) {
+    const cached = await findRecentDuplicate(tenantId, name, input)
+    if (cached) {
+      return {
+        ...(typeof cached === "object" && cached !== null ? cached : { result: cached }),
+        _deduped: true,
+        _note: "Ação idêntica já foi executada há poucos segundos — resultado reaproveitado para evitar duplicação no Meta.",
+      }
+    }
+  }
 
   if (name === "get_account_info")       return getAccountInfo(tenantId)
   if (name === "get_campaigns")          return getCampaigns(tenantId, input.date_preset ?? "last_7d")
@@ -502,12 +598,54 @@ async function executeTool(name: string, input: Record<string, any>, tenantId: s
     return charge
   }
 
+  if (name === "get_google_accounts") return getGoogleConnections(tenantId)
+
+  if (name === "get_google_campaigns")   return getGoogleCampaigns(tenantId, input.date_preset ?? "last_7d")
+  if (name === "create_google_campaign") return createGoogleCampaign(tenantId, {
+    name: input.name, dailyBudget: input.daily_budget, channelType: input.channel_type,
+  })
+  if (name === "toggle_google_campaign") return toggleGoogleCampaign(tenantId, input.campaign_id, !!input.enable)
+  if (name === "update_google_campaign_budget")
+    return updateGoogleCampaignBudget(tenantId, input.budget_resource_name, Math.round(input.daily_budget * 1_000_000))
+  if (name === "get_google_insights") return getGoogleInsights(tenantId, input.date_preset ?? "last_7d")
+
+  if (name === "get_google_adgroups")   return getAdGroups(tenantId, input.campaign_id, input.date_preset ?? "last_7d")
+  if (name === "create_google_adgroup") return createAdGroup(tenantId, {
+    campaignResourceName: input.campaign_resource_name,
+    name:                 input.name,
+    cpcBidMicros:         input.cpc_bid ? Math.round(input.cpc_bid * 1_000_000) : undefined,
+  })
+  if (name === "toggle_google_adgroup")
+    return updateAdGroupStatus(tenantId, input.adgroup_resource_name, input.enable ? "ENABLED" : "PAUSED")
+
+  if (name === "get_google_keywords") return getKeywords(tenantId, input.adgroup_id, input.date_preset ?? "last_7d")
+  if (name === "create_google_keywords") return createKeywords(tenantId, {
+    adGroupResourceName: input.adgroup_resource_name,
+    keywords: (input.keywords ?? []).map((k: any) => ({ text: k.text, matchType: k.match_type })),
+  })
+  if (name === "add_google_negative_keywords") return addNegativeKeywords(tenantId, {
+    adGroupResourceName: input.adgroup_resource_name,
+    keywords: (input.keywords ?? []).map((k: any) => ({ text: k.text, matchType: k.match_type })),
+  })
+
+  if (name === "create_google_ad") return createResponsiveSearchAd(tenantId, {
+    adGroupResourceName: input.adgroup_resource_name,
+    headlines:            input.headlines ?? [],
+    descriptions:         input.descriptions ?? [],
+    finalUrl:             input.final_url,
+    path1:                input.path1,
+    path2:                input.path2,
+  })
+  if (name === "toggle_google_ad")
+    return updateAdStatus(tenantId, input.ad_resource_name, input.enable ? "ENABLED" : "PAUSED")
+
   throw new Error(`Ferramenta desconhecida: ${name}`)
 }
 
-function logAction(tenantId: string, action: string, params: any, result: any, status: string) {
+async function logAction(tenantId: string, action: string, params: any, result: any, status: string) {
   const supabase = createServiceClient()
-  supabase.from("agent_logs").insert({ tenant_id: tenantId, action, params, result, status, justification: "" })
+  const { error } = await supabase.from("agent_logs").insert({ tenant_id: tenantId, action, params, result, status, justification: "" })
+  if (error) console.error(`[agent] logAction failed tenant=${tenantId} action=${action}:`, error.message)
 }
 
 export const ALLOWED_MODELS = ["claude-haiku-4-5-20251001", "claude-sonnet-4-6", "claude-opus-4-7"]
@@ -519,7 +657,8 @@ export async function runAgent(
   modelId?: string,
   history?: { role: string; content: string }[],
   adAccountId?: string,
-  onChunk?: (chunk: AgentChunk) => void
+  onChunk?: (chunk: AgentChunk) => void,
+  connectionId?: string
 ) {
   const apiKey = await getAnthropicKey()
   const client = new Anthropic({ apiKey })
@@ -554,13 +693,17 @@ export async function runAgent(
       p_period:        period,
       p_input_tokens:  usage.input_tokens,
       p_output_tokens: usage.output_tokens,
-    }).then(() => {})
+    }).then(
+      () => {},
+      (e: any) => console.error(`[agent] trackUsage failed tenant=${tenantId}:`, e?.message ?? e)
+    )
   }
 
+  return runWithMetaConnection(connectionId, async () => {
   while (iterations < MAX_ITERATIONS) {
     iterations++
     const stream = client.messages.stream({
-      model, max_tokens: 4096, system: SYSTEM_PROMPT, tools: TOOLS, messages
+      model, max_tokens: 8192, system: SYSTEM_PROMPT, tools: TOOLS, messages
     })
 
     stream.on("text", (text) => {
@@ -586,7 +729,9 @@ export async function runAgent(
         toolsUsed.push({ name: block.name, input: block.input as any })
         try {
           const result = await executeTool(block.name, block.input as any, tenantId)
-          logAction(tenantId, block.name, block.input, result, "success")
+          // Awaited (not fire-and-forget): the dedupe guard above reads this same
+          // table, so a pending write here could let a rapid duplicate slip through.
+          await logAction(tenantId, block.name, block.input, result, "success")
           onChunk?.({ type: "tool_done", name: block.name })
           if (WRITE_TOOLS.has(block.name)) {
             actionsTaken.push({ tool: block.name, input: block.input, result })
@@ -594,7 +739,7 @@ export async function runAgent(
           }
           results.push({ type: "tool_result", tool_use_id: block.id, content: JSON.stringify(result) })
         } catch (e: any) {
-          logAction(tenantId, block.name, block.input, { error: e.message }, "failed")
+          await logAction(tenantId, block.name, block.input, { error: e.message }, "failed")
           onChunk?.({ type: "tool_error", name: block.name, error: e.message })
           results.push({ type: "tool_result", tool_use_id: block.id, content: `Erro: ${e.message}`, is_error: true })
         }
@@ -606,4 +751,5 @@ export async function runAgent(
   const fallback = "Limite de iterações atingido."
   onChunk?.({ type: "done", message: fallback, tools_used: toolsUsed, actions_taken: actionsTaken })
   return { message: fallback, actions_taken: actionsTaken, tools_used: toolsUsed }
+  })
 }

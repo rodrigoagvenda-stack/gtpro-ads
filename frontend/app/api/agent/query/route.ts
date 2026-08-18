@@ -15,10 +15,11 @@ export async function POST(req: NextRequest) {
 
     const [configRes, connRes] = await Promise.all([
       supabase.from("agent_configs").select("*").eq("tenant_id", tenant.tenant_id).single(),
-      supabase.from("meta_connections").select("ad_account_id").eq("tenant_id", tenant.tenant_id).eq("active", true).eq("is_active", true).single(),
+      supabase.from("meta_connections").select("id, ad_account_id").eq("tenant_id", tenant.tenant_id).eq("active", true).eq("is_active", true).single(),
     ])
 
     const adAccountId = connRes.data?.ad_account_id ?? undefined
+    const connectionId = connRes.data?.id ?? undefined
 
     await supabase.from("chat_messages").insert({
       tenant_id: tenant.tenant_id, role: "user", content: message,
@@ -33,7 +34,7 @@ export async function POST(req: NextRequest) {
         try {
           const result = await runAgent(
             tenant.tenant_id, message, configRes.data ?? {}, model, history, adAccountId,
-            (chunk) => controller.enqueue(send(chunk))
+            (chunk) => controller.enqueue(send(chunk)), connectionId
           )
           await supabase.from("chat_messages").insert({
             tenant_id: tenant.tenant_id, role: "assistant",

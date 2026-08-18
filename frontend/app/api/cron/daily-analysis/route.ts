@@ -4,6 +4,7 @@ import { createServiceClient } from "@/lib/server/supabase"
 import { sendText } from "@/lib/server/whatsapp"
 import { getCampaigns, filterCampaignsForAgent } from "@/lib/server/meta-ads"
 import { checkAndNotifyAlerts } from "@/lib/server/alerts"
+import { getAnthropicKey } from "@/lib/server/platform"
 
 // ─── Auth ─────────────────────────────────────────────────────────────────────
 
@@ -18,18 +19,6 @@ function authorized(req: NextRequest): boolean {
 
 function brHour(): number {
   return (new Date().getUTCHours() - 3 + 24) % 24
-}
-
-// ─── Anthropic key helper ─────────────────────────────────────────────────────
-
-async function getAnthropicKey(): Promise<string> {
-  const supabase = createServiceClient()
-  const { data } = await supabase
-    .from("platform_settings")
-    .select("value_encrypted")
-    .eq("key", "anthropic_api_key")
-    .single()
-  return data?.value_encrypted ?? ""
 }
 
 // ─── Run analysis for one tenant ─────────────────────────────────────────────

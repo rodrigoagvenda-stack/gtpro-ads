@@ -225,6 +225,213 @@ export async function createGoogleCampaign(tenantId: string, params: {
   }
 }
 
+// ─── Ad Groups ────────────────────────────────────────────────────────────────
+
+export async function createAdGroup(tenantId: string, params: {
+  campaignResourceName: string  // "customers/123/campaigns/456"
+  name: string
+  cpcBidMicros?: number
+}) {
+  const { accessToken, conn } = await getTokens(tenantId)
+  const customerId = conn.customer_id
+
+  const create: Record<string, any> = {
+    name:     params.name,
+    campaign: params.campaignResourceName,
+    status:   "ENABLED",
+    type:     "SEARCH_STANDARD",
+  }
+  if (params.cpcBidMicros) create.cpcBidMicros = params.cpcBidMicros
+
+  const res = await gadsPost(
+    `/customers/${customerId}/adGroups:mutate`,
+    { operations: [{ create }] },
+    accessToken, conn.manager_customer_id,
+  )
+  return { resourceName: res.results?.[0]?.resourceName, customerId }
+}
+
+export async function getAdGroups(tenantId: string, campaignId: string, datePreset = "last_7d") {
+  const { accessToken, conn } = await getTokens(tenantId)
+  const dateRange = DATE_RANGES[datePreset] ?? "LAST_7_DAYS"
+  const query = `
+    SELECT
+      ad_group.id, ad_group.resource_name, ad_group.name, ad_group.status, ad_group.cpc_bid_micros,
+      metrics.impressions, metrics.clicks, metrics.cost_micros, metrics.conversions
+    FROM ad_group
+    WHERE campaign.id = ${campaignId}
+      AND segments.date DURING ${dateRange}
+      AND ad_group.status != 'REMOVED'
+  `
+  const data = await gadsPost(`/customers/${conn.customer_id}/googleAds:search`, { query }, accessToken, conn.manager_customer_id)
+  return (data.results ?? []).map((r: any) => {
+    const ag = r.adGroup
+    const m  = r.metrics
+    return {
+      id:           ag.id,
+      resourceName: ag.resourceName,
+      name:         ag.name,
+      status:       ag.status,
+      cpc_bid:      ag.cpcBidMicros ? Number(ag.cpcBidMicros) / 1_000_000 : null,
+      impressions:  Number(m?.impressions ?? 0),
+      clicks:       Number(m?.clicks ?? 0),
+      spend:        (m?.costMicros ?? 0) / 1_000_000,
+      conversions:  Number(m?.conversions ?? 0),
+    }
+  })
+}
+
+export async function updateAdGroupStatus(tenantId: string, adGroupResourceName: string, status: "ENABLED" | "PAUSED") {
+  const { accessToken, conn } = await getTokens(tenantId)
+  return gadsPost(
+    `/customers/${conn.customer_id}/adGroups:mutate`,
+    { operations: [{ update: { resourceName: adGroupResourceName, status }, updateMask: "status" }] },
+    accessToken, conn.manager_customer_id,
+  )
+}
+
+// ─── Keywords ─────────────────────────────────────────────────────────────────
+
+export type KeywordMatchType = "EXACT" | "PHRASE" | "BROAD"
+const MATCH_TYPES = new Set<KeywordMatchType>(["EXACT", "PHRASE", "BROAD"])
+
+function normalizeMatchType(mt: string | undefined, fallback: KeywordMatchType): KeywordMatchType {
+  const upper = (mt ?? "").toUpperCase() as KeywordMatchType
+  return MATCH_TYPES.has(upper) ? upper : fallback
+}
+
+export async function createKeywords(tenantId: string, params: {
+  adGroupResourceName: string
+  keywords: { text: string; matchType?: string }[]
+}) {
+  const { accessToken, conn } = await getTokens(tenantId)
+  if (!params.keywords?.length) throw new Error("Informe ao menos uma palavra-chave.")
+
+  const operations = params.keywords.map(kw => ({
+    create: {
+      adGroup: params.adGroupResourceName,
+      status:  "ENABLED",
+      keyword: { text: kw.text, matchType: normalizeMatchType(kw.matchType, "PHRASE") },
+    },
+  }))
+  const res = await gadsPost(
+    `/customers/${conn.customer_id}/adGroupCriteria:mutate`,
+    { operations },
+    accessToken, conn.manager_customer_id,
+  )
+  return { created: res.results?.length ?? 0, resourceNames: (res.results ?? []).map((r: any) => r.resourceName) }
+}
+
+export async function addNegativeKeywords(tenantId: string, params: {
+  adGroupResourceName: string
+  keywords: { text: string; matchType?: string }[]
+}) {
+  const { accessToken, conn } = await getTokens(tenantId)
+  if (!params.keywords?.length) throw new Error("Informe ao menos uma palavra-chave negativa.")
+
+  const operations = params.keywords.map(kw => ({
+    create: {
+      adGroup:  params.adGroupResourceName,
+      negative: true,
+      keyword:  { text: kw.text, matchType: normalizeMatchType(kw.matchType, "BROAD") },
+    },
+  }))
+  const res = await gadsPost(
+    `/customers/${conn.customer_id}/adGroupCriteria:mutate`,
+    { operations },
+    accessToken, conn.manager_customer_id,
+  )
+  return { created: res.results?.length ?? 0 }
+}
+
+export async function getKeywords(tenantId: string, adGroupId: string, datePreset = "last_7d") {
+  const { accessToken, conn } = await getTokens(tenantId)
+  const dateRange = DATE_RANGES[datePreset] ?? "LAST_7_DAYS"
+  const query = `
+    SELECT
+      ad_group_criterion.criterion_id, ad_group_criterion.resource_name,
+      ad_group_criterion.keyword.text, ad_group_criterion.keyword.match_type,
+      ad_group_criterion.status, ad_group_criterion.quality_info.quality_score,
+      metrics.impressions, metrics.clicks, metrics.cost_micros, metrics.conversions, metrics.average_cpc
+    FROM keyword_view
+    WHERE ad_group.id = ${adGroupId}
+      AND segments.date DURING ${dateRange}
+      AND ad_group_criterion.status != 'REMOVED'
+  `
+  const data = await gadsPost(`/customers/${conn.customer_id}/googleAds:search`, { query }, accessToken, conn.manager_customer_id)
+  return (data.results ?? []).map((r: any) => {
+    const c = r.adGroupCriterion
+    const m = r.metrics
+    return {
+      id:            c.criterionId,
+      resourceName:  c.resourceName,
+      text:          c.keyword?.text,
+      matchType:     c.keyword?.matchType,
+      status:        c.status,
+      qualityScore:  c.qualityInfo?.qualityScore ?? null,
+      impressions:   Number(m?.impressions ?? 0),
+      clicks:        Number(m?.clicks ?? 0),
+      spend:         (m?.costMicros ?? 0) / 1_000_000,
+      conversions:   Number(m?.conversions ?? 0),
+      avg_cpc:       (m?.averageCpc ?? 0) / 1_000_000,
+    }
+  })
+}
+
+// ─── Responsive Search Ads ──────────────────────────────────────────────────────
+
+export async function createResponsiveSearchAd(tenantId: string, params: {
+  adGroupResourceName: string
+  headlines: string[]     // 3–15 headlines, max 30 chars each
+  descriptions: string[]  // 2–4 descriptions, max 90 chars each
+  finalUrl: string
+  path1?: string
+  path2?: string
+}) {
+  const { accessToken, conn } = await getTokens(tenantId)
+
+  if (!params.headlines || params.headlines.length < 3)
+    throw new Error("Responsive Search Ad exige no mínimo 3 headlines (máx. 30 caracteres cada).")
+  if (!params.descriptions || params.descriptions.length < 2)
+    throw new Error("Responsive Search Ad exige no mínimo 2 descriptions (máx. 90 caracteres cada).")
+  const badHeadline = params.headlines.find(h => h.length > 30)
+  if (badHeadline) throw new Error(`Headline "${badHeadline}" excede 30 caracteres (${badHeadline.length}).`)
+  const badDesc = params.descriptions.find(d => d.length > 90)
+  if (badDesc) throw new Error(`Description "${badDesc}" excede 90 caracteres (${badDesc.length}).`)
+  if (!params.finalUrl) throw new Error("finalUrl é obrigatório para criar o anúncio.")
+
+  const responsiveSearchAd: Record<string, any> = {
+    headlines:    params.headlines.map(text => ({ text })),
+    descriptions: params.descriptions.map(text => ({ text })),
+  }
+  if (params.path1) responsiveSearchAd.path1 = params.path1
+  if (params.path2) responsiveSearchAd.path2 = params.path2
+
+  const res = await gadsPost(
+    `/customers/${conn.customer_id}/adGroupAds:mutate`,
+    {
+      operations: [{
+        create: {
+          adGroup: params.adGroupResourceName,
+          status:  "PAUSED",
+          ad:      { finalUrls: [params.finalUrl], responsiveSearchAd },
+        },
+      }],
+    },
+    accessToken, conn.manager_customer_id,
+  )
+  return { resourceName: res.results?.[0]?.resourceName }
+}
+
+export async function updateAdStatus(tenantId: string, adGroupAdResourceName: string, status: "ENABLED" | "PAUSED") {
+  const { accessToken, conn } = await getTokens(tenantId)
+  return gadsPost(
+    `/customers/${conn.customer_id}/adGroupAds:mutate`,
+    { operations: [{ update: { resourceName: adGroupAdResourceName, status }, updateMask: "status" }] },
+    accessToken, conn.manager_customer_id,
+  )
+}
+
 export async function saveGoogleConnections(
   tenantId: string,
   accessToken: string,

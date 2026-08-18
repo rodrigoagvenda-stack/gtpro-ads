@@ -1,38 +1,41 @@
+import { AsyncLocalStorage } from "async_hooks"
 import { createServiceClient } from "./supabase"
 import { decrypt, encrypt } from "./crypto"
 import { getMetaAppId, getMetaAppSecret } from "./platform"
 
 const GRAPH = "https://graph.facebook.com/v25.0"
 
-async function getToken(tenantId: string) {
-  const { token } = await getTokenAndAccount(tenantId)
+// Request-scoped active connection: set once per agent turn (or webhook action) via
+// runWithMetaConnection, so every downstream call resolves the same Meta account —
+// without threading connectionId through every function in this file individually.
+// An explicit connectionId argument always wins over the ambient context.
+const metaConnectionContext = new AsyncLocalStorage<{ connectionId?: string }>()
+
+export function runWithMetaConnection<T>(connectionId: string | undefined, fn: () => Promise<T>): Promise<T> {
+  return metaConnectionContext.run({ connectionId }, fn)
+}
+
+async function getToken(tenantId: string, connectionId?: string) {
+  const { token } = await getTokenAndAccount(tenantId, connectionId)
   return token
 }
 
 async function getTokenAndAccount(tenantId: string, connectionId?: string) {
   const supabase = createServiceClient()
-
-  // Diagnóstico: quais rows existem para esse tenant_id?
-  const { data: allRows, error: diagError } = await supabase
-    .from("meta_connections")
-    .select("id, tenant_id, ad_account_id, active, is_active")
-    .eq("tenant_id", tenantId)
-  console.log(`[meta-ads] getTokenAndAccount tenant_id=${tenantId} connectionId=${connectionId ?? "none"}`)
-  console.log(`[meta-ads] rows found for tenant: ${JSON.stringify(allRows)} error=${diagError?.message ?? "none"}`)
+  const resolvedConnectionId = connectionId ?? metaConnectionContext.getStore()?.connectionId
 
   let q = supabase
     .from("meta_connections")
     .select("access_token_encrypted, ad_account_id")
     .eq("tenant_id", tenantId)
     .eq("active", true)
-  if (connectionId) {
-    q = (q as any).eq("id", connectionId)
+  if (resolvedConnectionId) {
+    q = (q as any).eq("id", resolvedConnectionId)
   } else {
     q = (q as any).eq("is_active", true)
   }
   const { data } = await (q as any).single()
-  console.log(`[meta-ads] active+is_active query result: ${data ? `found ad_account=${data.ad_account_id}` : "NOT FOUND"}`)
-  if (!data) throw new Error(`Conta Meta não conectada (tenant_id=${tenantId}, rows_total=${allRows?.length ?? 0})`)
+  if (!data) throw new Error(`Conta Meta não conectada (tenant_id=${tenantId})`)
   return { token: decrypt(data.access_token_encrypted), adAccountId: data.ad_account_id }
 }
 

@@ -1,13 +1,12 @@
 import { createServiceClient } from "./supabase"
+import { getSetting } from "./platform"
 
 async function getAsaasConfig() {
-  const supabase = createServiceClient()
-  const [{ data: keyRow }, { data: sandboxRow }] = await Promise.all([
-    supabase.from("platform_settings").select("value_encrypted").eq("key", "asaas_api_key").single(),
-    supabase.from("platform_settings").select("value_encrypted").eq("key", "asaas_sandbox").single(),
+  const [apiKey, sandboxRaw] = await Promise.all([
+    getSetting("asaas_api_key"),
+    getSetting("asaas_sandbox"),
   ])
-  const apiKey   = keyRow?.value_encrypted ?? ""
-  const sandbox  = sandboxRow?.value_encrypted === "true"
+  const sandbox  = sandboxRaw === "true"
   const baseUrl  = sandbox
     ? "https://sandbox.asaas.com/api/v3"
     : "https://api.asaas.com/v3"
