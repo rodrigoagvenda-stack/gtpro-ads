@@ -11,7 +11,7 @@ export async function GET(req: NextRequest) {
 
   const supabase = createServiceClient()
   const { data, error } = await supabase
-    .from("clients")
+    .from("client_ad_accounts")
     .select(`
       id, name, is_active, meta_connection_id, google_connection_id,
       meta_connection:meta_connections ( id, ad_account_id, name ),
@@ -42,7 +42,7 @@ export async function POST(req: NextRequest) {
   if (id) payload.id = id
 
   const { data, error } = await supabase
-    .from("clients")
+    .from("client_ad_accounts")
     .upsert(payload, { onConflict: "id" })
     .select()
     .single()
@@ -63,7 +63,7 @@ export async function PATCH(req: NextRequest) {
   const supabase = createServiceClient()
 
   const { data: client, error: findErr } = await supabase
-    .from("clients")
+    .from("client_ad_accounts")
     .select("id, meta_connection_id, google_connection_id")
     .eq("id", id)
     .eq("tenant_id", tenant.tenant_id)
@@ -71,8 +71,8 @@ export async function PATCH(req: NextRequest) {
 
   if (findErr || !client) return Response.json({ error: "Cliente não encontrado" }, { status: 404 })
 
-  await supabase.from("clients").update({ is_active: false }).eq("tenant_id", tenant.tenant_id)
-  await supabase.from("clients").update({ is_active: true }).eq("id", id)
+  await supabase.from("client_ad_accounts").update({ is_active: false }).eq("tenant_id", tenant.tenant_id)
+  await supabase.from("client_ad_accounts").update({ is_active: true }).eq("id", id)
 
   if (client.meta_connection_id) {
     await supabase.from("meta_connections").update({ is_active: false }).eq("tenant_id", tenant.tenant_id)
