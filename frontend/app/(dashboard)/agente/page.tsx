@@ -231,6 +231,9 @@ const TOOL_LABELS: Record<string, string> = {
   create_google_ad: "Criando anúncio Google Ads", toggle_google_ad: "Alterando status do anúncio",
   get_ga4_properties: "Verificando propriedades GA4", get_ga4_overview: "Carregando visão geral do site",
   get_ga4_conversions_daily: "Carregando tendência de conversões", get_ga4_top_pages: "Carregando páginas mais visitadas",
+  get_gtm_containers: "Verificando containers GTM", get_gtm_triggers: "Carregando gatilhos",
+  create_gtm_trigger: "Criando gatilho", get_gtm_tags: "Carregando tags",
+  create_gtm_tag: "Criando tag", publish_gtm_workspace: "Publicando no GTM",
 }
 
 // Tools sem "google" no nome pertencem ao Meta Ads ou são utilitários internos (não
@@ -246,17 +249,19 @@ const META_TOOLS = new Set([
   "get_account_info", "get_pages", "search_geo", "search_interests",
 ])
 
-function toolPlatform(name: string): "meta" | "google" | "ga4" | "system" {
+function toolPlatform(name: string): "meta" | "google" | "ga4" | "gtm" | "system" {
+  if (name.includes("gtm")) return "gtm"
   if (name.includes("ga4")) return "ga4"
   if (name.includes("google")) return "google"
   if (META_TOOLS.has(name)) return "meta"
   return "system"
 }
 
-const PLATFORM_DOT: Record<"meta" | "google" | "ga4" | "system", string> = {
+const PLATFORM_DOT: Record<"meta" | "google" | "ga4" | "gtm" | "system", string> = {
   meta:   "bg-blue-500",
   google: "bg-amber-400",
   ga4:    "bg-emerald-400",
+  gtm:    "bg-fuchsia-400",
   system: "bg-zinc-500",
 }
 

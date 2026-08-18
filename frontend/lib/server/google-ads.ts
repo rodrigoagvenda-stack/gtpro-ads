@@ -15,6 +15,8 @@ let _resolvedVersion: number | null = null
 const GOOGLE_OAUTH_SCOPES = [
   "https://www.googleapis.com/auth/adwords",
   "https://www.googleapis.com/auth/analytics.readonly",
+  "https://www.googleapis.com/auth/tagmanager.edit.containers",
+  "https://www.googleapis.com/auth/tagmanager.publish",
 ].join(" ")
 
 export async function getGoogleOAuthUrl(state: string, redirectUri: string): Promise<string> {

@@ -20,6 +20,7 @@ import {
   createResponsiveSearchAd, updateAdStatus, getGoogleConnections,
 } from "./google-ads"
 import { getGA4Connections, getGA4Overview, getGA4ConversionsDaily, getGA4TopPages } from "./ga4"
+import { getGTMConnections, getGTMTriggers, createGTMTrigger, getGTMTags, createGTMTag, publishGTMWorkspace } from "./gtm"
 
 // ─── Streaming chunk types ────────────────────────────────────────────────────
 
@@ -34,7 +35,7 @@ export type AgentChunk =
 
 // ─── System prompt ────────────────────────────────────────────────────────────
 
-const SYSTEM_PROMPT = `Você é o GTPRO, especialista em Meta Ads, Google Ads e Google Analytics 4 com acesso completo às APIs. Cria, edita e otimiza campanhas de verdade — não apenas sugere.
+const SYSTEM_PROMPT = `Você é o GTPRO, especialista em Meta Ads, Google Ads, Google Analytics 4 e Google Tag Manager com acesso completo às APIs. Cria, edita e otimiza campanhas de verdade — não apenas sugere.
 
 ────────────────────────────────────────
 FORMATAÇÃO
@@ -300,6 +301,20 @@ GOOGLE ANALYTICS 4 (GA4) — SOMENTE LEITURA
 - GA4 é somente leitura — não existe ferramenta de escrita para GA4 nesta versão.
 
 ────────────────────────────────────────
+GOOGLE TAG MANAGER (GTM) — REGRAS OBRIGATÓRIAS
+────────────────────────────────────────
+- Antes de criar qualquer coisa, confira com get_gtm_containers qual container está ativo — nunca assuma.
+- Tag depende de gatilho: SEMPRE crie (ou identifique com get_gtm_triggers) o gatilho ANTES da tag, e passe o ID dele em trigger_ids. Uma tag sem gatilho nunca dispara.
+- Fluxo de criação, uma pergunta por vez, mesma disciplina do Meta/Google Ads:
+  1. O que a tag precisa medir (conversão do Google Ads, evento GA4, ou script customizado) e QUANDO deve disparar (carregou página X, clicou em Y, enviou formulário)
+  2. Se o gatilho pedido ainda não existir, create_gtm_trigger primeiro — guarde o id retornado
+  3. create_gtm_tag usando esse trigger_id
+  4. Resuma o que foi criado (gatilho + tag) e pergunte se pode publicar
+- publish_gtm_workspace é o único jeito de colocar no ar — sem publicar, a tag fica só no rascunho, invisível no site do cliente. NUNCA publique sem confirmação explícita do usuário, mesmo em modo não supervisionado — publicar afeta o site ao vivo do cliente imediatamente.
+- kind=google_ads_conversion precisa do conversion_id (o AW-XXXXXXXXX da conta) e do conversion_label (da ação de conversão específica) — se o usuário não souber esses valores, oriente a pegar em Google Ads → Ferramentas → Conversões → clicar na ação → Configuração da tag.
+- Erros do GTM: transcreva a mensagem exata, mesma regra de transparência das outras plataformas.
+
+────────────────────────────────────────
 COBRANÇAS (BOLETO / PIX) — ASAAS
 ────────────────────────────────────────
 Quando o usuário pedir para gerar boleto, cobrança ou link de pagamento:
@@ -457,6 +472,14 @@ const TOOLS: Anthropic.Tool[] = [
   { name: "get_ga4_overview", description: "Visão geral de tráfego: sessões, usuários, conversões e engajamento por canal (orgânico, pago, direto etc). Use para responder 'como está o tráfego do site'.", input_schema: { ...o, properties: { date_preset: { type: "string", enum: ["today", "yesterday", "last_7d", "last_14d", "last_30d", "this_month", "last_month"] } } } },
   { name: "get_ga4_conversions_daily", description: "Série diária de sessões, conversões e receita — use para ver tendência ao longo do tempo.", input_schema: { ...o, properties: { date_preset: s } } },
   { name: "get_ga4_top_pages", description: "Páginas mais visitadas com sessões e conversões — útil para cruzar com landing pages de campanhas.", input_schema: { ...o, properties: { date_preset: s } } },
+
+  // ── Google Tag Manager
+  { name: "get_gtm_containers", description: "Lista os containers GTM conectados e qual está ativo.", input_schema: { ...o, properties: {} } },
+  { name: "get_gtm_triggers", description: "Lista os gatilhos (triggers) já criados no container ativo.", input_schema: { ...o, properties: {} } },
+  { name: "create_gtm_trigger", description: "Cria um gatilho no GTM. Tipos: PAGEVIEW (carregou a página), CLICK (clique em qualquer elemento), LINK_CLICK (clique em link), FORM_SUBMISSION (envio de formulário), CUSTOM_EVENT (evento customizado disparado via dataLayer, exige event_name). url_contains filtra pra só disparar em páginas cuja URL contenha esse trecho (ex: '/obrigado' para página de conversão).", input_schema: { ...o, properties: { name: s, type: { type: "string", enum: ["PAGEVIEW", "CLICK", "LINK_CLICK", "FORM_SUBMISSION", "CUSTOM_EVENT"] }, event_name: s, url_contains: s }, required: ["name", "type"] } },
+  { name: "get_gtm_tags", description: "Lista as tags já criadas no container ativo.", input_schema: { ...o, properties: {} } },
+  { name: "create_gtm_tag", description: "Cria uma tag no GTM vinculada a um ou mais gatilhos (use os IDs retornados por get_gtm_triggers ou create_gtm_trigger). kind=google_ads_conversion exige conversion_id (AW-XXXXXXXXX) e conversion_label; kind=ga4_event exige measurement_id (G-XXXXXXXXXX) e event_name; kind=custom_html exige html (script bruto, use só quando não houver template pronto).", input_schema: { ...o, properties: { name: s, kind: { type: "string", enum: ["google_ads_conversion", "ga4_event", "custom_html"] }, trigger_ids: { type: "array", items: s }, conversion_id: s, conversion_label: s, conversion_value: s, measurement_id: s, event_name: s, html: s }, required: ["name", "kind", "trigger_ids"] } },
+  { name: "publish_gtm_workspace", description: "Publica as tags e gatilhos criados — sem isso eles ficam só no rascunho e não disparam no site do cliente. SEMPRE confirme com o usuário antes de publicar.", input_schema: { ...o, properties: { version_name: s } } },
 ]
 
 const WRITE_TOOLS = new Set([
@@ -467,6 +490,7 @@ const WRITE_TOOLS = new Set([
   "create_google_adgroup","toggle_google_adgroup",
   "create_google_keywords","add_google_negative_keywords",
   "create_google_ad","toggle_google_ad",
+  "create_gtm_trigger","create_gtm_tag","publish_gtm_workspace",
 ])
 
 // Guards against duplicate creation if the model retries a write after a transient
@@ -476,6 +500,7 @@ const DEDUPE_WINDOW_MS = 30_000
 const DEDUPE_TOOLS = new Set([
   "create_campaign", "create_adset", "create_ad",
   "create_google_campaign", "create_google_adgroup", "create_google_ad",
+  "create_gtm_trigger", "create_gtm_tag",
 ])
 
 async function findRecentDuplicate(tenantId: string, name: string, input: Record<string, any>): Promise<any | null> {
@@ -700,6 +725,25 @@ async function executeTool(name: string, input: Record<string, any>, tenantId: s
   if (name === "get_ga4_overview")           return getGA4Overview(tenantId, input.date_preset ?? "last_7d")
   if (name === "get_ga4_conversions_daily")  return getGA4ConversionsDaily(tenantId, input.date_preset ?? "last_30d")
   if (name === "get_ga4_top_pages")          return getGA4TopPages(tenantId, input.date_preset ?? "last_7d")
+
+  if (name === "get_gtm_containers") {
+    const rows = await getGTMConnections(tenantId)
+    return (rows as any[]).map(r => ({
+      id: r.id, account_name: r.account_name || null, container_name: r.container_name || null,
+      public_id: r.public_id, is_active: r.is_active,
+    }))
+  }
+  if (name === "get_gtm_triggers") return getGTMTriggers(tenantId)
+  if (name === "create_gtm_trigger") return createGTMTrigger(tenantId, {
+    name: input.name, type: input.type, eventName: input.event_name, urlContains: input.url_contains,
+  })
+  if (name === "get_gtm_tags") return getGTMTags(tenantId)
+  if (name === "create_gtm_tag") return createGTMTag(tenantId, {
+    name: input.name, kind: input.kind, triggerIds: input.trigger_ids ?? [],
+    conversionId: input.conversion_id, conversionLabel: input.conversion_label, conversionValue: input.conversion_value,
+    measurementId: input.measurement_id, eventName: input.event_name, html: input.html,
+  })
+  if (name === "publish_gtm_workspace") return publishGTMWorkspace(tenantId, input.version_name)
 
   throw new Error(`Ferramenta desconhecida: ${name}`)
 }

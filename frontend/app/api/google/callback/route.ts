@@ -8,6 +8,7 @@ import {
   saveGoogleConnections,
 } from "@/lib/server/google-ads"
 import { listGA4Properties, saveGA4Connections } from "@/lib/server/ga4"
+import { listGTMContainers, saveGTMConnections } from "@/lib/server/gtm"
 
 // Format a raw customer ID as Google displays it: XXX-XXX-XXXX
 function fmtId(id: string): string {
@@ -70,6 +71,19 @@ export async function GET(req: NextRequest) {
       }
     } catch (e: any) {
       console.warn("[google/callback] GA4 falhou (não bloqueia Google Ads):", e.message)
+    }
+
+    // GTM idem — independente do resultado do Google Ads.
+    try {
+      const gtmContainers = await listGTMContainers(tokens.access_token)
+      if (gtmContainers.length) {
+        await saveGTMConnections(tenantId, tokens.access_token, tokens.refresh_token, gtmContainers)
+        console.log(`[google/callback] GTM: ${gtmContainers.length} containers salvos`)
+      } else {
+        console.log("[google/callback] GTM: nenhum container acessível")
+      }
+    } catch (e: any) {
+      console.warn("[google/callback] GTM falhou (não bloqueia Google Ads):", e.message)
     }
 
     const customers = await listAccessibleCustomers(tokens.access_token)
