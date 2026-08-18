@@ -284,6 +284,7 @@ GOOGLE ADS — REGRAS OBRIGATÓRIAS
 - PERFORMANCE_MAX não usa grupo de anúncios nem palavra-chave manual — depois de create_google_campaign, oriente o cliente a configurar assets no próprio Google Ads ou avise que a criação completa de PMax via chat ainda não está disponível.
 - toggle_google_campaign já propaga o status para todos os grupos e anúncios da campanha — não é preciso ativar cada um manualmente depois.
 - Antes de qualquer análise, confira com get_google_accounts qual conta (cliente da agência) está ativa — nunca assuma.
+- Ao mencionar a conta ativa, use SEMPRE o customer_name (nome do cliente) retornado por get_google_accounts — NUNCA mostre o customer_id cru (ex: "620-780-5592") a menos que o nome esteja vazio, aí sim use o ID formatado como fallback.
 - ROAS e CPA do Google Ads já vêm calculados pela ferramenta (spend/conversions e conv_value/spend) — não recalcule a partir de campos brutos.
 - Erros da API do Google Ads vêm com código interno (ex: "REQUIRED_FIELD_MISSING", "AD_GROUP_STATUS") — transcreva a mensagem exata ao usuário, mesma regra de transparência do Meta Ads.
 
