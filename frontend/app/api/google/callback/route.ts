@@ -7,6 +7,7 @@ import {
   getCustomerClientNames,
   saveGoogleConnections,
 } from "@/lib/server/google-ads"
+import { listGA4Properties, saveGA4Connections } from "@/lib/server/ga4"
 
 // Format a raw customer ID as Google displays it: XXX-XXX-XXXX
 function fmtId(id: string): string {
@@ -56,6 +57,20 @@ export async function GET(req: NextRequest) {
     await supabase.from("oauth_states").delete().eq("state", state)
 
     const tokens = await exchangeGoogleCode(code, redirectUri)
+
+    // GA4 é salvo independente do resultado do Google Ads abaixo — um tenant pode ter
+    // só Analytics conectado, sem nenhuma conta de anúncios acessível.
+    try {
+      const ga4Properties = await listGA4Properties(tokens.access_token)
+      if (ga4Properties.length) {
+        await saveGA4Connections(tenantId, tokens.access_token, tokens.refresh_token, ga4Properties)
+        console.log(`[google/callback] GA4: ${ga4Properties.length} propriedades salvas`)
+      } else {
+        console.log("[google/callback] GA4: nenhuma propriedade acessível")
+      }
+    } catch (e: any) {
+      console.warn("[google/callback] GA4 falhou (não bloqueia Google Ads):", e.message)
+    }
 
     const customers = await listAccessibleCustomers(tokens.access_token)
     console.log(`[google/callback] accessible customers: ${customers.length}`)

@@ -19,6 +19,7 @@ import {
   getKeywords, createKeywords, addNegativeKeywords,
   createResponsiveSearchAd, updateAdStatus, getGoogleConnections,
 } from "./google-ads"
+import { getGA4Connections, getGA4Overview, getGA4ConversionsDaily, getGA4TopPages } from "./ga4"
 
 // ─── Streaming chunk types ────────────────────────────────────────────────────
 
@@ -33,7 +34,7 @@ export type AgentChunk =
 
 // ─── System prompt ────────────────────────────────────────────────────────────
 
-const SYSTEM_PROMPT = `Você é o GTPRO, especialista em Meta Ads e Google Ads com acesso completo às APIs. Cria, edita e otimiza campanhas de verdade — não apenas sugere.
+const SYSTEM_PROMPT = `Você é o GTPRO, especialista em Meta Ads, Google Ads e Google Analytics 4 com acesso completo às APIs. Cria, edita e otimiza campanhas de verdade — não apenas sugere.
 
 ────────────────────────────────────────
 FORMATAÇÃO
@@ -290,6 +291,15 @@ GOOGLE ADS — REGRAS OBRIGATÓRIAS
 - Erros da API do Google Ads vêm com código interno (ex: "REQUIRED_FIELD_MISSING", "AD_GROUP_STATUS") — transcreva a mensagem exata ao usuário, mesma regra de transparência do Meta Ads.
 
 ────────────────────────────────────────
+GOOGLE ANALYTICS 4 (GA4) — SOMENTE LEITURA
+────────────────────────────────────────
+- Antes de qualquer análise de tráfego, confira com get_ga4_properties qual propriedade está ativa — nunca assuma.
+- GA4 é dado de SITE (sessões, usuários, páginas), não de campanha — não confunda com métricas do Meta/Google Ads. Se o usuário pedir "como está o tráfego" ou "de onde vêm as visitas", use get_ga4_overview (traz por canal: orgânico, pago, direto, social etc).
+- Para tendência ao longo do tempo, use get_ga4_conversions_daily. Para saber quais páginas convertem mais, use get_ga4_top_pages.
+- Conversas iniciadas no Meta/Google Ads e "conversions" do GA4 são medidas por sistemas DIFERENTES com metodologias diferentes — NUNCA some ou compare diretamente sem avisar que as fontes são diferentes.
+- GA4 é somente leitura — não existe ferramenta de escrita para GA4 nesta versão.
+
+────────────────────────────────────────
 COBRANÇAS (BOLETO / PIX) — ASAAS
 ────────────────────────────────────────
 Quando o usuário pedir para gerar boleto, cobrança ou link de pagamento:
@@ -441,6 +451,12 @@ const TOOLS: Anthropic.Tool[] = [
   // ── Google Ads — Ads
   { name: "create_google_ad", description: "Cria um Responsive Search Ad (RSA) num grupo de anúncios. Exige 3–15 headlines (máx. 30 caracteres cada) e 2–4 descriptions (máx. 90 caracteres cada). Sempre criado como PAUSED.", input_schema: { ...o, properties: { adgroup_resource_name: s, headlines: { type: "array", items: s }, descriptions: { type: "array", items: s }, final_url: s, path1: s, path2: s }, required: ["adgroup_resource_name", "headlines", "descriptions", "final_url"] } },
   { name: "toggle_google_ad", description: "Ativa ou pausa um anúncio do Google Ads.", input_schema: { ...o, properties: { ad_resource_name: s, enable: b }, required: ["ad_resource_name", "enable"] } },
+
+  // ── Google Analytics 4 (leitura)
+  { name: "get_ga4_properties", description: "Lista as propriedades GA4 conectadas e qual está ativa.", input_schema: { ...o, properties: {} } },
+  { name: "get_ga4_overview", description: "Visão geral de tráfego: sessões, usuários, conversões e engajamento por canal (orgânico, pago, direto etc). Use para responder 'como está o tráfego do site'.", input_schema: { ...o, properties: { date_preset: { type: "string", enum: ["today", "yesterday", "last_7d", "last_14d", "last_30d", "this_month", "last_month"] } } } },
+  { name: "get_ga4_conversions_daily", description: "Série diária de sessões, conversões e receita — use para ver tendência ao longo do tempo.", input_schema: { ...o, properties: { date_preset: s } } },
+  { name: "get_ga4_top_pages", description: "Páginas mais visitadas com sessões e conversões — útil para cruzar com landing pages de campanhas.", input_schema: { ...o, properties: { date_preset: s } } },
 ]
 
 const WRITE_TOOLS = new Set([
@@ -670,6 +686,20 @@ async function executeTool(name: string, input: Record<string, any>, tenantId: s
   })
   if (name === "toggle_google_ad")
     return updateAdStatus(tenantId, input.ad_resource_name, input.enable ? "ENABLED" : "PAUSED")
+
+  if (name === "get_ga4_properties") {
+    const rows = await getGA4Connections(tenantId)
+    return (rows as any[]).map(r => ({
+      id:            r.id,
+      property_name: r.property_name || null,
+      account_name:  r.account_name || null,
+      property_id:   r.property_id,
+      is_active:     r.is_active,
+    }))
+  }
+  if (name === "get_ga4_overview")           return getGA4Overview(tenantId, input.date_preset ?? "last_7d")
+  if (name === "get_ga4_conversions_daily")  return getGA4ConversionsDaily(tenantId, input.date_preset ?? "last_30d")
+  if (name === "get_ga4_top_pages")          return getGA4TopPages(tenantId, input.date_preset ?? "last_7d")
 
   throw new Error(`Ferramenta desconhecida: ${name}`)
 }

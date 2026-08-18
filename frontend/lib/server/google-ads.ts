@@ -10,6 +10,13 @@ let _resolvedVersion: number | null = null
 
 // ─── OAuth helpers ────────────────────────────────────────────────────────────
 
+// Um único fluxo OAuth pede Google Ads + GA4 juntos — evita duas conexões
+// separadas para a mesma conta Google.
+const GOOGLE_OAUTH_SCOPES = [
+  "https://www.googleapis.com/auth/adwords",
+  "https://www.googleapis.com/auth/analytics.readonly",
+].join(" ")
+
 export async function getGoogleOAuthUrl(state: string, redirectUri: string): Promise<string> {
   const clientId = await getGoogleClientId()
   if (!clientId) throw new Error("Google Client ID não configurado. Configure em Admin → Configurações.")
@@ -17,7 +24,7 @@ export async function getGoogleOAuthUrl(state: string, redirectUri: string): Pro
     client_id:     clientId,
     redirect_uri:  redirectUri,
     response_type: "code",
-    scope:         "https://www.googleapis.com/auth/adwords",
+    scope:         GOOGLE_OAUTH_SCOPES,
     access_type:   "offline",
     prompt:        "consent",
     state,
@@ -37,7 +44,7 @@ export async function exchangeGoogleCode(code: string, redirectUri: string) {
   return data as { access_token: string; refresh_token: string; expires_in: number }
 }
 
-async function refreshGoogleToken(refreshToken: string): Promise<string> {
+export async function refreshGoogleToken(refreshToken: string): Promise<string> {
   const [clientId, clientSecret] = await Promise.all([getGoogleClientId(), getGoogleClientSecret()])
   const res = await fetch(`${OAUTH_BASE}/token`, {
     method: "POST",
