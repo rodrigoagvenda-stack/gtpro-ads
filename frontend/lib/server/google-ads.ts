@@ -244,13 +244,16 @@ export async function createGoogleCampaign(tenantId: string, params: {
     campaignBudget:          budgetRn,
   }
 
+  // "Maximizar cliques" na interface do Google Ads é o campo targetSpend por baixo dos
+  // panos (nome histórico da API, mantido por compatibilidade) — maximizeClicks não
+  // existe como campo e a API rejeita com "Cannot find field".
   if (params.channelType === "SEARCH") {
-    base.maximizeClicks = {}
+    base.targetSpend = {}
     base.networkSettings = { targetGoogleSearch: true, targetSearchNetwork: true, targetContentNetwork: false }
   } else if (params.channelType === "PERFORMANCE_MAX") {
-    base.maximizeConversionValue = { targetRoas: 0 }
+    base.maximizeConversionValue = {}
   } else {
-    base.maximizeClicks = {}
+    base.targetSpend = {}
   }
 
   const campaignRes = await gadsPost(
