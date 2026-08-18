@@ -249,6 +249,12 @@ export async function getCampaigns(tenantId: string, datePreset = "last_7d", con
         page_likes,
         follows,
         roas: roas ?? roasFallback,
+        // Dado bruto do Meta, sem filtro — pra conferir o action_type EXATO antes de
+        // adicionar um novo pick() no código (ex: seguidores/visitas de perfil do
+        // Instagram divergindo do relatório oficial: melhor ver o nome real do campo
+        // que a Meta está mandando do que adivinhar um action_type novo às cegas).
+        raw_actions: actions,
+        raw_action_values: ins.action_values ?? [],
         // Period provenance — every derived metric (CPL, CPA, CPC_conv) used values
         // from this single insights call. Do NOT divide metrics across different _period tags.
         _period: periodTag,
