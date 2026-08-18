@@ -79,14 +79,16 @@ export async function GET(req: NextRequest) {
     }
     console.log(`[google/callback] customer_client hierarchy resolved ${nameMap.size} names, manager=${managerCustomerId ?? "none found"}`)
 
+    // nameMap already covers the FULL hierarchy under each manager found — not just the
+    // accounts directly accessible to this login. Iterating only `customers` here was the
+    // bug: any sub-account present in the hierarchy but not directly accessible got silently
+    // dropped, even though customer_client had already resolved its name correctly.
     const failedIds: string[] = []
+    for (const [id, found] of nameMap) {
+      customerDetails.push({ id, name: found.name || fmtId(id), currencyCode: found.currencyCode, isManager: found.isManager })
+    }
     for (const c of customers) {
-      const found = nameMap.get(c.id)
-      if (found) {
-        customerDetails.push({ id: c.id, name: found.name || fmtId(c.id), currencyCode: found.currencyCode, isManager: found.isManager })
-      } else {
-        failedIds.push(c.id)
-      }
+      if (!nameMap.has(c.id)) failedIds.push(c.id)
     }
 
     // Fallback — per-account lookup for anything the hierarchy query didn't cover
