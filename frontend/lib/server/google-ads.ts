@@ -498,8 +498,6 @@ export async function getGoogleCampaigns(tenantId: string, datePreset = "last_7d
       campaign.status,
       campaign.advertising_channel_type,
       campaign.bidding_strategy_type,
-      campaign.start_date,
-      campaign.end_date,
       campaign_budget.amount_micros,
       metrics.impressions,
       metrics.clicks,
