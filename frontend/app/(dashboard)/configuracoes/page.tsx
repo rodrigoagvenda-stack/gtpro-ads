@@ -7,7 +7,7 @@ import {
   Check, Copy, Eye, EyeOff, Plus, Trash2, RefreshCw, Link2, Unlink,
   Loader2, LayoutGrid, Pencil, Bot, Megaphone, Bell, MessageCircle,
   Zap, Key, Settings, Settings2, Smartphone, RotateCcw, Users, Shield, UserMinus,
-  Mail, X, ExternalLink, TrendingUp,
+  Mail, X, ExternalLink, TrendingUp, ChevronDown,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 
@@ -1452,6 +1452,54 @@ function GoogleAdsTab() {
 // seletores independentes sem relação nenhuma — trocar um não trocava o outro.
 // Isso vincula os dois por cliente, pra ativar juntos com um clique.
 
+// Dropdown custom em vez de <select> nativo — o popup nativo do navegador é uma
+// camada separada da página e às vezes ignora o tema escuro (bg-white/[0.0x] vira
+// branco sólido no popup, quebrando o layout).
+function Picker({ value, onChange, options, placeholder }: {
+  value: string
+  onChange: (v: string) => void
+  options: { value: string; label: string; disabled?: boolean }[]
+  placeholder: string
+}) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    function onClick(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
+    }
+    document.addEventListener("mousedown", onClick)
+    return () => document.removeEventListener("mousedown", onClick)
+  }, [])
+
+  const selected = options.find(o => o.value === value)
+
+  return (
+    <div ref={ref} className="relative">
+      <button type="button" onClick={() => setOpen(v => !v)}
+        className="w-full flex items-center justify-between px-3.5 py-2.5 bg-white/[0.04] ring-1 ring-white/[0.08] rounded-lg text-[13px] text-left text-white hover:bg-white/[0.06] transition-colors">
+        <span className={cn("truncate", !selected && "text-zinc-600")}>{selected ? selected.label : placeholder}</span>
+        <ChevronDown size={14} className={cn("text-zinc-500 transition-transform shrink-0 ml-2", open && "rotate-180")} />
+      </button>
+      {open && (
+        <div className="absolute z-20 mt-1 w-full max-h-64 overflow-y-auto bg-zinc-900 ring-1 ring-white/[0.12] rounded-lg shadow-xl py-1">
+          {options.map(o => (
+            <button key={o.value} type="button" disabled={o.disabled}
+              onClick={() => { onChange(o.value); setOpen(false) }}
+              className={cn(
+                "w-full text-left px-3.5 py-2 text-[13px] transition-colors truncate",
+                o.disabled ? "text-zinc-700 cursor-not-allowed" :
+                o.value === value ? "bg-violet-500/15 text-violet-300" : "text-zinc-300 hover:bg-white/[0.06]"
+              )}>
+              {o.label}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 function ClientLinkCard() {
   const [metaAccounts, setMetaAccounts]     = useState<MetaAccount[]>([])
   const [googleAccounts, setGoogleAccounts] = useState<GoogleAccount[]>([])
@@ -1542,24 +1590,28 @@ function ClientLinkCard() {
           <input type="text" placeholder="Ex: Net Infinito Botucatu" value={name} onChange={e => setName(e.target.value)} className={inputCls} />
         </Field>
         <Field label="Conta Meta Ads">
-          <select value={metaId} onChange={e => setMetaId(e.target.value)} className={inputCls}>
-            <option value="">— nenhuma —</option>
-            {metaAccounts.map(a => (
-              <option key={a.id} value={a.id} disabled={linkedMetaIds.has(a.id)}>
-                {(a.name || a.ad_account_id) + (linkedMetaIds.has(a.id) ? " (já vinculada)" : "")}
-              </option>
-            ))}
-          </select>
+          <Picker
+            value={metaId}
+            onChange={setMetaId}
+            placeholder="— nenhuma —"
+            options={metaAccounts.map(a => ({
+              value: a.id,
+              label: (a.name || a.ad_account_id) + (linkedMetaIds.has(a.id) ? " (já vinculada)" : ""),
+              disabled: linkedMetaIds.has(a.id),
+            }))}
+          />
         </Field>
         <Field label="Conta Google Ads">
-          <select value={googleId} onChange={e => setGoogleId(e.target.value)} className={inputCls}>
-            <option value="">— nenhuma —</option>
-            {googleAccounts.map(a => (
-              <option key={a.id} value={a.id} disabled={linkedGoogleIds.has(a.id)}>
-                {(a.customer_name || a.customer_id) + (linkedGoogleIds.has(a.id) ? " (já vinculada)" : "")}
-              </option>
-            ))}
-          </select>
+          <Picker
+            value={googleId}
+            onChange={setGoogleId}
+            placeholder="— nenhuma —"
+            options={googleAccounts.map(a => ({
+              value: a.id,
+              label: (a.customer_name || a.customer_id) + (linkedGoogleIds.has(a.id) ? " (já vinculada)" : ""),
+              disabled: linkedGoogleIds.has(a.id),
+            }))}
+          />
         </Field>
         <div>
           <button onClick={createLink} disabled={saving} className="flex items-center gap-1.5 px-4 py-2 bg-white/[0.06] hover:bg-white/[0.09] disabled:opacity-50 text-white text-[13px] font-medium rounded-lg ring-1 ring-white/[0.08] transition-colors">
