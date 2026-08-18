@@ -4,6 +4,7 @@ import {
   exchangeGoogleCode,
   listAccessibleCustomers,
   getCustomerInfo,
+  getCustomerClientNames,
   saveGoogleConnections,
 } from "@/lib/server/google-ads"
 
@@ -63,31 +64,34 @@ export async function GET(req: NextRequest) {
     type CDetail = { id: string; name: string; currencyCode: string; isManager: boolean }
     const customerDetails: CDetail[] = []
     let managerCustomerId: string | undefined
-    const failedIds: string[] = []
 
-    // Pass 1 — try each account individually (finds MCC which can use itself as login)
+    // Preferred method: query customer_client from each accessible account — the one(s)
+    // that ARE a manager return descriptive_name for every child in the hierarchy in one
+    // shot, instead of guessing login-customer-id per account (which was failing for
+    // every sub-account and silently falling back to the raw numeric ID as "name").
+    const nameMap = new Map<string, { name: string; currencyCode: string; isManager: boolean }>()
     for (const c of customers) {
-      try {
-        const info = await getCustomerInfo(c.id, tokens.access_token)
-        if (info) {
-          if (info.manager) managerCustomerId = c.id
-          customerDetails.push({
-            id:           c.id,
-            name:         info.descriptiveName || fmtId(c.id),
-            currencyCode: info.currencyCode ?? "BRL",
-            isManager:    !!info.manager,
-          })
-        } else {
-          failedIds.push(c.id)
-        }
-      } catch {
+      const clientMap = await getCustomerClientNames(c.id, tokens.access_token)
+      if (clientMap.size > 0) {
+        for (const [id, info] of clientMap) nameMap.set(id, info)
+        if (!managerCustomerId) managerCustomerId = c.id
+      }
+    }
+    console.log(`[google/callback] customer_client hierarchy resolved ${nameMap.size} names, manager=${managerCustomerId ?? "none found"}`)
+
+    const failedIds: string[] = []
+    for (const c of customers) {
+      const found = nameMap.get(c.id)
+      if (found) {
+        customerDetails.push({ id: c.id, name: found.name || fmtId(c.id), currencyCode: found.currencyCode, isManager: found.isManager })
+      } else {
         failedIds.push(c.id)
       }
     }
 
-    // Pass 2 — retry sub-accounts using the identified MCC as login-customer-id
+    // Fallback — per-account lookup for anything the hierarchy query didn't cover
     if (failedIds.length > 0) {
-      console.log(`[google/callback] pass 2: ${failedIds.length} accounts, manager=${managerCustomerId}`)
+      console.log(`[google/callback] fallback lookup: ${failedIds.length} accounts, manager=${managerCustomerId}`)
       for (const id of failedIds) {
         try {
           const info = await getCustomerInfo(id, tokens.access_token, managerCustomerId)
@@ -95,7 +99,7 @@ export async function GET(req: NextRequest) {
             id,
             name:         info?.descriptiveName || fmtId(id),
             currencyCode: info?.currencyCode ?? "BRL",
-            isManager:    false,
+            isManager:    !!info?.manager,
           })
         } catch {
           customerDetails.push({ id, name: fmtId(id), currencyCode: "BRL", isManager: false })

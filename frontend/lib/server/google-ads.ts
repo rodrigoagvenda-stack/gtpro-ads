@@ -179,6 +179,36 @@ export async function getCustomerInfo(customerId: string, accessToken: string, l
   return null
 }
 
+// Preferred way to name sub-accounts under an MCC: one GAQL query against
+// customer_client from the manager account returns descriptive_name for every
+// child in the hierarchy at once, instead of guessing login-customer-id per account.
+export async function getCustomerClientNames(
+  topCustomerId: string,
+  accessToken: string,
+): Promise<Map<string, { name: string; currencyCode: string; isManager: boolean }>> {
+  const query = `
+    SELECT customer_client.id, customer_client.descriptive_name, customer_client.currency_code, customer_client.manager, customer_client.status
+    FROM customer_client
+    WHERE customer_client.status = 'ENABLED'
+  `
+  const result = new Map<string, { name: string; currencyCode: string; isManager: boolean }>()
+  try {
+    const data = await gadsPost(`/customers/${topCustomerId}/googleAds:search`, { query }, accessToken, topCustomerId)
+    for (const r of data.results ?? []) {
+      const cc = r.customerClient
+      if (!cc?.id) continue
+      result.set(String(cc.id), {
+        name:         cc.descriptiveName || "",
+        currencyCode: cc.currencyCode ?? "BRL",
+        isManager:    !!cc.manager,
+      })
+    }
+  } catch (e: any) {
+    console.warn(`[google-ads] getCustomerClientNames from ${topCustomerId}:`, e.message)
+  }
+  return result
+}
+
 export async function createGoogleCampaign(tenantId: string, params: {
   name: string
   dailyBudget: number  // em reais
