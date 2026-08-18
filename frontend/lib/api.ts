@@ -210,6 +210,13 @@ export const api = {
     toggleFlow:  (id: string, is_active: boolean) => fetchWithAuth(`/instagram/flows/${id}`, { method: "PATCH", body: JSON.stringify({ is_active }) }),
   },
 
+  clients: {
+    list: () => fetchWithAuth("/clients"),
+    create: (body: { id?: string; name: string; meta_connection_id?: string | null; google_connection_id?: string | null }) =>
+      fetchWithAuth("/clients", { method: "POST", body: JSON.stringify(body) }),
+    activate: (id: string) => fetchWithAuth("/clients", { method: "PATCH", body: JSON.stringify({ id }) }),
+  },
+
   media: {
     list: () => fetchWithAuth("/meta/media"),
     upload: async (file: File): Promise<{ meta_hash?: string; meta_video_id?: string; name: string; type: string }> => {

@@ -1253,6 +1253,12 @@ function PlataformaTab() {
 // ─── Tab: Google Ads ──────────────────────────────────────────────────────────
 
 interface GoogleAccount { id: string; customer_id: string; customer_name: string; currency_code: string; is_active: boolean; manager_customer_id: string | null; created_at: string }
+interface ClientLink {
+  id: string; name: string; is_active: boolean
+  meta_connection_id: string | null; google_connection_id: string | null
+  meta_connection: { id: string; ad_account_id: string; name: string } | null
+  google_connection: { id: string; customer_id: string; customer_name: string } | null
+}
 
 function GoogleAdsTab() {
   const searchParams = useSearchParams()
@@ -1435,7 +1441,133 @@ function GoogleAdsTab() {
           </div>
         </Card>
       )}
+
+      <ClientLinkCard />
     </div>
+  )
+}
+
+// ─── Vincular cliente (Meta + Google) ──────────────────────────────────────────
+// Antes disso, o dropdown do header (Meta) e a lista de contas Google eram
+// seletores independentes sem relação nenhuma — trocar um não trocava o outro.
+// Isso vincula os dois por cliente, pra ativar juntos com um clique.
+
+function ClientLinkCard() {
+  const [metaAccounts, setMetaAccounts]     = useState<MetaAccount[]>([])
+  const [googleAccounts, setGoogleAccounts] = useState<GoogleAccount[]>([])
+  const [clients, setClients]               = useState<ClientLink[]>([])
+  const [name, setName]         = useState("")
+  const [metaId, setMetaId]     = useState("")
+  const [googleId, setGoogleId] = useState("")
+  const [saving, setSaving]           = useState(false)
+  const [activatingId, setActivatingId] = useState<string | null>(null)
+  const [msg, setMsg] = useState<{ type: "ok" | "err"; text: string } | null>(null)
+
+  function load() {
+    api.get("/meta/accounts").then((d: any) => setMetaAccounts(Array.isArray(d) ? d : [])).catch(() => {})
+    api.get("/google/accounts").then((d: any) => setGoogleAccounts(Array.isArray(d) ? d : [])).catch(() => {})
+    api.clients.list().then((d: any) => setClients(Array.isArray(d) ? d : [])).catch(() => {})
+  }
+
+  useEffect(load, [])
+
+  async function createLink() {
+    if (!name.trim()) { setMsg({ type: "err", text: "Dê um nome pro cliente." }); return }
+    setSaving(true); setMsg(null)
+    try {
+      await api.clients.create({ name: name.trim(), meta_connection_id: metaId || null, google_connection_id: googleId || null })
+      setName(""); setMetaId(""); setGoogleId("")
+      setMsg({ type: "ok", text: "Cliente vinculado." })
+      load()
+    } catch (e: any) { setMsg({ type: "err", text: e.message }) } finally { setSaving(false) }
+  }
+
+  async function activate(id: string) {
+    setActivatingId(id); setMsg(null)
+    try {
+      await api.clients.activate(id)
+      setMsg({ type: "ok", text: "Cliente ativado — Meta e Google trocados juntos." })
+      load()
+    } catch (e: any) { setMsg({ type: "err", text: e.message }) } finally { setActivatingId(null) }
+  }
+
+  const linkedMetaIds   = new Set(clients.map(c => c.meta_connection_id).filter(Boolean))
+  const linkedGoogleIds = new Set(clients.map(c => c.google_connection_id).filter(Boolean))
+
+  return (
+    <Card>
+      <h2 className="text-[13px] font-semibold text-zinc-200">Vincular cliente (Meta + Google)</h2>
+      <p className="text-[12px] text-zinc-600 -mt-3">Liga uma conta Meta e uma conta Google Ads da mesma empresa — ativar o cliente troca as duas juntas.</p>
+
+      {msg && (
+        <div className={cn("flex items-center gap-2 text-[12px] rounded-lg px-3 py-2 ring-1",
+          msg.type === "ok" ? "text-emerald-400 bg-emerald-500/10 ring-emerald-500/20" : "text-red-400 bg-red-500/10 ring-red-500/20"
+        )}>{msg.text}</div>
+      )}
+
+      {clients.length > 0 && (
+        <div className="space-y-1.5">
+          {clients.map(c => (
+            <div key={c.id} className={cn("flex items-center gap-3 px-4 py-3 rounded-lg ring-1 transition-colors",
+              c.is_active ? "bg-violet-500/10 ring-violet-500/30" : "bg-white/[0.02] ring-white/[0.06]"
+            )}>
+              <div className={cn("w-2 h-2 rounded-full shrink-0", c.is_active ? "bg-violet-400" : "bg-zinc-600")} />
+              <div className="flex-1 min-w-0">
+                <p className="text-[13px] font-medium text-zinc-200">{c.name}</p>
+                <p className="text-[11px] text-zinc-600 mt-0.5 flex items-center gap-3">
+                  <span className="inline-flex items-center gap-1">
+                    <span className="w-1.5 h-1.5 rounded-full bg-blue-500 shrink-0" />
+                    {c.meta_connection?.name || c.meta_connection?.ad_account_id || "sem Meta"}
+                  </span>
+                  <span className="inline-flex items-center gap-1">
+                    <span className="w-1.5 h-1.5 rounded-full bg-amber-400 shrink-0" />
+                    {c.google_connection?.customer_name || c.google_connection?.customer_id || "sem Google"}
+                  </span>
+                </p>
+              </div>
+              {c.is_active
+                ? <span className="text-[11px] text-violet-400 font-medium shrink-0">Ativo</span>
+                : <button onClick={() => activate(c.id)} disabled={!!activatingId}
+                    className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 text-[12px] text-zinc-400 hover:text-white hover:bg-white/[0.06] rounded-lg transition-colors disabled:opacity-40">
+                    {activatingId === c.id ? <Loader2 size={11} className="animate-spin" /> : null} Ativar
+                  </button>
+              }
+            </div>
+          ))}
+        </div>
+      )}
+
+      <div className="grid grid-cols-1 gap-3 pt-1">
+        <Field label="Nome do cliente">
+          <input type="text" placeholder="Ex: Net Infinito Botucatu" value={name} onChange={e => setName(e.target.value)} className={inputCls} />
+        </Field>
+        <Field label="Conta Meta Ads">
+          <select value={metaId} onChange={e => setMetaId(e.target.value)} className={inputCls}>
+            <option value="">— nenhuma —</option>
+            {metaAccounts.map(a => (
+              <option key={a.id} value={a.id} disabled={linkedMetaIds.has(a.id)}>
+                {(a.name || a.ad_account_id) + (linkedMetaIds.has(a.id) ? " (já vinculada)" : "")}
+              </option>
+            ))}
+          </select>
+        </Field>
+        <Field label="Conta Google Ads">
+          <select value={googleId} onChange={e => setGoogleId(e.target.value)} className={inputCls}>
+            <option value="">— nenhuma —</option>
+            {googleAccounts.map(a => (
+              <option key={a.id} value={a.id} disabled={linkedGoogleIds.has(a.id)}>
+                {(a.customer_name || a.customer_id) + (linkedGoogleIds.has(a.id) ? " (já vinculada)" : "")}
+              </option>
+            ))}
+          </select>
+        </Field>
+        <div>
+          <button onClick={createLink} disabled={saving} className="flex items-center gap-1.5 px-4 py-2 bg-white/[0.06] hover:bg-white/[0.09] disabled:opacity-50 text-white text-[13px] font-medium rounded-lg ring-1 ring-white/[0.08] transition-colors">
+            {saving ? <><Loader2 size={13} className="animate-spin" /> Vinculando...</> : "Vincular"}
+          </button>
+        </div>
+      </div>
+    </Card>
   )
 }
 
