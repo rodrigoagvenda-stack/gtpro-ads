@@ -355,8 +355,9 @@ REGRAS GERAIS
 ────────────────────────────────────────
 NUNCA RESPONDA DE MEMÓRIA — REGRA ABSOLUTA
 ────────────────────────────────────────
-- Status de conexão, contas, campanhas, métricas ou qualquer dado que possa ter mudado: SEMPRE chame a ferramenta de novo, mesmo que você já tenha essa informação em mensagens anteriores desta conversa.
-- Se o usuário disser "tenta de novo", "verifica de novo", "atualiza" ou qualquer pedido de reverificação: é PROIBIDO responder repetindo uma resposta anterior sem chamar a ferramenta correspondente. O estado pode ter mudado desde a última chamada.
+- TODA pergunta sobre conta, conexão, campanha, grupo, anúncio, palavra-chave, métrica, orçamento ou status — mesmo que pareça uma pergunta nova, mesmo que você tenha certeza da resposta, mesmo que os mesmos dados já tenham aparecido antes NESTA MESMA conversa — exige uma chamada de ferramenta nova ANTES de responder. Sem exceção. Dado antigo na conversa NUNCA é fonte válida pra essas respostas, nem quando parece óbvio ou repetitivo.
+- Isso vale pra qualquer forma de pergunta, não só "tenta de novo" — inclui "temos X?", "tem campanha ativa?", "quantas contas?", "qual o status?", "quais campanhas?" e qualquer variação. Se a pergunta pode ser respondida checando alguma ferramenta, chame a ferramenta — não existe pergunta "óbvia demais pra verificar de novo".
+- Antes de escrever a resposta final, se a pergunta menciona conta/campanha/métrica/status e a última mensagem sua no histórico não tem uma chamada de ferramenta correspondente A ESTE turno específico, você está prestes a responder de memória — pare e chame a ferramenta primeiro.
 - Erro anterior não significa que vai falhar de novo — sempre re-execute antes de afirmar que algo não está conectado ou não existe.
 
 ────────────────────────────────────────
@@ -790,6 +791,21 @@ export async function runAgent(
   let iterations = 0
   const MAX_ITERATIONS = 20
 
+  // Trava de código para a regra "nunca responda de memória": regra em prompt sozinha já
+  // falhou em produção (o modelo respondeu com dado de horas atrás, sem chamar ferramenta,
+  // pra uma pergunta como "temos campanha ativa?"). Se a pergunta do usuário bate nesses
+  // gatilhos e o modelo tenta encerrar sem ter chamado NENHUMA ferramenta neste turno,
+  // o código força uma nova tentativa em vez de aceitar a resposta — uma vez só, pra não
+  // criar loop infinito se o modelo insistir.
+  const VERIFICATION_TRIGGERS = [
+    "campanh", "conta", "ativ", "status", "métric", "metrica", "orçamento", "orcamento", "budget",
+    "palavra-chave", "palavra chave", "keyword", "grupo de anúncio", "grupo de anuncio",
+    "gasto", "resultado", "desempenho", "conversõ", "converso", "roas", "cpl", "cpa", "ctr",
+    "gtm", "tag", "container", "gatilho", "ga4", "analytics", "propriedade", "pixel",
+  ]
+  const needsVerification = VERIFICATION_TRIGGERS.some(k => message.toLowerCase().includes(k))
+  let correctionAttempted = false
+
   const supabase = createServiceClient()
   const period   = new Date().toISOString().slice(0, 7) // YYYY-MM
 
@@ -821,6 +837,14 @@ export async function runAgent(
     trackUsage(response.usage)
 
     if (response.stop_reason === "end_turn") {
+      if (needsVerification && toolsUsed.length === 0 && !correctionAttempted) {
+        correctionAttempted = true
+        messages.push({
+          role: "user",
+          content: "Você respondeu sem chamar nenhuma ferramenta, mas a pergunta é sobre conta/campanha/status/métrica — dado que pode ter mudado. Chame a ferramenta correspondente agora e responda só com o resultado dela, não com o que você disse antes.",
+        })
+        continue
+      }
       const textBlock = response.content.find(b => b.type === "text")
       const finalMsg = (textBlock as any)?.text ?? ""
       onChunk?.({ type: "done", message: finalMsg, tools_used: toolsUsed, actions_taken: actionsTaken })

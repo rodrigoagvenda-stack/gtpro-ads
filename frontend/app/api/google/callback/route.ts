@@ -92,21 +92,33 @@ export async function GET(req: NextRequest) {
 
     type CDetail = { id: string; name: string; currencyCode: string; isManager: boolean }
     const customerDetails: CDetail[] = []
-    let managerCustomerId: string | undefined
 
     // Preferred method: query customer_client from each accessible account — the one(s)
     // that ARE a manager return descriptive_name for every child in the hierarchy in one
     // shot, instead of guessing login-customer-id per account (which was failing for
     // every sub-account and silently falling back to the raw numeric ID as "name").
-    const nameMap = new Map<string, { name: string; currencyCode: string; isManager: boolean }>()
+    //
+    // BUG (encontrado em produção): travar no PRIMEIRO manager encontrado pega uma sub-MCC
+    // aninhada em vez da raiz de verdade quando a conta tem hierarquia em 2+ níveis (ex:
+    // "Agência Venda" administra várias contas, uma delas é "Bio Integra", que por sua vez
+    // também é manager de um subgrupo — o loop antigo travava em "Bio Integra" se ela
+    // aparecesse primeiro na lista, salvando o login-customer-id errado pra todo mundo e
+    // causando USER_PERMISSION_DENIED em contas que só têm acesso via a raiz de verdade).
+    // Fix: usar o manager cuja hierarquia resolvida for a MAIOR — a raiz enxerga todos os
+    // descendentes, uma sub-MCC só enxerga o próprio subgrupo.
+    const hierarchies = new Map<string, Map<string, { name: string; currencyCode: string; isManager: boolean }>>()
     for (const c of customers) {
       const clientMap = await getCustomerClientNames(c.id, tokens.access_token)
-      if (clientMap.size > 0) {
-        for (const [id, info] of clientMap) nameMap.set(id, info)
-        if (!managerCustomerId) managerCustomerId = c.id
-      }
+      if (clientMap.size > 0) hierarchies.set(c.id, clientMap)
     }
-    console.log(`[google/callback] customer_client hierarchy resolved ${nameMap.size} names, manager=${managerCustomerId ?? "none found"}`)
+
+    let managerCustomerId: string | undefined
+    let bestSize = -1
+    for (const [id, map] of hierarchies) {
+      if (map.size > bestSize) { bestSize = map.size; managerCustomerId = id }
+    }
+    const nameMap = managerCustomerId ? hierarchies.get(managerCustomerId)! : new Map()
+    console.log(`[google/callback] hierarquias candidatas: ${[...hierarchies.entries()].map(([id, m]) => `${id}(${m.size})`).join(", ") || "nenhuma"} — raiz escolhida: ${managerCustomerId ?? "nenhuma"} (${nameMap.size} contas)`)
 
     // nameMap already covers the FULL hierarchy under each manager found — not just the
     // accounts directly accessible to this login. Iterating only `customers` here was the
