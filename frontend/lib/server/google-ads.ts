@@ -283,7 +283,11 @@ export async function createAdGroup(tenantId: string, params: {
     status:   "ENABLED",
     type:     "SEARCH_STANDARD",
   }
-  if (params.cpcBidMicros) create.cpcBidMicros = params.cpcBidMicros
+  // Campanha com bid strategy targetSpend ("Maximizar cliques") exige lance por clique
+  // no grupo de anúncios — sem isso a API rejeita com fieldError:REQUIRED. R$1,00 é só
+  // um teto de segurança inicial, não influencia o gasto (isso é controlado pelo
+  // orçamento da campanha); o usuário pode ajustar depois.
+  create.cpcBidMicros = params.cpcBidMicros ?? 1_000_000
 
   const res = await gadsPost(
     `/customers/${customerId}/adGroups:mutate`,
