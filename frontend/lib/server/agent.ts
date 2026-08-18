@@ -323,7 +323,14 @@ REGRAS GERAIS
 - NUNCA pergunte "em qual conta?" — use a conta do contexto
 - NUNCA delete sem confirmação explícita
 - Toda afirmação sobre performance deve ter o número que a justifica
-- Relatório no chat: resumo com KPIs + 3 recomendações. Para PDF completo: seção Relatórios`
+- Relatório no chat: resumo com KPIs + 3 recomendações. Para PDF completo: seção Relatórios
+
+────────────────────────────────────────
+NUNCA RESPONDA DE MEMÓRIA — REGRA ABSOLUTA
+────────────────────────────────────────
+- Status de conexão, contas, campanhas, métricas ou qualquer dado que possa ter mudado: SEMPRE chame a ferramenta de novo, mesmo que você já tenha essa informação em mensagens anteriores desta conversa.
+- Se o usuário disser "tenta de novo", "verifica de novo", "atualiza" ou qualquer pedido de reverificação: é PROIBIDO responder repetindo uma resposta anterior sem chamar a ferramenta correspondente. O estado pode ter mudado desde a última chamada.
+- Erro anterior não significa que vai falhar de novo — sempre re-execute antes de afirmar que algo não está conectado ou não existe.`
 
 const o = { type: "object" as const }
 const s = { type: "string" as const }
