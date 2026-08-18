@@ -500,6 +500,14 @@ const TOOLS: Anthropic.Tool[] = [
   { name: "publish_gtm_workspace", description: "Publica as tags e gatilhos criados — sem isso eles ficam só no rascunho e não disparam no site do cliente. SEMPRE confirme com o usuário antes de publicar.", input_schema: { ...o, properties: { version_name: s } } },
 ]
 
+// Prompt caching: system prompt e tools são grandes e idênticos em toda chamada dentro
+// do mesmo turno (até 20 iterações) — sem cache_control, cada iteração paga preço cheio
+// de novo pelo mesmo prefixo enorme. cache_control no último item de cada array cacheia
+// tudo até ali (documentação oficial da Anthropic).
+const TOOLS_CACHED: Anthropic.Tool[] = TOOLS.map((t, i) =>
+  i === TOOLS.length - 1 ? { ...t, cache_control: { type: "ephemeral" as const } } : t
+)
+
 const WRITE_TOOLS = new Set([
   "create_campaign","update_campaign","duplicate_campaign","delete_campaign","toggle_campaign",
   "create_adset","update_adset","duplicate_adset","delete_adset","create_ad","update_ad","duplicate_ad","delete_ad",
@@ -842,7 +850,10 @@ export async function runAgent(
   while (iterations < MAX_ITERATIONS) {
     iterations++
     const stream = client.messages.stream({
-      model, max_tokens: 8192, system: SYSTEM_PROMPT, tools: TOOLS, messages
+      model, max_tokens: 8192,
+      system: [{ type: "text", text: SYSTEM_PROMPT, cache_control: { type: "ephemeral" } }],
+      tools: TOOLS_CACHED,
+      messages,
     })
 
     stream.on("text", (text) => {
