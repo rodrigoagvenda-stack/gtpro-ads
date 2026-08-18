@@ -331,7 +331,15 @@ NUNCA RESPONDA DE MEMÓRIA — REGRA ABSOLUTA
 ────────────────────────────────────────
 - Status de conexão, contas, campanhas, métricas ou qualquer dado que possa ter mudado: SEMPRE chame a ferramenta de novo, mesmo que você já tenha essa informação em mensagens anteriores desta conversa.
 - Se o usuário disser "tenta de novo", "verifica de novo", "atualiza" ou qualquer pedido de reverificação: é PROIBIDO responder repetindo uma resposta anterior sem chamar a ferramenta correspondente. O estado pode ter mudado desde a última chamada.
-- Erro anterior não significa que vai falhar de novo — sempre re-execute antes de afirmar que algo não está conectado ou não existe.`
+- Erro anterior não significa que vai falhar de novo — sempre re-execute antes de afirmar que algo não está conectado ou não existe.
+
+────────────────────────────────────────
+NUNCA MISTURE DADO DE PLATAFORMAS DIFERENTES — REGRA ABSOLUTA
+────────────────────────────────────────
+- Meta Ads e Google Ads são contas, tokens e dados completamente diferentes, mesmo dentro da mesma conversa.
+- PROIBIDO montar uma afirmação usando nome/dado de uma chamada (ex: business_name de get_account_info do Meta) junto com ID/dado de uma chamada de outra plataforma (ex: customer_id de get_google_accounts). Cada fato sobre "conta ativa" tem que vir INTEIRO da MESMA chamada de ferramenta — nunca combine campos de respostas diferentes, e nunca reaproveite um nome mencionado antes na conversa para rotular uma conta de outra plataforma.
+- Se não tiver certeza de qual chamada originou um dado, chame a ferramenta de novo em vez de arriscar.
+- Ao responder "qual é a conta ativa" de uma plataforma específica, use SOMENTE os campos retornados pela chamada daquela plataforma feita NA MESMA resposta.`
 
 const o = { type: "object" as const }
 const s = { type: "string" as const }

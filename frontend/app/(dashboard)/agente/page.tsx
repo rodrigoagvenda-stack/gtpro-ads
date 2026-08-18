@@ -220,6 +220,40 @@ const TOOL_LABELS: Record<string, string> = {
   get_account_info: "Carregando conta", check_whatsapp_status: "Verificando WhatsApp", generate_utm: "Gerando UTM",
   generate_charge: "Gerando cobrança", search_geo: "Buscando localização", search_interests: "Buscando interesses",
   create_alert: "Registrando alerta",
+  get_google_accounts: "Verificando contas Google Ads",
+  get_google_campaigns: "Buscando campanhas Google Ads", create_google_campaign: "Criando campanha Google Ads",
+  toggle_google_campaign: "Alterando status", update_google_campaign_budget: "Atualizando orçamento",
+  get_google_insights: "Carregando insights Google Ads",
+  get_google_adgroups: "Carregando grupos de anúncios", create_google_adgroup: "Criando grupo de anúncios",
+  toggle_google_adgroup: "Alterando status do grupo",
+  get_google_keywords: "Carregando palavras-chave", create_google_keywords: "Adicionando palavras-chave",
+  add_google_negative_keywords: "Adicionando negativas",
+  create_google_ad: "Criando anúncio Google Ads", toggle_google_ad: "Alterando status do anúncio",
+}
+
+// Tools sem "google" no nome pertencem ao Meta Ads ou são utilitários internos (não
+// atrelados a uma plataforma de anúncios específica).
+const META_TOOLS = new Set([
+  "get_campaigns", "get_account_insights", "get_campaign_insights", "get_insights_breakdown",
+  "get_adsets", "get_adset", "get_adset_insights", "get_ads", "get_ads_by_adset", "get_ad_insights",
+  "create_campaign", "update_campaign", "duplicate_campaign", "delete_campaign", "toggle_campaign",
+  "create_adset", "update_adset", "duplicate_adset", "delete_adset",
+  "create_ad", "update_ad", "duplicate_ad", "delete_ad",
+  "get_pixels", "get_pixel_stats", "get_custom_conversions", "get_audiences",
+  "create_lookalike_audience", "create_website_audience", "create_engagement_audience",
+  "get_account_info", "get_pages", "search_geo", "search_interests",
+])
+
+function toolPlatform(name: string): "meta" | "google" | "system" {
+  if (name.includes("google")) return "google"
+  if (META_TOOLS.has(name)) return "meta"
+  return "system"
+}
+
+const PLATFORM_DOT: Record<"meta" | "google" | "system", string> = {
+  meta:   "bg-blue-500",
+  google: "bg-amber-400",
+  system: "bg-zinc-500",
 }
 
 const MODELS = [
@@ -884,6 +918,7 @@ export default function AgentePage() {
                                   ) : (
                                     <XCircle size={11} />
                                   )}
+                                  <span className={cn("w-1.5 h-1.5 rounded-full shrink-0", PLATFORM_DOT[toolPlatform(tool.name)])} />
                                   {TOOL_LABELS[tool.name] ?? tool.name}
                                 </span>
                               ))}
@@ -915,6 +950,7 @@ export default function AgentePage() {
                             <div className="flex flex-wrap gap-1.5 mt-3">
                               {[...new Map(msg.tools_used.map(t => [t.name, t])).values()].map((t, j) => (
                                 <span key={j} className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] text-zinc-600 bg-white/[0.03] ring-1 ring-white/[0.06]">
+                                  <span className={cn("w-1.5 h-1.5 rounded-full shrink-0", PLATFORM_DOT[toolPlatform(t.name)])} />
                                   <CheckCircle2 size={9} className="text-emerald-500/60" />
                                   {TOOL_LABELS[t.name] ?? t.name}
                                 </span>
