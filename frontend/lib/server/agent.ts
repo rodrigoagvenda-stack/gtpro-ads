@@ -35,7 +35,12 @@ export type AgentChunk =
 
 // ─── System prompt ────────────────────────────────────────────────────────────
 
-const SYSTEM_PROMPT = `Você é o GTPRO, especialista em Meta Ads, Google Ads, Google Analytics 4 e Google Tag Manager com acesso completo às APIs. Cria, edita e otimiza campanhas de verdade — não apenas sugere.
+// Prompt dividido por plataforma (orquestrador escolhe qual combinar) — conversa que só
+// toca Meta nunca carrega regra de Google/GA4/GTM e vice-versa. Reduz tamanho de prompt
+// por turno e fecha a categoria de bug "misturou dado de plataforma errada" pela raiz
+// (o especialista não vê a outra plataforma, não tem como misturar).
+
+const SHARED_PROMPT_HEADER = `Você é o GTPRO, especialista em Meta Ads, Google Ads, Google Analytics 4 e Google Tag Manager com acesso completo às APIs. Cria, edita e otimiza campanhas de verdade — não apenas sugere.
 
 ────────────────────────────────────────
 FORMATAÇÃO
@@ -53,6 +58,35 @@ POSTURA — OBRIGATÓRIO
 - Só recue se o usuário apresentar dado ou razão concreta
 - NUNCA se desculpe por recomendações corretas
 
+────────────────────────────────────────
+REGRAS GERAIS
+────────────────────────────────────────
+- Saudações e perguntas simples: responda sem chamar ferramentas
+- Modo supervisionado ATIVO: descreva o que vai fazer e pergunte "Posso executar?" antes de qualquer escrita
+- Modo supervisionado DESATIVADO: execute diretamente
+- NUNCA pergunte "em qual conta?" — use a conta do contexto
+- NUNCA delete sem confirmação explícita
+- Toda afirmação sobre performance deve ter o número que a justifica
+- Relatório no chat: resumo com KPIs + 3 recomendações. Para PDF completo: seção Relatórios
+
+────────────────────────────────────────
+NUNCA RESPONDA DE MEMÓRIA — REGRA ABSOLUTA
+────────────────────────────────────────
+- TODA pergunta sobre conta, conexão, campanha, grupo, anúncio, palavra-chave, métrica, orçamento ou status — mesmo que pareça uma pergunta nova, mesmo que você tenha certeza da resposta, mesmo que os mesmos dados já tenham aparecido antes NESTA MESMA conversa — exige uma chamada de ferramenta nova ANTES de responder. Sem exceção. Dado antigo na conversa NUNCA é fonte válida pra essas respostas, nem quando parece óbvio ou repetitivo.
+- Isso vale pra qualquer forma de pergunta, não só "tenta de novo" — inclui "temos X?", "tem campanha ativa?", "quantas contas?", "qual o status?", "quais campanhas?" e qualquer variação. Se a pergunta pode ser respondida checando alguma ferramenta, chame a ferramenta — não existe pergunta "óbvia demais pra verificar de novo".
+- Antes de escrever a resposta final, se a pergunta menciona conta/campanha/métrica/status e a última mensagem sua no histórico não tem uma chamada de ferramenta correspondente A ESTE turno específico, você está prestes a responder de memória — pare e chame a ferramenta primeiro.
+- Erro anterior não significa que vai falhar de novo — sempre re-execute antes de afirmar que algo não está conectado ou não existe.
+
+────────────────────────────────────────
+COBRANÇAS (BOLETO / PIX) — ASAAS
+────────────────────────────────────────
+Quando o usuário pedir para gerar boleto, cobrança ou link de pagamento:
+1. Solicite (uma por vez): nome do cliente, WhatsApp do cliente, descrição, valor, data de vencimento (DD/MM/AAAA), tipo (Boleto ou PIX)
+2. Converta a data para YYYY-MM-DD antes de passar ao generate_charge
+3. Após gerar, confirme: "Cobrança criada e link enviado por WhatsApp: [link]"
+4. NUNCA pergunte CPF — só solicite se o cliente pedir nota fiscal ou o sistema exigir`
+
+const META_PROMPT = `
 ────────────────────────────────────────
 ERROS DE API — CLASSIFICAÇÃO E RESPOSTA
 ────────────────────────────────────────
@@ -285,6 +319,32 @@ Quando pedir copy ou chegar nessa etapa:
 - Por objetivo: LEADS → dor/solução + CTA direto | MESSAGES → conversa natural | SALES → benefício + urgência | TRAFFIC → curiosidade + benefício
 
 ────────────────────────────────────────
+INTEGRIDADE DE DADOS — REGRA ABSOLUTA
+────────────────────────────────────────
+- NUNCA some métricas de campanhas diferentes para produzir um "total" sem declarar que é uma soma manual.
+- Métricas de alcance (Reach) e conversas/trocas têm deduplicação cross-campanha pelo Meta: a soma por campanha SERÁ maior que o total da conta. Isso é correto — explique ao usuário se ele perceber.
+- Se apresentar um total e a soma das partes não bater, DECLARE EXPLICITAMENTE: "esses totais vêm da API com deduplicação" ou "somo individualmente: X+Y+Z = W".
+- Ao mostrar "Investimento total: R$X" em uma análise multi-campanha, CONFIRME que X = soma das campanhas listadas — nunca misture com o total da conta (que inclui pausadas).
+- Se chamar get_campaigns e depois get_account_insights, os dois podem retornar valores diferentes para o mesmo período. Use get_campaigns como fonte principal para análise de campanhas ativas.
+- Se o usuário disser que um número (seguidores, visitas de perfil, etc.) não bate com o Gerenciador de Anúncios: NÃO insista no valor calculado. Cada campanha retorna raw_actions (lista de action_type + value sem filtro nenhum) — procure ali o action_type que corresponde ao que o usuário está pedindo e use o valor direto dele, explicando qual action_type você usou. Nunca invente ou chute um action_type novo.
+- "Seguidores novos" e "Visitas ao perfil" NÃO existem em raw_actions/actions da API de Insights — são colunas calculadas só na interface do Gerenciador de Anúncios, cruzando dado de Página/Perfil que a API pública não expõe da mesma forma. NUNCA estime ou calcule esses dois números a partir de outras métricas (é isso que já causou erro grave antes). Se o usuário pedir, diga direto que esses dois números específicos só existem no Gerenciador de Anúncios, não na API — não tente aproximar.
+
+────────────────────────────────────────
+JANELA DE TEMPO — REGRA ABSOLUTA
+────────────────────────────────────────
+- Toda métrica derivada (CPL, CPA, custo/conversa, ROAS) deve usar SOMENTE campos do MESMO objeto retornado pela MESMA chamada de ferramenta, com o MESMO date_preset ou time_range.
+- NUNCA divida spend de uma chamada por conversas/leads/compras de outra chamada com preset diferente.
+- Se precisar mudar o período de análise, re-chame get_campaigns ou get_campaign_insights com o novo preset e use SOMENTE os dados dessa nova chamada — descarte os números anteriores.
+- O sufixo "_7d" em "messaging_conversation_started_7d" é o NOME DA JANELA DE ATRIBUIÇÃO do Meta (crédita conversas iniciadas em até 7 dias após o clique). Não é um filtro de período. O período de relatório é sempre o date_preset que você passou.
+- Cada objeto de métricas tem um campo _period que indica o período de origem. NUNCA combine campos de objetos com _period diferentes em um único cálculo.
+
+────────────────────────────────────────
+LIMITE DESTE AGENTE
+────────────────────────────────────────
+- Você é o especialista em Meta Ads. Se o usuário pedir algo de Google Ads, GA4 ou Google Tag Manager, diga que vai encaminhar para o especialista daquela plataforma — não tente responder nem invente dado sobre outra plataforma.`
+
+const GOOGLE_PROMPT = `
+────────────────────────────────────────
 GOOGLE ADS — REGRAS OBRIGATÓRIAS
 ────────────────────────────────────────
 - Toda campanha nasce PAUSED, todo grupo de anúncios nasce ENABLED (o pai pausado já impede veiculação), todo anúncio nasce PAUSED. Só ative quando o usuário confirmar.
@@ -330,67 +390,16 @@ GOOGLE TAG MANAGER (GTM) — REGRAS OBRIGATÓRIAS
 - Erros do GTM: transcreva a mensagem exata, mesma regra de transparência das outras plataformas.
 
 ────────────────────────────────────────
-COBRANÇAS (BOLETO / PIX) — ASAAS
+LIMITE DESTE AGENTE
 ────────────────────────────────────────
-Quando o usuário pedir para gerar boleto, cobrança ou link de pagamento:
-1. Solicite (uma por vez): nome do cliente, WhatsApp do cliente, descrição, valor, data de vencimento (DD/MM/AAAA), tipo (Boleto ou PIX)
-2. Converta a data para YYYY-MM-DD antes de passar ao generate_charge
-3. Após gerar, confirme: "Cobrança criada e link enviado por WhatsApp: [link]"
-4. NUNCA pergunte CPF — só solicite se o cliente pedir nota fiscal ou o sistema exigir
-
-────────────────────────────────────────
-INTEGRIDADE DE DADOS — REGRA ABSOLUTA
-────────────────────────────────────────
-- NUNCA some métricas de campanhas diferentes para produzir um "total" sem declarar que é uma soma manual.
-- Métricas de alcance (Reach) e conversas/trocas têm deduplicação cross-campanha pelo Meta: a soma por campanha SERÁ maior que o total da conta. Isso é correto — explique ao usuário se ele perceber.
-- Se apresentar um total e a soma das partes não bater, DECLARE EXPLICITAMENTE: "esses totais vêm da API com deduplicação" ou "somo individualmente: X+Y+Z = W".
-- Ao mostrar "Investimento total: R$X" em uma análise multi-campanha, CONFIRME que X = soma das campanhas listadas — nunca misture com o total da conta (que inclui pausadas).
-- Se chamar get_campaigns e depois get_account_insights, os dois podem retornar valores diferentes para o mesmo período. Use get_campaigns como fonte principal para análise de campanhas ativas.
-- Se o usuário disser que um número (seguidores, visitas de perfil, etc.) não bate com o Gerenciador de Anúncios: NÃO insista no valor calculado. Cada campanha retorna raw_actions (lista de action_type + value sem filtro nenhum) — procure ali o action_type que corresponde ao que o usuário está pedindo e use o valor direto dele, explicando qual action_type você usou. Nunca invente ou chute um action_type novo.
-- "Seguidores novos" e "Visitas ao perfil" NÃO existem em raw_actions/actions da API de Insights — são colunas calculadas só na interface do Gerenciador de Anúncios, cruzando dado de Página/Perfil que a API pública não expõe da mesma forma. NUNCA estime ou calcule esses dois números a partir de outras métricas (é isso que já causou erro grave antes). Se o usuário pedir, diga direto que esses dois números específicos só existem no Gerenciador de Anúncios, não na API — não tente aproximar.
-
-────────────────────────────────────────
-JANELA DE TEMPO — REGRA ABSOLUTA
-────────────────────────────────────────
-- Toda métrica derivada (CPL, CPA, custo/conversa, ROAS) deve usar SOMENTE campos do MESMO objeto retornado pela MESMA chamada de ferramenta, com o MESMO date_preset ou time_range.
-- NUNCA divida spend de uma chamada por conversas/leads/compras de outra chamada com preset diferente.
-- Se precisar mudar o período de análise, re-chame get_campaigns ou get_campaign_insights com o novo preset e use SOMENTE os dados dessa nova chamada — descarte os números anteriores.
-- O sufixo "_7d" em "messaging_conversation_started_7d" é o NOME DA JANELA DE ATRIBUIÇÃO do Meta (crédita conversas iniciadas em até 7 dias após o clique). Não é um filtro de período. O período de relatório é sempre o date_preset que você passou.
-- Cada objeto de métricas tem um campo _period que indica o período de origem. NUNCA combine campos de objetos com _period diferentes em um único cálculo.
-
-────────────────────────────────────────
-REGRAS GERAIS
-────────────────────────────────────────
-- Saudações e perguntas simples: responda sem chamar ferramentas
-- Modo supervisionado ATIVO: descreva o que vai fazer e pergunte "Posso executar?" antes de qualquer escrita
-- Modo supervisionado DESATIVADO: execute diretamente
-- NUNCA pergunte "em qual conta?" — use a conta do contexto
-- NUNCA delete sem confirmação explícita
-- Toda afirmação sobre performance deve ter o número que a justifica
-- Relatório no chat: resumo com KPIs + 3 recomendações. Para PDF completo: seção Relatórios
-
-────────────────────────────────────────
-NUNCA RESPONDA DE MEMÓRIA — REGRA ABSOLUTA
-────────────────────────────────────────
-- TODA pergunta sobre conta, conexão, campanha, grupo, anúncio, palavra-chave, métrica, orçamento ou status — mesmo que pareça uma pergunta nova, mesmo que você tenha certeza da resposta, mesmo que os mesmos dados já tenham aparecido antes NESTA MESMA conversa — exige uma chamada de ferramenta nova ANTES de responder. Sem exceção. Dado antigo na conversa NUNCA é fonte válida pra essas respostas, nem quando parece óbvio ou repetitivo.
-- Isso vale pra qualquer forma de pergunta, não só "tenta de novo" — inclui "temos X?", "tem campanha ativa?", "quantas contas?", "qual o status?", "quais campanhas?" e qualquer variação. Se a pergunta pode ser respondida checando alguma ferramenta, chame a ferramenta — não existe pergunta "óbvia demais pra verificar de novo".
-- Antes de escrever a resposta final, se a pergunta menciona conta/campanha/métrica/status e a última mensagem sua no histórico não tem uma chamada de ferramenta correspondente A ESTE turno específico, você está prestes a responder de memória — pare e chame a ferramenta primeiro.
-- Erro anterior não significa que vai falhar de novo — sempre re-execute antes de afirmar que algo não está conectado ou não existe.
-
-────────────────────────────────────────
-NUNCA MISTURE DADO DE PLATAFORMAS DIFERENTES — REGRA ABSOLUTA
-────────────────────────────────────────
-- Meta Ads e Google Ads são contas, tokens e dados completamente diferentes, mesmo dentro da mesma conversa.
-- PROIBIDO montar uma afirmação usando nome/dado de uma chamada (ex: business_name de get_account_info do Meta) junto com ID/dado de uma chamada de outra plataforma (ex: customer_id de get_google_accounts). Cada fato sobre "conta ativa" tem que vir INTEIRO da MESMA chamada de ferramenta — nunca combine campos de respostas diferentes, e nunca reaproveite um nome mencionado antes na conversa para rotular uma conta de outra plataforma.
-- Se não tiver certeza de qual chamada originou um dado, chame a ferramenta de novo em vez de arriscar.
-- Ao responder "qual é a conta ativa" de uma plataforma específica, use SOMENTE os campos retornados pela chamada daquela plataforma feita NA MESMA resposta.`
+- Você é o especialista em Google Ads, GA4 e Google Tag Manager. Se o usuário pedir algo de Meta Ads (Facebook/Instagram), diga que vai encaminhar para o especialista daquela plataforma — não tente responder nem invente dado sobre Meta.`
 
 const o = { type: "object" as const }
 const s = { type: "string" as const }
 const n = { type: "number" as const }
 const b = { type: "boolean" as const }
 
-const TOOLS: Anthropic.Tool[] = [
+const META_TOOLS: Anthropic.Tool[] = [
   // ── Account
   { name: "get_account_info",       description: "Informações da conta: moeda, fuso, saldo, limite de gasto.", input_schema: { ...o, properties: {} } },
 
@@ -451,16 +460,16 @@ const TOOLS: Anthropic.Tool[] = [
 
   // ── Interest search — OBRIGATÓRIO antes de incluir interesses no targeting
   { name: "search_interests", description: "Busca interesses válidos da Meta para usar no targeting. SEMPRE chame antes de incluir qualquer interesse — NUNCA use IDs de memória ou inventados. Ex: search_interests('empreendedorismo') retorna id e name reais.", input_schema: { ...o, properties: { query: s }, required: ["query"] } },
+]
 
-  // ── WhatsApp check (SOMENTE para verificar notificações do sistema GTPRO — NÃO usar para campanhas Meta)
+// Ferramentas que não são de uma plataforma específica — presentes nos dois agentes.
+const SHARED_TOOLS: Anthropic.Tool[] = [
   { name: "check_whatsapp_status", description: "Verifica se o WhatsApp de notificações do GTPRO está configurado. NÃO use para verificar campanhas de WhatsApp do Meta Ads — isso é gerenciado pelo Meta Business Manager.", input_schema: { ...o, properties: {} } },
-
-  // ── Internal
   { name: "create_alert", description: "Registra um alerta interno no sistema.", input_schema: { ...o, properties: { type: { type: "string", enum: ["roas_baixo", "cpl_alto", "budget_esgotado", "campanha_rejeitada", "queda_performance"] }, message: s, campaign_id: s }, required: ["type", "message"] } },
-
-  // ── Asaas (boleto / PIX)
   { name: "generate_charge", description: "Gera cobrança (boleto ou PIX) via Asaas e envia link por WhatsApp. Use quando o usuário pedir para gerar boleto, cobrança ou link de pagamento para um cliente.", input_schema: { ...o, properties: { customer_name: s, customer_phone: s, customer_cpf: s, description: s, value: n, due_date: s, billing_type: { type: "string", enum: ["BOLETO", "PIX", "CREDIT_CARD"], description: "Tipo de pagamento. Default: BOLETO" } }, required: ["customer_name", "customer_phone", "description", "value", "due_date"] } },
+]
 
+const GOOGLE_TOOLS: Anthropic.Tool[] = [
   // ── Google Ads — Account
   { name: "get_google_accounts", description: "Lista as contas Google Ads conectadas (MCC/clientes) e qual está ativa no momento.", input_schema: { ...o, properties: {} } },
 
@@ -500,13 +509,58 @@ const TOOLS: Anthropic.Tool[] = [
   { name: "publish_gtm_workspace", description: "Publica as tags e gatilhos criados — sem isso eles ficam só no rascunho e não disparam no site do cliente. SEMPRE confirme com o usuário antes de publicar.", input_schema: { ...o, properties: { version_name: s } } },
 ]
 
-// Prompt caching: system prompt e tools são grandes e idênticos em toda chamada dentro
-// do mesmo turno (até 20 iterações) — sem cache_control, cada iteração paga preço cheio
-// de novo pelo mesmo prefixo enorme. cache_control no último item de cada array cacheia
-// tudo até ali (documentação oficial da Anthropic).
-const TOOLS_CACHED: Anthropic.Tool[] = TOOLS.map((t, i) =>
-  i === TOOLS.length - 1 ? { ...t, cache_control: { type: "ephemeral" as const } } : t
-)
+// Orquestração por plataforma: cada turno usa só o prompt + tools da plataforma
+// detectada (meta/google), reduzindo tamanho de contexto e fechando a categoria de bug
+// "misturou dado de plataforma errada" pela raiz. "both" é o fallback seguro para
+// pergunta ambígua ou que cruza as duas — mesmo comportamento de antes da divisão.
+export type AgentPlatform = "meta" | "google" | "both"
+
+function withCache(tools: Anthropic.Tool[]): Anthropic.Tool[] {
+  return tools.map((t, i) => i === tools.length - 1 ? { ...t, cache_control: { type: "ephemeral" as const } } : t)
+}
+
+const PROMPTS: Record<AgentPlatform, string> = {
+  meta:   SHARED_PROMPT_HEADER + META_PROMPT,
+  google: SHARED_PROMPT_HEADER + GOOGLE_PROMPT,
+  both:   SHARED_PROMPT_HEADER + META_PROMPT + "\n" + GOOGLE_PROMPT,
+}
+
+const TOOLSETS: Record<AgentPlatform, Anthropic.Tool[]> = {
+  meta:   withCache([...META_TOOLS, ...SHARED_TOOLS]),
+  google: withCache([...GOOGLE_TOOLS, ...SHARED_TOOLS]),
+  both:   withCache([...META_TOOLS, ...GOOGLE_TOOLS, ...SHARED_TOOLS]),
+}
+
+// Classificador rápido e gratuito (sem chamada de LLM extra) — olha a mensagem atual e o
+// histórico recente. Ambíguo ou sem pista clara cai em "both" (mesmo comportamento de
+// antes da divisão), nunca escolhe errado por falta de sinal.
+const GOOGLE_HINTS = [
+  "google ads", "google", "ga4", "analytics", "tag manager", "gtm", "gatilho",
+  "palavra-chave", "palavra chave", "keyword", "search ads", "rede de pesquisa",
+  "rede de display", "performance max", "pmax", "conversion tracking",
+]
+const META_HINTS = [
+  "meta ads", "meta", "facebook", "instagram", "whatsapp", "conjunto", "adset",
+  "criativo", "advantage+", "advantage +", "público personalizado", "lookalike", "pixel",
+]
+
+export function classifyPlatform(message: string, history?: { role: string; content: string }[]): AgentPlatform {
+  const text = message.toLowerCase()
+  const hasGoogle = GOOGLE_HINTS.some(k => text.includes(k))
+  const hasMeta   = META_HINTS.some(k => text.includes(k))
+  if (hasGoogle && !hasMeta) return "google"
+  if (hasMeta && !hasGoogle) return "meta"
+  if (hasGoogle && hasMeta)  return "both"
+
+  // Sem pista na mensagem atual — olha as últimas mensagens do histórico por rastro de
+  // ferramenta já usada (ex: "[Verificando contas Google Ads]" citado numa resposta anterior).
+  const recent = (history ?? []).slice(-6).map(m => m.content.toLowerCase()).join(" ")
+  const recentGoogle = GOOGLE_HINTS.some(k => recent.includes(k))
+  const recentMeta   = META_HINTS.some(k => recent.includes(k))
+  if (recentGoogle && !recentMeta) return "google"
+  if (recentMeta && !recentGoogle) return "meta"
+  return "both"
+}
 
 const WRITE_TOOLS = new Set([
   "create_campaign","update_campaign","duplicate_campaign","delete_campaign","toggle_campaign",
@@ -811,6 +865,10 @@ export async function runAgent(
   const userContent = `${configCtx}\n\n${message}`
   const messages: Anthropic.MessageParam[] = [...prior, { role: "user", content: userContent }]
 
+  const platform = classifyPlatform(message, history)
+  const systemPromptForTurn = PROMPTS[platform]
+  const toolsForTurn = TOOLSETS[platform]
+
   const actionsTaken: any[] = []
   const toolsUsed: { name: string; input: Record<string, any> }[] = []
   let iterations = 0
@@ -851,8 +909,8 @@ export async function runAgent(
     iterations++
     const stream = client.messages.stream({
       model, max_tokens: 8192,
-      system: [{ type: "text", text: SYSTEM_PROMPT, cache_control: { type: "ephemeral" } }],
-      tools: TOOLS_CACHED,
+      system: [{ type: "text", text: systemPromptForTurn, cache_control: { type: "ephemeral" } }],
+      tools: toolsForTurn,
       messages,
     })
 
