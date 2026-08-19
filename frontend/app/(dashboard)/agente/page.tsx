@@ -436,6 +436,7 @@ export default function AgentePage() {
   const [textModeOpen, setTextModeOpen]       = useState(false)
   const [createPickerOpen, setCreatePickerOpen] = useState(false)
   const [activeAction, setActiveAction]       = useState<ActiveAction>(null)
+  const [contextUsage, setContextUsage]       = useState<{ tokens: number; window: number } | null>(null)
 
   const bottomRef      = useRef<HTMLDivElement>(null)
   const textareaRef    = useRef<HTMLTextAreaElement>(null)
@@ -478,6 +479,7 @@ export default function AgentePage() {
     if (!confirm("Apagar todo o histórico?")) return
     await api.agent.clearMessages()
     setMessages([])
+    setContextUsage(null)
   }
 
   async function loadLogs() {
@@ -554,6 +556,9 @@ export default function AgentePage() {
               msgs[msgs.length - 1] = { ...last, content: chunk.message, isError: true }
             return msgs
           })
+        } else if (chunk.type === "done") {
+          if (typeof chunk.context_tokens === "number" && typeof chunk.context_window === "number")
+            setContextUsage({ tokens: chunk.context_tokens, window: chunk.context_window })
         }
       }, ctrl.signal)
     } catch (e: any) {
@@ -1141,6 +1146,26 @@ export default function AgentePage() {
                 </div>
 
                 <div className="flex items-center gap-2">
+                  {/* Context usage bar */}
+                  {contextUsage && (() => {
+                    const pct = Math.min(100, Math.round((contextUsage.tokens / contextUsage.window) * 100))
+                    const color = pct >= 90 ? "bg-red-500" : pct >= 70 ? "bg-amber-500" : "bg-violet-500"
+                    const textColor = pct >= 90 ? "text-red-400" : pct >= 70 ? "text-amber-400" : "text-zinc-600"
+                    return (
+                      <div className="flex items-center gap-1.5" title={`${contextUsage.tokens.toLocaleString("pt-BR")} / ${contextUsage.window.toLocaleString("pt-BR")} tokens de contexto`}>
+                        {pct >= 70 && (
+                          <button onClick={clearHistory} className={cn("text-[11px] font-medium underline decoration-dotted underline-offset-2", textColor)}>
+                            {pct >= 90 ? "Contexto quase cheio — limpar" : "Limpar chat"}
+                          </button>
+                        )}
+                        <div className="w-12 h-1 rounded-full bg-white/[0.08] overflow-hidden">
+                          <div className={cn("h-full rounded-full transition-all duration-300", color)} style={{ width: `${pct}%` }} />
+                        </div>
+                        <span className={cn("text-[11px] font-medium tabular-nums", textColor)}>{pct}%</span>
+                      </div>
+                    )
+                  })()}
+
                   {/* Model picker */}
                   <div className="relative">
                     <button onClick={() => setModelOpen(v => !v)}

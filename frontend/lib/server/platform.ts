@@ -44,6 +44,7 @@ export async function setSetting(key: string, value: string) {
 }
 
 export const getAnthropicKey        = () => getSetting("anthropic_api_key")
+export const getOpenAIKey           = () => getSetting("openai_api_key")
 export const getMetaAppId           = () => getSetting("meta_app_id")
 export const getMetaAppSecret       = () => getSetting("meta_app_secret")
 export const getGoogleClientId      = () => getSetting("google_client_id")

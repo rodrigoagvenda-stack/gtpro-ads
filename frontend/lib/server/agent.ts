@@ -30,8 +30,16 @@ export type AgentChunk =
   | { type: "tool_done"; name: string }
   | { type: "tool_error"; name: string; error: string }
   | { type: "action"; tool: string; input: Record<string, any>; result: any }
-  | { type: "done"; message: string; tools_used: any[]; actions_taken: any[] }
+  | { type: "done"; message: string; tools_used: any[]; actions_taken: any[]; context_tokens?: number; context_window?: number }
   | { type: "error"; message: string }
+
+// Janela de contexto real dos modelos permitidos — usada só pra calcular o % exibido na
+// barra de uso do chat (item "context-usage bar"), não tem efeito na chamada à API em si.
+const CONTEXT_WINDOW: Record<string, number> = {
+  "claude-haiku-4-5-20251001": 200_000,
+  "claude-sonnet-4-6": 200_000,
+  "claude-opus-4-7": 200_000,
+}
 
 // ─── System prompt ────────────────────────────────────────────────────────────
 
@@ -855,10 +863,20 @@ export async function runAgent(
     : ""
 
   const today = new Date().toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "2-digit", timeZone: "America/Sao_Paulo" })
-  const configCtx = `Data de hoje: ${today}. Configurações: objetivo=${tenantConfig.objetivo_principal}, ROAS mín=${tenantConfig.roas_minimo}, CPL máx=R$${tenantConfig.cpl_maximo}, budget mensal=R$${tenantConfig.budget_mensal ?? "não definido"}, modo supervisionado=${tenantConfig.modo_supervisionado ? "ATIVO" : "DESATIVADO"}. Conta de anúncios ativa: ${adAccountId ?? "padrão"} — use SOMENTE esta conta em todas as operações.${namingCtx}`
+  // Memória longa: perfil do negócio é estático (não cresce com a conversa) e injetado em toda
+  // pergunta, igual configCtx — diferente do `history`, que é cortado (MAX_HISTORY_MESSAGES acima).
+  const businessCtx = tenantConfig.business_profile
+    ? `\nPerfil do negócio do cliente: ${tenantConfig.business_profile}`
+    : ""
+  const configCtx = `Data de hoje: ${today}. Configurações: objetivo=${tenantConfig.objetivo_principal}, ROAS mín=${tenantConfig.roas_minimo}, CPL máx=R$${tenantConfig.cpl_maximo}, budget mensal=R$${tenantConfig.budget_mensal ?? "não definido"}, modo supervisionado=${tenantConfig.modo_supervisionado ? "ATIVO" : "DESATIVADO"}. Conta de anúncios ativa: ${adAccountId ?? "padrão"} — use SOMENTE esta conta em todas as operações.${namingCtx}${businessCtx}`
 
+  // Histórico completo pode chegar a até 200 mensagens (limite do endpoint /api/agent/messages).
+  // Reenviar tudo isso pra Anthropic em toda pergunta encarece e engorda o prompt sem necessidade —
+  // as últimas ~15 trocas (30 mensagens) já dão continuidade de contexto suficiente pro agente.
+  const MAX_HISTORY_MESSAGES = 30
   const prior: Anthropic.MessageParam[] = (history ?? [])
     .filter(m => m.role === "user" || m.role === "assistant")
+    .slice(-MAX_HISTORY_MESSAGES)
     .map(m => ({ role: m.role as "user" | "assistant", content: m.content }))
 
   // Inject configCtx always — naming template and account must be present in every turn
@@ -904,6 +922,9 @@ export async function runAgent(
     )
   }
 
+  const contextWindow = CONTEXT_WINDOW[model] ?? 200_000
+  let lastUsage: Anthropic.Usage | undefined
+
   return runWithMetaConnection(connectionId, async () => {
   while (iterations < MAX_ITERATIONS) {
     iterations++
@@ -921,6 +942,7 @@ export async function runAgent(
     const response = await stream.finalMessage()
     messages.push({ role: "assistant", content: response.content })
     trackUsage(response.usage)
+    lastUsage = response.usage
 
     if (response.stop_reason === "end_turn") {
       if (needsVerification && toolsUsed.length === 0 && !correctionAttempted) {
@@ -933,8 +955,11 @@ export async function runAgent(
       }
       const textBlock = response.content.find(b => b.type === "text")
       const finalMsg = (textBlock as any)?.text ?? ""
-      onChunk?.({ type: "done", message: finalMsg, tools_used: toolsUsed, actions_taken: actionsTaken })
-      return { message: finalMsg, actions_taken: actionsTaken, tools_used: toolsUsed }
+      const contextTokens = lastUsage
+        ? lastUsage.input_tokens + (lastUsage.cache_read_input_tokens ?? 0) + (lastUsage.cache_creation_input_tokens ?? 0)
+        : undefined
+      onChunk?.({ type: "done", message: finalMsg, tools_used: toolsUsed, actions_taken: actionsTaken, context_tokens: contextTokens, context_window: contextWindow })
+      return { message: finalMsg, actions_taken: actionsTaken, tools_used: toolsUsed, context_tokens: contextTokens, context_window: contextWindow }
     }
 
     if (response.stop_reason === "tool_use") {
@@ -965,7 +990,10 @@ export async function runAgent(
   }
 
   const fallback = "Limite de iterações atingido."
-  onChunk?.({ type: "done", message: fallback, tools_used: toolsUsed, actions_taken: actionsTaken })
-  return { message: fallback, actions_taken: actionsTaken, tools_used: toolsUsed }
+  const contextTokens = lastUsage
+    ? lastUsage.input_tokens + (lastUsage.cache_read_input_tokens ?? 0) + (lastUsage.cache_creation_input_tokens ?? 0)
+    : undefined
+  onChunk?.({ type: "done", message: fallback, tools_used: toolsUsed, actions_taken: actionsTaken, context_tokens: contextTokens, context_window: contextWindow })
+  return { message: fallback, actions_taken: actionsTaken, tools_used: toolsUsed, context_tokens: contextTokens, context_window: contextWindow }
   })
 }

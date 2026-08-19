@@ -128,7 +128,7 @@ function AgenteTab() {
   const [cfg, setCfg] = useState({
     objetivo_principal: "LEADS", roas_minimo: 2, cpl_maximo: 50, budget_mensal: "",
     modo_supervisionado: true, limite_budget_sem_aprovacao: 100,
-    campaign_naming_template: "",
+    campaign_naming_template: "", business_profile: "",
   })
   const [saving, setSaving] = useState(false)
   const [saved, setSaved]   = useState(false)
@@ -142,6 +142,7 @@ function AgenteTab() {
       modo_supervisionado: d.modo_supervisionado ?? true,
       limite_budget_sem_aprovacao: d.limite_budget_sem_aprovacao ?? 100,
       campaign_naming_template: d.campaign_naming_template ?? "",
+      business_profile: d.business_profile ?? "",
     })).catch(() => {})
   }, [])
 
@@ -161,6 +162,23 @@ function AgenteTab() {
 
   return (
     <div className="space-y-4 max-w-xl">
+      <Card>
+        <h2 className="text-[13px] font-semibold text-zinc-200">Perfil do negócio</h2>
+        <p className="text-[12px] text-zinc-600 -mt-3">
+          Contexto fixo que o agente sempre tem disponível, sem depender do histórico da conversa: o que o cliente vende, público-alvo, ticket médio, diferenciais. Mantenha objetivo e curto.
+        </p>
+        <Field label="Resumo do negócio">
+          <textarea
+            rows={5}
+            placeholder="Ex: Clínica odontológica em Curitiba, foco em implantes e ortodontia. Público: 30-55 anos, classe B/C. Ticket médio R$3.500. Diferencial: parcelamento em 24x sem juros."
+            value={cfg.business_profile}
+            onChange={e => setCfg(c => ({ ...c, business_profile: e.target.value }))}
+            className={cn(inputCls, "resize-none")}
+          />
+        </Field>
+        <SaveBtn saving={saving} saved={saved} onClick={save} />
+      </Card>
+
       <Card>
         <h2 className="text-[13px] font-semibold text-zinc-200">Parâmetros de performance</h2>
         <p className="text-[12px] text-zinc-600 -mt-3">Valores que o agente usa para avaliar campanhas e tomar decisões.</p>
@@ -1159,12 +1177,17 @@ function ApiKeysTab() {
 // ─── Tab: Plataforma ──────────────────────────────────────────────────────────
 
 function PlataformaTab() {
-  const [platform, setPlatform] = useState({ anthropic_api_key_set: false })
+  const [platform, setPlatform] = useState({ anthropic_api_key_set: false, openai_api_key_set: false })
   const [anthropicKey, setAnthropicKey] = useState("")
+  const [openaiKey, setOpenaiKey] = useState("")
   const [showKey, setShowKey] = useState(false)
+  const [showOpenaiKey, setShowOpenaiKey] = useState(false)
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
+  const [savingOpenai, setSavingOpenai] = useState(false)
+  const [savedOpenai, setSavedOpenai] = useState(false)
   const [error, setError] = useState("")
+  const [errorOpenai, setErrorOpenai] = useState("")
   const [apiKeys, setApiKeys] = useState<ApiKey[]>([])
   const [newKeyName, setNewKeyName] = useState("")
   const [generatedKey, setGeneratedKey] = useState("")
@@ -1184,6 +1207,16 @@ function PlataformaTab() {
       setPlatform(await api.get("/settings/platform"))
       setAnthropicKey(""); setSaved(true); setTimeout(() => setSaved(false), 3000)
     } catch (e: any) { setError(e.message) } finally { setSaving(false) }
+  }
+
+  async function saveOpenaiKey() {
+    if (!openaiKey.trim()) return
+    setSavingOpenai(true); setErrorOpenai("")
+    try {
+      await api.post("/settings/platform", { openai_api_key: openaiKey })
+      setPlatform(await api.get("/settings/platform"))
+      setOpenaiKey(""); setSavedOpenai(true); setTimeout(() => setSavedOpenai(false), 3000)
+    } catch (e: any) { setErrorOpenai(e.message) } finally { setSavingOpenai(false) }
   }
 
   async function createApiKey() {
@@ -1208,6 +1241,19 @@ function PlataformaTab() {
           </div>
         </Field>
         <SaveBtn saving={saving} saved={saved} onClick={saveAnthropicKey} />
+      </Card>
+
+      <Card>
+        <h2 className="text-[13px] font-semibold text-zinc-200">OpenAI API Key</h2>
+        <p className="text-[12px] text-zinc-600 -mt-3">Opcional — usada só na geração de relatórios (mais barata que Claude pra esse texto). Sem chave configurada, relatórios continuam usando Claude normalmente.</p>
+        {errorOpenai && <div className="text-[12px] text-red-400 bg-red-500/10 ring-1 ring-red-500/20 rounded-lg px-3 py-2">{errorOpenai}</div>}
+        <Field label="API Key" badge={platform.openai_api_key_set ? "configurada" : undefined}>
+          <div className="relative">
+            <input type={showOpenaiKey ? "text" : "password"} placeholder={platform.openai_api_key_set ? "Deixe vazio para manter" : "sk-..."} value={openaiKey} onChange={e => setOpenaiKey(e.target.value)} className={cn(inputCls, "pr-10")} />
+            <button type="button" onClick={() => setShowOpenaiKey(v => !v)} className="absolute right-3 top-2.5 text-zinc-600 hover:text-zinc-400">{showOpenaiKey ? <EyeOff size={13} /> : <Eye size={13} />}</button>
+          </div>
+        </Field>
+        <SaveBtn saving={savingOpenai} saved={savedOpenai} onClick={saveOpenaiKey} />
       </Card>
 
       <Card>

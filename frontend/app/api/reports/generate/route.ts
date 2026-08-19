@@ -2,8 +2,51 @@ import { NextRequest } from "next/server"
 import { getTenant, unauthorized } from "@/lib/server/auth"
 import { createServiceClient } from "@/lib/server/supabase"
 import { getCampaigns, getInsights, getAds } from "@/lib/server/meta-ads"
-import { getAnthropicKey } from "@/lib/server/platform"
+import { getAnthropicKey, getOpenAIKey } from "@/lib/server/platform"
 import Anthropic from "@anthropic-ai/sdk"
+
+// Geração de relatório é texto puro (sem tool-calling, sem execução de ações) — candidato seguro
+// pra um modelo mais barato. Usa GPT se a chave estiver configurada, senão cai pro Claude já em uso.
+async function generateReportText(prompt: string, tenantId: string, period: string) {
+  const supabase = createServiceClient()
+  const openaiKey = await getOpenAIKey().catch(() => "")
+
+  if (openaiKey) {
+    const res = await fetch("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${openaiKey}` },
+      body: JSON.stringify({
+        model: "gpt-4o",
+        max_tokens: 8192,
+        messages: [{ role: "user", content: prompt }],
+      }),
+    })
+    if (!res.ok) throw new Error(`OpenAI error: ${res.status} ${await res.text()}`)
+    const data = await res.json()
+    supabase.rpc("increment_api_usage", {
+      p_tenant_id:     tenantId,
+      p_period:        period,
+      p_input_tokens:  data.usage?.prompt_tokens ?? 0,
+      p_output_tokens: data.usage?.completion_tokens ?? 0,
+    }).then(() => {})
+    return data.choices?.[0]?.message?.content ?? ""
+  }
+
+  const key    = await getAnthropicKey()
+  const client = new Anthropic({ apiKey: key })
+  const response = await client.messages.create({
+    model:      "claude-sonnet-4-6",
+    max_tokens: 8192,
+    messages:   [{ role: "user", content: prompt }],
+  })
+  supabase.rpc("increment_api_usage", {
+    p_tenant_id:     tenantId,
+    p_period:        period,
+    p_input_tokens:  response.usage.input_tokens,
+    p_output_tokens: response.usage.output_tokens,
+  }).then(() => {})
+  return (response.content.find(b => b.type === "text") as any)?.text ?? ""
+}
 
 // ─── Objective config ─────────────────────────────────────────────────────────
 
@@ -680,22 +723,7 @@ ${skillSections}
 ${signature}
 *${periodLabel}*`
 
-    const key      = await getAnthropicKey()
-    const client   = new Anthropic({ apiKey: key })
-    const response = await client.messages.create({
-      model:      "claude-sonnet-4-6",
-      max_tokens: 8192,
-      messages:   [{ role: "user", content: prompt }],
-    })
-
-    supabase.rpc("increment_api_usage", {
-      p_tenant_id:     tenant.tenant_id,
-      p_period:        now.toISOString().slice(0, 7),
-      p_input_tokens:  response.usage.input_tokens,
-      p_output_tokens: response.usage.output_tokens,
-    }).then(() => {})
-
-    const summary = (response.content.find(b => b.type === "text") as any)?.text ?? ""
+    const summary = await generateReportText(prompt, tenant.tenant_id, now.toISOString().slice(0, 7))
 
     const { data: report } = await supabase.from("reports").insert({
       tenant_id:    tenant.tenant_id,

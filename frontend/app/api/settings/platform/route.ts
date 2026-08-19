@@ -7,6 +7,7 @@ export async function GET(req: NextRequest) {
   if (!tenant) return unauthorized()
   return Response.json({
     anthropic_api_key_set:    !!(await getSetting("anthropic_api_key")),
+    openai_api_key_set:      !!(await getSetting("openai_api_key")),
     meta_app_id:               await getMetaAppId(),
     meta_app_secret_set:      !!(await getSetting("meta_app_secret")),
     google_client_id:          await getGoogleClientId(),
@@ -25,6 +26,7 @@ export async function PUT(req: NextRequest) {
   try {
     const body = await req.json()
     if (body.anthropic_api_key)     await setSetting("anthropic_api_key",     body.anthropic_api_key)
+    if (body.openai_api_key)        await setSetting("openai_api_key",        body.openai_api_key)
     if (body.meta_app_id)           await setSetting("meta_app_id",           body.meta_app_id)
     if (body.meta_app_secret)       await setSetting("meta_app_secret",       body.meta_app_secret)
     if (body.google_client_id)      await setSetting("google_client_id",      body.google_client_id)
