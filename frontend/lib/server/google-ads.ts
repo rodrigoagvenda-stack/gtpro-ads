@@ -70,13 +70,24 @@ function extractGadsError(status: number, data: any, label: string): string {
     return codeEntry ? `${codeEntry[0]}:${codeEntry[1]}` : null
   }).filter(Boolean)
 
+  // location.fieldPathElements aponta o campo exato que falhou (ex: "operations[0].create.network_settings")
+  // — sem isso, um fieldError:REQUIRED só diz "algum campo obrigatório falta", e tanto o agente quanto quem
+  // lê o log ficam adivinhando qual. Isso foi a causa raiz do agente tentar "corrigir" o nome da campanha
+  // repetidamente num erro que era estrutural, não de nomenclatura.
+  const fieldPaths = gadsErrors.map((e: any) => {
+    const els = e.location?.fieldPathElements
+    if (!Array.isArray(els) || !els.length) return null
+    return els.map((el: any) => el.index !== undefined ? `${el.fieldName}[${el.index}]` : el.fieldName).join(".")
+  }).filter(Boolean)
+
   const deepMsg = gadsErrors[0]?.message
   const topMsg  = data?.error?.message ?? JSON.stringify(data).slice(0, 400)
   const msg     = deepMsg ? `${deepMsg} (${topMsg})` : topMsg
   const codeStr = codes.length ? ` [${codes.join(", ")}]` : ""
+  const pathStr = fieldPaths.length ? ` — campo: ${fieldPaths.join(", ")}` : ""
 
   console.error(`[google-ads] ${label} ${status}:`, JSON.stringify(data))
-  return `${msg}${codeStr}`
+  return `${msg}${codeStr}${pathStr}`
 }
 
 // ─── Version-aware fetch helper ───────────────────────────────────────────────

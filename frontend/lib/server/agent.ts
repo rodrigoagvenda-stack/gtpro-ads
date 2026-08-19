@@ -886,6 +886,10 @@ export async function runAgent(
   const platform = classifyPlatform(message, history)
   const systemPromptForTurn = PROMPTS[platform]
   const toolsForTurn = TOOLSETS[platform]
+  // Log de decisão do orquestrador — visível no stdout do container (Easypanel → Logs).
+  // Sem isso não dava pra saber, sem abrir o banco, qual agente/prompt foi escolhido pra
+  // cada pergunta nem diagnosticar por que uma resposta saiu errada.
+  console.log(`[agent] tenant=${tenantId} model=${model} platform=${platform} msg="${message.slice(0, 120)}"`)
 
   const actionsTaken: any[] = []
   const toolsUsed: { name: string; input: Record<string, any> }[] = []
@@ -968,6 +972,7 @@ export async function runAgent(
         if (block.type !== "tool_use") continue
         onChunk?.({ type: "tool_start", name: block.name, input: block.input as any })
         toolsUsed.push({ name: block.name, input: block.input as any })
+        console.log(`[agent] tenant=${tenantId} platform=${platform} tool_call=${block.name} input=${JSON.stringify(block.input).slice(0, 300)}`)
         try {
           const result = await executeTool(block.name, block.input as any, tenantId)
           // Awaited (not fire-and-forget): the dedupe guard above reads this same
@@ -980,6 +985,7 @@ export async function runAgent(
           }
           results.push({ type: "tool_result", tool_use_id: block.id, content: JSON.stringify(result) })
         } catch (e: any) {
+          console.error(`[agent] tenant=${tenantId} platform=${platform} tool_call=${block.name} FAILED: ${e.message}`)
           await logAction(tenantId, block.name, block.input, { error: e.message }, "failed")
           onChunk?.({ type: "tool_error", name: block.name, error: e.message })
           results.push({ type: "tool_result", tool_use_id: block.id, content: `Erro: ${e.message}`, is_error: true })
