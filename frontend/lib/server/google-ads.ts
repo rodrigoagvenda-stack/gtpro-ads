@@ -259,8 +259,10 @@ export async function createGoogleCampaign(tenantId: string, params: {
     campaignBudget:          budgetRn,
     // Obrigatório desde a v24 da API (regulação de transparência de anúncios políticos
     // da UE) em TODA criação de campanha, mesmo fora da UE — sem isso a API rejeita com
-    // fieldError:REQUIRED. Clientes do GTPRO são negócios locais, nunca anúncio político.
-    containsEuPoliticalAdvertising: false,
+    // fieldError:REQUIRED. É enum (EuPoliticalAdvertisingStatusEnum), não boolean — mandar
+    // false/true dá "Invalid value". Clientes do GTPRO são negócios locais, nunca anúncio
+    // político, então é sempre DOES_NOT_CONTAIN_EU_POLITICAL_ADVERTISING.
+    containsEuPoliticalAdvertising: "DOES_NOT_CONTAIN_EU_POLITICAL_ADVERTISING",
   }
 
   // "Maximizar cliques" na interface do Google Ads é o campo targetSpend por baixo dos
