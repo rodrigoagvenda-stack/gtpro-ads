@@ -239,9 +239,13 @@ export async function createGoogleCampaign(tenantId: string, params: {
   const mcc        = conn.manager_customer_id
 
   // 1. Criar orçamento diário
+  // Nome do budget leva sufixo curto pra não colidir com DUPLICATE_NAME numa
+  // retentativa (ex: agente tenta de novo com o mesmo nome de campanha depois
+  // de um erro anterior — o budget da tentativa falha ficou órfão na conta).
+  const budgetName = `${params.name} Budget ${Date.now().toString(36)}`
   const budgetRes = await gadsPost(
     `/customers/${customerId}/campaignBudgets:mutate`,
-    { operations: [{ create: { name: `${params.name} Budget`, amountMicros: Math.round(params.dailyBudget * 1_000_000), deliveryMethod: "STANDARD" } }] },
+    { operations: [{ create: { name: budgetName, amountMicros: Math.round(params.dailyBudget * 1_000_000), deliveryMethod: "STANDARD" } }] },
     accessToken, mcc,
   )
   const budgetRn = budgetRes.results?.[0]?.resourceName
@@ -253,6 +257,10 @@ export async function createGoogleCampaign(tenantId: string, params: {
     status:                  "PAUSED",
     advertisingChannelType:  params.channelType,
     campaignBudget:          budgetRn,
+    // Obrigatório desde a v24 da API (regulação de transparência de anúncios políticos
+    // da UE) em TODA criação de campanha, mesmo fora da UE — sem isso a API rejeita com
+    // fieldError:REQUIRED. Clientes do GTPRO são negócios locais, nunca anúncio político.
+    containsEuPoliticalAdvertising: false,
   }
 
   // "Maximizar cliques" na interface do Google Ads é o campo targetSpend por baixo dos
