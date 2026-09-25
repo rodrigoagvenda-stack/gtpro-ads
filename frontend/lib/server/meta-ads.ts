@@ -807,6 +807,25 @@ export async function getInsights(tenantId: string, datePreset = "last_7d", sinc
   return data.data?.[0] ?? {}
 }
 
+// Linha vazia da API de Insights NÃO significa "sem histórico": o agente já concluiu isso
+// errado uma vez. Devolve aviso explícito, e sinaliza se o período retornado difere do pedido
+// (foi assim que um pedido de 18/08 a 25/09 voltou como últimos 7 dias sem ninguém notar).
+export function finalizeInsightsRow(row: any, since?: string, until?: string, datePreset?: string) {
+  const periodTag = since && until ? `${since}_to_${until}` : (datePreset ?? "")
+  if (!row || Object.keys(row).length === 0) {
+    return {
+      _period: periodTag,
+      _empty: true,
+      _note: "Nenhuma linha retornada pela API para este intervalo: sem entrega no período, período anterior ao início da campanha, ou ID inválido. NÃO significa que a API não guarda histórico; não afirme isso.",
+    }
+  }
+  const out: any = { ...row, _period: periodTag }
+  if (since && until && (row.date_start !== since || row.date_stop !== until)) {
+    out._period_warning = `Período retornado (${row.date_start} a ${row.date_stop}) difere do solicitado (${since} a ${until}). Informe ao usuário o período real; a campanha pode ter começado depois de "since".`
+  }
+  return out
+}
+
 export async function getCampaignInsights(tenantId: string, campaignId: string, datePreset = "last_7d", since?: string, until?: string) {
   const token = await getToken(tenantId)
   const params: Record<string, string> = { access_token: token, fields: INSIGHT_FIELDS }
@@ -816,10 +835,7 @@ export async function getCampaignInsights(tenantId: string, campaignId: string, 
     params.date_preset = datePreset
   }
   const data = await graphGet(`/${campaignId}/insights`, params)
-  const row  = data.data?.[0] ?? {}
-  // Attach period provenance so callers can detect cross-period metric mixing
-  row._period = since && until ? `${since}_to_${until}` : datePreset
-  return row
+  return finalizeInsightsRow(data.data?.[0], since, until, datePreset)
 }
 
 export async function getAdSetInsights(tenantId: string, adSetId: string, datePreset = "last_7d", since?: string, until?: string) {
@@ -831,9 +847,7 @@ export async function getAdSetInsights(tenantId: string, adSetId: string, datePr
     params.date_preset = datePreset
   }
   const data = await graphGet(`/${adSetId}/insights`, params)
-  const row  = data.data?.[0] ?? {}
-  row._period = since && until ? `${since}_to_${until}` : datePreset
-  return row
+  return finalizeInsightsRow(data.data?.[0], since, until, datePreset)
 }
 
 export async function getAdInsights(tenantId: string, adId: string, datePreset = "last_7d", since?: string, until?: string) {
@@ -845,9 +859,7 @@ export async function getAdInsights(tenantId: string, adId: string, datePreset =
     params.date_preset = datePreset
   }
   const data = await graphGet(`/${adId}/insights`, params)
-  const row  = data.data?.[0] ?? {}
-  row._period = since && until ? `${since}_to_${until}` : datePreset
-  return row
+  return finalizeInsightsRow(data.data?.[0], since, until, datePreset)
 }
 
 export async function getInsightsByBreakdown(tenantId: string, breakdown: string, datePreset = "last_7d") {

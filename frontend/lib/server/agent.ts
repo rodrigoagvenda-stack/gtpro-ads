@@ -4,7 +4,7 @@ import { createServiceClient } from "./supabase"
 import { sendText } from "./whatsapp"
 import { createAsaasCharge } from "./asaas"
 import {
-  getCampaigns, getInsights, getCampaignInsights, getAdSetInsights, getAdInsights, getInsightsByBreakdown,
+  getCampaigns, getInsights, getCampaignInsights, getAdSetInsights, getAdInsights, getInsightsByBreakdown, finalizeInsightsRow,
   createCampaign, updateCampaign, duplicateCampaign, deleteCampaign, toggleCampaign,
   getAdSets, getAdSetById, createAdSet, updateAdSet, duplicateAdSet, deleteAdSet,
   getAds, getAdsByAdSet, updateAd, duplicateAd, deleteAd, createAd,
@@ -346,6 +346,9 @@ JANELA DE TEMPO — REGRA ABSOLUTA
 - Se precisar mudar o período de análise, re-chame get_campaigns ou get_campaign_insights com o novo preset e use SOMENTE os dados dessa nova chamada — descarte os números anteriores.
 - O sufixo "_7d" em "messaging_conversation_started_7d" NÃO é janela de atribuição nem filtro de período. Segundo a Meta ("Messaging Conversations Started"), conta a conversa iniciada depois de pelo menos 7 dias sem troca de mensagens com aquela pessoa; se ela volta a falar dentro de 7 dias, é a mesma conversa. O período de relatório é sempre o date_preset que você passou.
 - Cada objeto de métricas tem um campo _period que indica o período de origem. NUNCA combine campos de objetos com _period diferentes em um único cálculo.
+- Se o usuário pedir datas exatas (ex: 18/08 a 25/09), passe since e until (YYYY-MM-DD) em get_campaigns, get_account_insights ou get_campaign_insights; nunca troque por um date_preset parecido. Se a resposta trouxer _period_warning ou _period diferente do pedido, diga ao usuário o período real que veio.
+- Se a resposta trouxer _empty=true, a API não devolveu linhas (sem entrega no período, campanha começou depois, ou ID errado). NUNCA diga que a API "não retorna dados históricos" ou "não guarda histórico": isso é falso. Confira o ID com get_campaigns e tente de novo antes de concluir.
+- NUNCA indique caminho de coluna ou menu do Gerenciador de Anúncios que você não tenha certeza que existe (ex: "Colunas > buscar messaging_user_depth"). Se não souber, diga que não sabe.
 
 ────────────────────────────────────────
 LIMITE DESTE AGENTE
@@ -413,10 +416,10 @@ const META_TOOLS: Anthropic.Tool[] = [
   { name: "get_account_info",       description: "Informações da conta: moeda, fuso, saldo, limite de gasto.", input_schema: { ...o, properties: {} } },
 
   // ── Campaigns — Read
-  { name: "get_campaigns",          description: "Lista todas as campanhas com métricas e orçamentos.", input_schema: { ...o, properties: { date_preset: s } } },
+  { name: "get_campaigns",          description: "Lista todas as campanhas com métricas e orçamentos. Use since+until para janela exata (YYYY-MM-DD), ou date_preset para janelas predefinidas. Nunca misture os dois.", input_schema: { ...o, properties: { date_preset: s, since: s, until: s } } },
   { name: "get_campaign_insights",  description: "Métricas detalhadas de uma campanha específica. Use since+until para janela exata (YYYY-MM-DD), ou date_preset para janelas predefinidas. Nunca misture os dois.", input_schema: { ...o, properties: { campaign_id: s, date_preset: s, since: s, until: s }, required: ["campaign_id"] } },
   { name: "get_insights_breakdown", description: "Insights com breakdown por age, gender, placement, device, region etc.", input_schema: { ...o, properties: { breakdown: s, date_preset: s }, required: ["breakdown"] } },
-  { name: "get_account_insights",   description: "Métricas agregadas da conta inteira.", input_schema: { ...o, properties: { date_preset: s } } },
+  { name: "get_account_insights",   description: "Métricas agregadas da conta inteira. Use since+until para janela exata (YYYY-MM-DD), ou date_preset para janelas predefinidas. Nunca misture os dois.", input_schema: { ...o, properties: { date_preset: s, since: s, until: s } } },
 
   // ── Campaigns — Write
   { name: "create_campaign", description: "Cria uma nova campanha. Sempre cria como PAUSED por padrão.", input_schema: { ...o, properties: { name: s, objective: s, daily_budget: n, lifetime_budget: n, start_time: s, stop_time: s, special_ad_categories: { type: "array", items: s } }, required: ["name", "objective"] } },
@@ -624,8 +627,8 @@ async function executeTool(name: string, input: Record<string, any>, tenantId: s
   }
 
   if (name === "get_account_info")       return getAccountInfo(tenantId)
-  if (name === "get_campaigns")          return getCampaigns(tenantId, input.date_preset ?? "last_7d")
-  if (name === "get_account_insights")   return getInsights(tenantId, input.date_preset)
+  if (name === "get_campaigns")          return getCampaigns(tenantId, input.date_preset ?? "last_7d", undefined, input.since, input.until)
+  if (name === "get_account_insights")   return finalizeInsightsRow(await getInsights(tenantId, input.date_preset, input.since, input.until), input.since, input.until, input.date_preset)
   if (name === "get_campaign_insights")  return getCampaignInsights(tenantId, input.campaign_id, input.date_preset, input.since, input.until)
   if (name === "get_insights_breakdown") return getInsightsByBreakdown(tenantId, input.breakdown, input.date_preset)
   if (name === "create_campaign")        return createCampaign(tenantId, input)
