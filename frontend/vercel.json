@@ -7,6 +7,10 @@
     {
       "path": "/api/cron/session-timeout",
       "schedule": "* * * * *"
+    },
+    {
+      "path": "/api/cron/ig-follower-snapshot",
+      "schedule": "0 3 * * *"
     }
   ]
 }

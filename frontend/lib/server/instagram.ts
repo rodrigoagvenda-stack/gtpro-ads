@@ -118,6 +118,120 @@ export async function getIgMedia(tenantId: string, igUserId: string) {
   return res.data ?? []
 }
 
+// ─── Media insights (Reels/Feed/Story) ────────────────────────────────────────
+
+function toMetricMap(res: any): Record<string, number> {
+  const out: Record<string, number> = {}
+  for (const m of res.data ?? []) out[m.name] = m.values?.[0]?.value ?? m.total_value?.value ?? 0
+  return out
+}
+
+// "views" e "total_interactions" estão em desenvolvimento na API da Meta — se a conta
+// não tiver acesso, o pedido inteiro falha mesmo as outras métricas sendo válidas.
+// Por isso tenta o conjunto completo primeiro e cai pro conjunto estável se falhar.
+async function getMediaInsights(mediaId: string, token: string, mediaProductType: string | null) {
+  const metricSets: Record<string, string[]> = {
+    REELS: ["reach,likes,comments,shares,saved,total_interactions,views", "reach,likes,comments,shares,saved"],
+    FEED:  ["reach,likes,comments,shares,saved,total_interactions,follows,profile_visits", "reach,likes,comments,shares,saved"],
+    STORY: ["reach,likes,comments,shares,total_interactions,follows,profile_visits", "reach,likes,comments,shares"],
+  }
+  const attempts = metricSets[mediaProductType ?? ""] ?? ["reach,likes,comments,shares,saved", "reach,likes,comments"]
+
+  for (const metric of attempts) {
+    try {
+      const res = await igGet(`/${mediaId}/insights`, { access_token: token, metric })
+      return toMetricMap(res)
+    } catch { /* tenta o próximo conjunto, mais restrito */ }
+  }
+  return { _error: "Não foi possível obter insights para esta mídia." }
+}
+
+// Lista mídia de um perfil num período, opcionalmente filtrando por tipo (ex: "REELS"),
+// com as métricas de cada item já anexadas. media_product_type e insights por mídia só
+// existem na API com Login do Facebook — contas conectadas via esse fluxo, que é o único
+// suportado pelo GTPRO hoje.
+export async function getIgMediaWithInsights(
+  tenantId: string,
+  igUserId: string,
+  opts: { since?: string; until?: string; mediaType?: "REELS" | "FEED" | "STORY" | "AD" } = {}
+) {
+  const userToken = await getUserToken(tenantId)
+  const baseParams: Record<string, string> = {
+    access_token: userToken,
+    fields: "id,caption,media_type,media_product_type,timestamp,permalink,like_count,comments_count",
+    limit: "50",
+  }
+  if (opts.since) baseParams.since = opts.since
+  if (opts.until) baseParams.until = opts.until
+
+  let all: any[] = []
+  let after: string | undefined
+  do {
+    const params = after ? { ...baseParams, after } : baseParams
+    const page = await igGet(`/${igUserId}/media`, params)
+    all = [...all, ...(page.data ?? [])]
+    after = page.paging?.cursors?.after
+    if (!page.paging?.next) break
+  } while (after)
+
+  const filtered = opts.mediaType ? all.filter(m => m.media_product_type === opts.mediaType) : all
+
+  return Promise.all(filtered.map(async (m) => ({
+    id: m.id,
+    caption: m.caption ?? null,
+    media_type: m.media_type,
+    media_product_type: m.media_product_type ?? null,
+    timestamp: m.timestamp,
+    permalink: m.permalink,
+    like_count: m.like_count ?? null,
+    comments_count: m.comments_count ?? null,
+    insights: await getMediaInsights(m.id, userToken, m.media_product_type ?? null),
+  })))
+}
+
+// ─── Seguidores (snapshot diário) ──────────────────────────────────────────────
+// A Meta não documenta histórico de follower_count além de uma janela recente — não dá
+// pra reconstruir o passado. A única forma confiável de medir crescimento ao longo de uma
+// iniciativa é capturar o total todo dia e guardar aqui, a partir de agora.
+
+export async function snapshotFollowerCounts(tenantId: string) {
+  const userToken = await getUserToken(tenantId)
+  const accounts = await getIgAccounts(tenantId)
+  const supabase = createServiceClient()
+  const today = new Date().toISOString().slice(0, 10)
+
+  const rows: any[] = []
+  for (const acc of accounts) {
+    try {
+      const data = await igGet(`/${acc.ig_user_id}`, { access_token: userToken, fields: "followers_count" })
+      if (typeof data.followers_count === "number") {
+        rows.push({ tenant_id: tenantId, ig_user_id: acc.ig_user_id, date: today, followers_count: data.followers_count })
+      }
+    } catch (e: any) {
+      console.error(`[instagram] snapshotFollowerCounts ${acc.ig_user_id}:`, e.message)
+    }
+  }
+
+  if (rows.length) {
+    await supabase.from("ig_follower_history").upsert(rows, { onConflict: "tenant_id,ig_user_id,date" })
+  }
+  return rows
+}
+
+export async function getFollowerHistory(tenantId: string, igUserId: string, since?: string, until?: string) {
+  const supabase = createServiceClient()
+  let q = supabase
+    .from("ig_follower_history")
+    .select("date,followers_count")
+    .eq("tenant_id", tenantId)
+    .eq("ig_user_id", igUserId)
+    .order("date")
+  if (since) q = q.gte("date", since)
+  if (until) q = q.lte("date", until)
+  const { data } = await q
+  return data ?? []
+}
+
 // ─── Actions — usa page token ─────────────────────────────────────────────────
 
 export async function sendIgDM(igUserId: string, commentId: string, message: string, pageToken: string) {

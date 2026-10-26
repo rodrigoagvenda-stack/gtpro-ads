@@ -13,6 +13,7 @@ import {
   getAccountInfo, searchGeoLocation, getPages, searchInterests,
   runWithMetaConnection,
 } from "./meta-ads"
+import { getIgAccounts, getIgMediaWithInsights, getFollowerHistory } from "./instagram"
 import {
   getGoogleCampaigns, createGoogleCampaign, toggleGoogleCampaign, updateGoogleCampaignBudget,
   getGoogleInsights, getAdGroups, createAdGroup, updateAdGroupStatus,
@@ -472,6 +473,11 @@ const META_TOOLS: Anthropic.Tool[] = [
 
   // ── Interest search — OBRIGATÓRIO antes de incluir interesses no targeting
   { name: "search_interests", description: "Busca interesses válidos da Meta para usar no targeting. SEMPRE chame antes de incluir qualquer interesse — NUNCA use IDs de memória ou inventados. Ex: search_interests('empreendedorismo') retorna id e name reais.", input_schema: { ...o, properties: { query: s }, required: ["query"] } },
+
+  // ── Instagram orgânico (não é Ads — conteúdo publicado na conta)
+  { name: "get_instagram_accounts", description: "Lista as contas do Instagram conectadas (ig_user_id de cada uma). SEMPRE chame antes de qualquer ferramenta de Instagram que peça ig_user_id.", input_schema: { ...o, properties: {} } },
+  { name: "get_instagram_posts", description: "Lista posts/Reels/Stories de uma conta do Instagram com métricas de cada um (visualizações, curtidas, comentários, compartilhamentos, salvamentos, alcance). Use since+until (YYYY-MM-DD) pra filtrar período. Use media_type='REELS' pra só Reels. A Meta NÃO fornece 'seguidores ganhos por este post' para Reels/Stories (só existe pra FEED) — nunca estime isso, use get_instagram_follower_history pra seguidores.", input_schema: { ...o, properties: { ig_user_id: s, since: s, until: s, media_type: { type: "string", enum: ["REELS", "FEED", "STORY", "AD"] } }, required: ["ig_user_id"] } },
+  { name: "get_instagram_follower_history", description: "Histórico diário de seguidores de uma conta, a partir da data em que o snapshot começou a rodar. NÃO existe histórico anterior a isso — a Meta não fornece retroativamente. Se o período pedido for anterior ao primeiro registro salvo, diga isso ao usuário, não invente nem estime.", input_schema: { ...o, properties: { ig_user_id: s, since: s, until: s }, required: ["ig_user_id"] } },
 ]
 
 // Ferramentas que não são de uma plataforma específica — presentes nos dois agentes.
@@ -714,6 +720,10 @@ async function executeTool(name: string, input: Record<string, any>, tenantId: s
     if (!results.length) return { results: [], message: `Nenhum interesse encontrado para "${input.query}". Tente outro termo.` }
     return { results, usage: `Use o campo "id" e "name" em targeting.interests[]. Estes são os únicos IDs válidos — nunca use IDs de outra fonte.` }
   }
+
+  if (name === "get_instagram_accounts") return getIgAccounts(tenantId)
+  if (name === "get_instagram_posts")    return getIgMediaWithInsights(tenantId, input.ig_user_id, { since: input.since, until: input.until, mediaType: input.media_type })
+  if (name === "get_instagram_follower_history") return getFollowerHistory(tenantId, input.ig_user_id, input.since, input.until)
 
   if (name === "create_alert") {
     const { data } = await supabase.from("alerts").insert({ tenant_id: tenantId, ...input, status: "active" }).select().single()
