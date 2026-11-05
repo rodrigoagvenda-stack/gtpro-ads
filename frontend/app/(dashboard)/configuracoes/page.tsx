@@ -517,7 +517,7 @@ function MetaTab() {
                 </div>
               </div>
               <div className="flex items-center gap-1">
-                <button onClick={async () => { setConnecting(true); try { const { url } = await api.meta.connect(); window.open(url, "_blank") } catch (e: any) { setMetaMsg({ type: "err", text: e.message }) } finally { setConnecting(false) } }} disabled={connecting} className="flex items-center gap-1.5 px-2.5 py-1.5 text-[12px] text-violet-400 hover:bg-violet-500/10 rounded-lg transition-colors disabled:opacity-40">
+                <button onClick={async () => { setConnecting(true); try { const { url } = await api.meta.connect(); window.location.href = url } catch (e: any) { setMetaMsg({ type: "err", text: e.message }) } finally { setConnecting(false) } }} disabled={connecting} className="flex items-center gap-1.5 px-2.5 py-1.5 text-[12px] text-violet-400 hover:bg-violet-500/10 rounded-lg transition-colors disabled:opacity-40">
                   {connecting ? <Loader2 size={11} className="animate-spin" /> : <RotateCcw size={11} />} Reconectar
                 </button>
                 <button onClick={async () => { if (!confirm("Desconectar?")) return; await api.meta.disconnect(); setMetaStatus({ connected: false }); setMetaMsg({ type: "info", text: "Conta desconectada." }) }} className="flex items-center gap-1.5 px-2.5 py-1.5 text-[12px] text-red-400 hover:bg-red-500/10 rounded-lg transition-colors"><Unlink size={11} /> Desconectar</button>
@@ -528,7 +528,7 @@ function MetaTab() {
             </button>
             {showAddAccount && (
               <div className="space-y-3 pt-1">
-                <button onClick={async () => { setConnecting(true); try { const { url } = await api.meta.connect(); window.open(url, "_blank") } catch (e: any) { setMetaMsg({ type: "err", text: e.message }) } finally { setConnecting(false) } }} disabled={connecting || (isAdmin && !platform.meta_app_id)} className="flex items-center gap-2 px-4 py-2.5 bg-white text-zinc-900 text-[13px] font-semibold rounded-lg hover:bg-zinc-100 disabled:opacity-40 transition-colors">
+                <button onClick={async () => { setConnecting(true); try { const { url } = await api.meta.connect(); window.location.href = url } catch (e: any) { setMetaMsg({ type: "err", text: e.message }) } finally { setConnecting(false) } }} disabled={connecting || (isAdmin && !platform.meta_app_id)} className="flex items-center gap-2 px-4 py-2.5 bg-white text-zinc-900 text-[13px] font-semibold rounded-lg hover:bg-zinc-100 disabled:opacity-40 transition-colors">
                   {connecting ? <><Loader2 size={13} className="animate-spin" /> Redirecionando...</> : <><Link2 size={13} /> Conectar via OAuth</>}
                 </button>
                 <button onClick={() => setShowManual(v => !v)} className="text-[12px] text-zinc-500 hover:text-zinc-300 transition-colors">{showManual ? "▲ Ocultar" : "▼ Tenho um System User Token permanente"}</button>
@@ -547,7 +547,7 @@ function MetaTab() {
         ) : (
           <div className="space-y-3">
             {isAdmin && !platform.meta_app_id && <p className="text-[12px] text-amber-400">Configure o Meta App ID acima antes de conectar via OAuth.</p>}
-            <button onClick={async () => { setConnecting(true); try { const { url } = await api.meta.connect(); window.open(url, "_blank") } catch (e: any) { setMetaMsg({ type: "err", text: e.message }) } finally { setConnecting(false) } }} disabled={connecting || (isAdmin && !platform.meta_app_id)} className="flex items-center gap-2 px-4 py-2.5 bg-white text-zinc-900 text-[13px] font-semibold rounded-lg hover:bg-zinc-100 disabled:opacity-40 transition-colors">
+            <button onClick={async () => { setConnecting(true); try { const { url } = await api.meta.connect(); window.location.href = url } catch (e: any) { setMetaMsg({ type: "err", text: e.message }) } finally { setConnecting(false) } }} disabled={connecting || (isAdmin && !platform.meta_app_id)} className="flex items-center gap-2 px-4 py-2.5 bg-white text-zinc-900 text-[13px] font-semibold rounded-lg hover:bg-zinc-100 disabled:opacity-40 transition-colors">
               {connecting ? <><Loader2 size={13} className="animate-spin" /> Redirecionando...</> : <><Link2 size={13} /> Conectar via OAuth</>}
             </button>
             <div className="border-t border-white/[0.05] pt-3">
@@ -1367,7 +1367,7 @@ function GoogleAdsTab() {
     setConnecting(true)
     try {
       const { url } = await api.get("/google/connect")
-      window.open(url, "_blank")
+      window.location.href = url
     } catch (e: any) { setGoogleMsg({ type: "err", text: e.message }) } finally { setConnecting(false) }
   }
 

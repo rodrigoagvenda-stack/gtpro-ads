@@ -14,12 +14,19 @@ export async function GET(req: NextRequest) {
   const state = randomBytes(16).toString("hex")
   const redirectBack = req.nextUrl.searchParams.get("redirect_back") ?? null
   const supabase = createServiceClient()
-  await supabase.from("oauth_states").insert({
+  const { error } = await supabase.from("oauth_states").insert({
     state,
     tenant_id: tenant.tenant_id,
     expires_at: new Date(Date.now() + 10 * 60 * 1000).toISOString(),
     redirect_back: redirectBack,
   })
+  // Sem isso, um erro de insert (ex: schema mudou) passava em silêncio e o callback
+  // sempre dizia "link expirado" — mesmo sem o usuário ter demorado nada, porque o
+  // state nunca existiu no banco pra começo de conversa.
+  if (error) {
+    console.error("[meta/connect] oauth_states insert failed:", error.message)
+    return Response.json({ error: "Falha ao iniciar conexão. Tente novamente." }, { status: 500 })
+  }
 
   const redirectUri = `${process.env.NEXT_PUBLIC_APP_URL ?? 'https://gtpro.vendai.pro'}/api/meta/callback`
   const scope = "ads_management,ads_read,business_management,read_insights,pages_show_list,pages_read_engagement,instagram_basic,instagram_manage_comments,instagram_manage_messages"
